@@ -48,6 +48,11 @@ test('returns a single review result for the current candidate', async () => {
   const result = await runOptimizationCycle({
     adapter,
     currentPrompt: 'draft prompt',
+    goalAnchor: {
+      goal: 'Keep the original task.',
+      deliverable: 'Return the requested output.',
+      driftGuard: ['Do not drift away from the original task.'],
+    },
     threshold: 95,
     previousBestScore: 90,
   })
@@ -70,6 +75,11 @@ test('keeps only the current review patch, without historical review context', a
   const result = await runOptimizationCycle({
     adapter,
     currentPrompt: 'draft prompt',
+    goalAnchor: {
+      goal: 'Keep the original task.',
+      deliverable: 'Return the requested output.',
+      driftGuard: ['Do not drift away from the original task.'],
+    },
     threshold: 95,
     previousBestScore: 91,
     previousFeedback: ['old issue that should not be merged here'],

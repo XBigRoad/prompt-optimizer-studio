@@ -60,9 +60,18 @@ test('adapter uses optimizer and judge models independently', async () => {
   await adapter.optimizePrompt({
     currentPrompt: 'draft',
     previousFeedback: [],
+    goalAnchor: {
+      goal: 'Keep the original task.',
+      deliverable: 'Return the original requested deliverable.',
+      driftGuard: ['Do not drift away from the original task.'],
+    },
     threshold: 95,
   })
-  await adapter.judgePrompt('candidate', 0)
+  await adapter.judgePrompt('candidate', 0, {
+    goal: 'Keep the original task.',
+    deliverable: 'Return the original requested deliverable.',
+    driftGuard: ['Do not drift away from the original task.'],
+  })
 
   assert.deepEqual(requestedModels, ['gpt-5.2', 'gemini-3.1-pro'])
 })

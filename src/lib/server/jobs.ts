@@ -3,11 +3,13 @@ import type { DatabaseSync } from 'node:sqlite'
 import { assignConversationGroup } from '@/lib/engine/conversation-policy'
 import { getJobDisplayError } from '@/lib/presentation'
 import { getDb } from '@/lib/server/db'
+import { deriveGoalAnchor, parseGoalAnchor, serializeGoalAnchor } from '@/lib/server/goal-anchor'
 import { ensurePromptPackVersion } from '@/lib/server/prompt-pack'
 import { compactFeedback } from '@/lib/server/prompting'
 import { getSettings, validateCpamcConnection, validateTaskDefaults } from '@/lib/server/settings'
 import type {
   CandidateRecord,
+  GoalAnchor,
   JobDetail,
   JobInput,
   JobRunMode,
@@ -60,6 +62,7 @@ export function createJobs(inputs: JobInput[]) {
         pack_version_id,
         current_round,
         best_average_score,
+        goal_anchor_json,
         max_rounds_override,
         next_round_instruction,
         next_round_instruction_updated_at,
@@ -74,7 +77,7 @@ export function createJobs(inputs: JobInput[]) {
         error_message,
         created_at,
         updated_at
-      ) VALUES (?, ?, ?, ?, ?, NULL, NULL, 'pending', 'auto', ?, 0, 0, NULL, NULL, NULL, 0, 0, '[]', NULL, ?, ?, NULL, NULL, NULL, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, NULL, NULL, 'pending', 'auto', ?, 0, 0, ?, NULL, NULL, NULL, 0, 0, '[]', NULL, ?, ?, NULL, NULL, NULL, ?, ?)
     `).run(
       id,
       normalizeTitle(input.title, normalizedPrompt),
@@ -82,6 +85,7 @@ export function createJobs(inputs: JobInput[]) {
       models.optimizerModel,
       models.judgeModel,
       pack.id,
+      serializeGoalAnchor(deriveGoalAnchor(normalizedPrompt)),
       settings.conversationPolicy,
       assignment.group?.id ?? null,
       now,
@@ -111,6 +115,7 @@ export function listJobs() {
       jobs.current_round,
       jobs.best_average_score,
       COALESCE(latest_candidate.optimized_prompt, jobs.raw_prompt) AS latest_prompt,
+      jobs.goal_anchor_json,
       jobs.max_rounds_override,
       jobs.next_round_instruction,
       jobs.next_round_instruction_updated_at,
@@ -157,6 +162,7 @@ export function getJobById(id: string) {
       jobs.current_round,
       jobs.best_average_score,
       COALESCE(latest_candidate.optimized_prompt, jobs.raw_prompt) AS latest_prompt,
+      jobs.goal_anchor_json,
       jobs.max_rounds_override,
       jobs.next_round_instruction,
       jobs.next_round_instruction_updated_at,
@@ -302,6 +308,23 @@ export function updateJobMaxRoundsOverride(jobId: string, maxRoundsOverride: num
         updated_at = ?
     WHERE id = ?
   `).run(normalizeMaxRoundsOverride(maxRoundsOverride), new Date().toISOString(), jobId)
+
+  return requireJob(jobId)
+}
+
+export function updateJobGoalAnchor(jobId: string, goalAnchor: Partial<GoalAnchor>) {
+  const job = requireJob(jobId)
+  if (job.status === 'completed') {
+    throw new Error('已完成任务不能修改核心目标锚点。')
+  }
+
+  const db = getDb()
+  db.prepare(`
+    UPDATE jobs
+    SET goal_anchor_json = ?,
+        updated_at = ?
+    WHERE id = ?
+  `).run(serializeGoalAnchor(goalAnchor), new Date().toISOString(), jobId)
 
   return requireJob(jobId)
 }
@@ -554,6 +577,7 @@ export function getOptimizerSeed(jobId: string) {
   return {
     currentPrompt: candidate ? String(candidate.optimized_prompt) : job.rawPrompt,
     previousFeedback: job.lastReviewPatch,
+    goalAnchor: job.goalAnchor,
     nextRoundInstruction: job.nextRoundInstruction,
     nextRoundInstructionUpdatedAt: job.nextRoundInstructionUpdatedAt,
   }
@@ -844,6 +868,7 @@ function mapJobRow(row: Record<string, unknown>): JobRecord {
     currentRound: Number(row.current_round),
     bestAverageScore: Number(row.best_average_score),
     latestPrompt: String(row.latest_prompt ?? row.raw_prompt ?? ''),
+    goalAnchor: parseGoalAnchor(row.goal_anchor_json),
     maxRoundsOverride: row.max_rounds_override === null || row.max_rounds_override === undefined
       ? null
       : Number(row.max_rounds_override),

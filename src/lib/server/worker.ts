@@ -133,6 +133,7 @@ async function runJob(jobId: string) {
       const {
         currentPrompt,
         previousFeedback,
+        goalAnchor,
         nextRoundInstruction,
         nextRoundInstructionUpdatedAt,
       } = getOptimizerSeed(jobId)
@@ -143,6 +144,7 @@ async function runJob(jobId: string) {
         threshold: settings.scoreThreshold,
         previousBestScore: activeJob.bestAverageScore,
         previousFeedback,
+        goalAnchor,
         nextRoundInstruction,
       })
 

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 
-import { getJobDetail, getJobById, updateJobMaxRoundsOverride, updateJobModels, updateJobNextRoundInstruction } from '@/lib/server/jobs'
+import { getJobDetail, getJobById, updateJobGoalAnchor, updateJobMaxRoundsOverride, updateJobModels, updateJobNextRoundInstruction } from '@/lib/server/jobs'
 import { ensureWorkerStarted } from '@/lib/server/worker'
 
 export const runtime = 'nodejs'
@@ -36,6 +36,11 @@ export async function PATCH(
       judgeModel?: string
       maxRoundsOverride?: number | null
       nextRoundInstruction?: string
+      goalAnchor?: {
+        goal?: string
+        deliverable?: string
+        driftGuard?: string[]
+      }
     }
 
     let updatedJob = job
@@ -50,6 +55,9 @@ export async function PATCH(
     }
     if (Object.hasOwn(body, 'nextRoundInstruction')) {
       updatedJob = updateJobNextRoundInstruction(id, body.nextRoundInstruction ?? '')
+    }
+    if (Object.hasOwn(body, 'goalAnchor')) {
+      updatedJob = updateJobGoalAnchor(id, body.goalAnchor ?? {})
     }
 
     return NextResponse.json({ job: updatedJob })

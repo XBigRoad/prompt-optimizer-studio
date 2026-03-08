@@ -1,3 +1,5 @@
+import type { GoalAnchor } from '@/lib/server/types'
+
 export interface RoundJudgment {
   score: number
   hasMaterialIssues: boolean
@@ -19,10 +21,11 @@ export interface ModelAdapter {
   optimizePrompt(input: {
     currentPrompt: string
     previousFeedback: string[]
+    goalAnchor: GoalAnchor
     nextRoundInstruction?: string | null
     threshold: number
   }): Promise<OptimizationResult>
-  judgePrompt(prompt: string, judgeIndex: number): Promise<RoundJudgment>
+  judgePrompt(prompt: string, judgeIndex: number, goalAnchor: GoalAnchor): Promise<RoundJudgment>
 }
 
 export interface OptimizationCycleInput {
@@ -31,6 +34,7 @@ export interface OptimizationCycleInput {
   threshold: number
   previousBestScore: number
   previousFeedback?: string[]
+  goalAnchor: GoalAnchor
   nextRoundInstruction?: string | null
 }
 
@@ -73,16 +77,18 @@ export async function runOptimizationCycle({
   threshold,
   previousBestScore,
   previousFeedback = [],
+  goalAnchor,
   nextRoundInstruction = null,
 }: OptimizationCycleInput): Promise<OptimizationCycleResult> {
   const optimization = await adapter.optimizePrompt({
     currentPrompt,
     previousFeedback,
+    goalAnchor,
     nextRoundInstruction,
     threshold,
   })
 
-  const review = await adapter.judgePrompt(optimization.optimizedPrompt, 0)
+  const review = await adapter.judgePrompt(optimization.optimizedPrompt, 0, goalAnchor)
   const summary = summarizeJudgments([review], threshold)
   const bestScore = summary.averageScore > previousBestScore ? summary.averageScore : previousBestScore
 

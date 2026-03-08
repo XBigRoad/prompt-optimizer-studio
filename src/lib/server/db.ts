@@ -64,6 +64,7 @@ export function getDb() {
       pack_version_id TEXT NOT NULL,
       current_round INTEGER NOT NULL DEFAULT 0,
       best_average_score REAL NOT NULL DEFAULT 0,
+      goal_anchor_json TEXT NOT NULL DEFAULT '{}',
       max_rounds_override INTEGER,
       next_round_instruction TEXT,
       next_round_instruction_updated_at TEXT,
@@ -124,6 +125,7 @@ export function getDb() {
   ensureColumn(db, 'jobs', 'pending_optimizer_model', 'TEXT')
   ensureColumn(db, 'jobs', 'pending_judge_model', 'TEXT')
   ensureColumn(db, 'jobs', 'run_mode', "TEXT NOT NULL DEFAULT 'auto'")
+  ensureColumn(db, 'jobs', 'goal_anchor_json', "TEXT NOT NULL DEFAULT '{}'")
   ensureColumn(db, 'jobs', 'max_rounds_override', 'INTEGER')
   ensureColumn(db, 'jobs', 'next_round_instruction', 'TEXT')
   ensureColumn(db, 'jobs', 'next_round_instruction_updated_at', 'TEXT')

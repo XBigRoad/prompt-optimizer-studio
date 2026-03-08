@@ -20,6 +20,7 @@ test('job controls support cancel, next-round model updates, and legacy error ma
       getJobById,
       listJobs,
       updateJobModels,
+      updateJobGoalAnchor,
       cancelJob,
       resetJobForRetry,
       updateJobProgress,
@@ -43,8 +44,16 @@ test('job controls support cancel, next-round model updates, and legacy error ma
       optimizerModel: 'gpt-5.4',
       judgeModel: 'gemini-3.1-pro',
     })
+    assert.match(updatedPending.goalAnchor.goal, /A/)
     assert.equal(updatedPending.optimizerModel, 'gpt-5.4')
     assert.equal(updatedPending.judgeModel, 'gemini-3.1-pro')
+
+    const updatedAnchor = updateJobGoalAnchor(pendingJob.id, {
+      goal: '保持任务 A 的核心目标',
+      deliverable: '输出任务 A 的最终结果',
+      driftGuard: ['不要改成别的任务'],
+    })
+    assert.equal(updatedAnchor.goalAnchor.goal, '保持任务 A 的核心目标')
 
     updateJobProgress(runningJob.id, {
       status: 'running',
@@ -116,6 +125,7 @@ test('job controls support paused state, resume modes, and max round overrides',
       pauseJob,
       resumeJobAuto,
       resumeJobStep,
+      updateJobGoalAnchor,
       updateJobNextRoundInstruction,
       updateJobMaxRoundsOverride,
       updateJobProgress,
@@ -138,13 +148,22 @@ test('job controls support paused state, resume modes, and max round overrides',
     assert.equal(job.maxRoundsOverride, null)
     assert.equal(job.pauseRequestedAt, null)
     assert.equal(job.nextRoundInstruction, null)
+    assert.ok(job.goalAnchor.goal.length > 0)
 
     const steered = updateJobNextRoundInstruction(job.id, 'Keep the output warmer and more direct.')
     assert.equal(steered.nextRoundInstruction, 'Keep the output warmer and more direct.')
 
+    const anchored = updateJobGoalAnchor(job.id, {
+      goal: '保持分诊目标',
+      deliverable: '输出结构化分诊结果',
+      driftGuard: ['不要退化成泛化建议'],
+    })
+    assert.equal(anchored.goalAnchor.deliverable, '输出结构化分诊结果')
+
     const firstSeed = getOptimizerSeed(job.id)
     assert.equal(firstSeed.nextRoundInstruction, 'Keep the output warmer and more direct.')
     assert.ok(firstSeed.nextRoundInstructionUpdatedAt)
+    assert.equal(firstSeed.goalAnchor.goal, '保持分诊目标')
 
     const consumed = clearConsumedNextRoundInstruction(job.id, firstSeed.nextRoundInstructionUpdatedAt)
     assert.equal(consumed.nextRoundInstruction, null)

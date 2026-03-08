@@ -4,6 +4,12 @@ import type { RoundJudgment } from '@/lib/engine/optimization-cycle'
 export type JobStatus = 'pending' | 'running' | 'paused' | 'completed' | 'failed' | 'manual_review' | 'cancelled'
 export type JobRunMode = 'auto' | 'step'
 
+export interface GoalAnchor {
+  goal: string
+  deliverable: string
+  driftGuard: string[]
+}
+
 export interface AppSettings {
   cpamcBaseUrl: string
   cpamcApiKey: string
@@ -41,6 +47,7 @@ export interface JobRecord {
   currentRound: number
   bestAverageScore: number
   latestPrompt: string
+  goalAnchor: GoalAnchor
   maxRoundsOverride: number | null
   nextRoundInstruction: string | null
   passStreak: number

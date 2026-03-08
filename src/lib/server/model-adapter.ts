@@ -1,5 +1,5 @@
 import type { ModelAdapter, OptimizationResult, RoundJudgment } from '@/lib/engine/optimization-cycle'
-import type { PromptPackVersion, AppSettings } from '@/lib/server/types'
+import type { GoalAnchor, PromptPackVersion, AppSettings } from '@/lib/server/types'
 import { extractJsonObject } from '@/lib/server/json'
 import { buildJudgePrompts, buildOptimizerPrompts } from '@/lib/server/prompting'
 
@@ -26,6 +26,7 @@ export class CpamcModelAdapter implements ModelAdapter {
   async optimizePrompt(input: {
     currentPrompt: string
     previousFeedback: string[]
+    goalAnchor: GoalAnchor
     nextRoundInstruction?: string | null
     threshold: number
   }): Promise<OptimizationResult> {
@@ -33,6 +34,7 @@ export class CpamcModelAdapter implements ModelAdapter {
       pack: this.pack,
       currentPrompt: input.currentPrompt,
       previousFeedback: input.previousFeedback,
+      goalAnchor: input.goalAnchor,
       nextRoundInstruction: input.nextRoundInstruction,
       threshold: input.threshold,
     })
@@ -48,10 +50,15 @@ export class CpamcModelAdapter implements ModelAdapter {
     }
   }
 
-  async judgePrompt(prompt: string, judgeIndex: number): Promise<RoundJudgment> {
+  async judgePrompt(prompt: string, judgeIndex: number, goalAnchor?: GoalAnchor): Promise<RoundJudgment> {
     const { system, user } = buildJudgePrompts({
       pack: this.pack,
       candidatePrompt: prompt,
+      goalAnchor: goalAnchor ?? {
+        goal: 'Keep the original task goal.',
+        deliverable: 'Preserve the original requested deliverable.',
+        driftGuard: ['Do not drift away from the original task.'],
+      },
       threshold: this.settings.scoreThreshold,
       judgeIndex,
     })

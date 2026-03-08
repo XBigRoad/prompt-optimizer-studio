@@ -60,6 +60,11 @@ interface JobDetailPayload {
     cancelRequestedAt: string | null
     pauseRequestedAt: string | null
     nextRoundInstruction: string | null
+    goalAnchor: {
+      goal: string
+      deliverable: string
+      driftGuard: string[]
+    }
     status: JobStatus
     runMode: JobRunMode
     currentRound: number
@@ -80,15 +85,20 @@ export function JobDetailShell({ jobId }: { jobId: string }) {
   const [taskModel, setTaskModel] = useState('')
   const [maxRoundsOverrideValue, setMaxRoundsOverrideValue] = useState('')
   const [nextRoundInstruction, setNextRoundInstruction] = useState('')
+  const [goalAnchorGoal, setGoalAnchorGoal] = useState('')
+  const [goalAnchorDeliverable, setGoalAnchorDeliverable] = useState('')
+  const [goalAnchorDriftGuardText, setGoalAnchorDriftGuardText] = useState('')
   const [modelDirty, setModelDirty] = useState(false)
   const [maxRoundsDirty, setMaxRoundsDirty] = useState(false)
   const [steeringDirty, setSteeringDirty] = useState(false)
+  const [goalAnchorDirty, setGoalAnchorDirty] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [retrying, setRetrying] = useState(false)
   const [savingModels, setSavingModels] = useState(false)
   const [savingMaxRounds, setSavingMaxRounds] = useState(false)
   const [savingSteering, setSavingSteering] = useState(false)
+  const [savingGoalAnchor, setSavingGoalAnchor] = useState(false)
   const [cancelling, setCancelling] = useState(false)
   const [pausing, setPausing] = useState(false)
   const [resumingStep, setResumingStep] = useState(false)
@@ -173,6 +183,16 @@ export function JobDetailShell({ jobId }: { jobId: string }) {
     setNextRoundInstruction(detail.job.nextRoundInstruction ?? '')
   }, [detail, steeringDirty])
 
+  useEffect(() => {
+    if (!detail || goalAnchorDirty) {
+      return
+    }
+
+    setGoalAnchorGoal(detail.job.goalAnchor.goal)
+    setGoalAnchorDeliverable(detail.job.goalAnchor.deliverable)
+    setGoalAnchorDriftGuardText(detail.job.goalAnchor.driftGuard.join('\n'))
+  }, [detail, goalAnchorDirty])
+
   const isRunning = detail?.job.status === 'running'
   const isPaused = detail?.job.status === 'paused'
   const canEdit = detail ? detail.job.status !== 'completed' : false
@@ -206,6 +226,7 @@ export function JobDetailShell({ jobId }: { jobId: string }) {
       setModelDirty(false)
       setMaxRoundsDirty(false)
       setSteeringDirty(false)
+      setGoalAnchorDirty(false)
       setExpandedRounds({})
       setDetail((current) => current ? { ...current, job: { ...current.job, ...payload.job }, candidates: [] } : current)
     } catch (retryError) {
@@ -357,6 +378,39 @@ export function JobDetailShell({ jobId }: { jobId: string }) {
     }
   }
 
+  async function saveGoalAnchor() {
+    setSavingGoalAnchor(true)
+    try {
+      const response = await fetch(`/api/jobs/${jobId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          goalAnchor: {
+            goal: goalAnchorGoal,
+            deliverable: goalAnchorDeliverable,
+            driftGuard: goalAnchorDriftGuardText
+              .split('\n')
+              .map((item) => item.trim())
+              .filter(Boolean),
+          },
+        }),
+      })
+      const payload = await response.json()
+      if (!response.ok) {
+        throw new Error(payload.error ?? 'Save failed.')
+      }
+      setError(null)
+      setGoalAnchorDirty(false)
+      setActionMessage('核心目标锚点已保存。后续所有轮次都会受它约束。')
+      setDetail((current) => current ? { ...current, job: { ...current.job, ...payload.job } } : current)
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : 'Save failed.')
+      setActionMessage(null)
+    } finally {
+      setSavingGoalAnchor(false)
+    }
+  }
+
   async function copyLatestPrompt() {
     if (!latestFullPrompt) {
       return
@@ -388,6 +442,7 @@ export function JobDetailShell({ jobId }: { jobId: string }) {
       setModelDirty(false)
       setMaxRoundsDirty(false)
       setSteeringDirty(false)
+      setGoalAnchorDirty(false)
       setDetail((current) => current ? { ...current, job: { ...current.job, ...payload.job } } : current)
     } catch (cancelError) {
       setError(cancelError instanceof Error ? cancelError.message : 'Cancel failed.')
@@ -457,6 +512,64 @@ export function JobDetailShell({ jobId }: { jobId: string }) {
                 </div>
               </div>
               <pre className="pre compact">{latestFullPrompt}</pre>
+            </section>
+
+            <section className="panel">
+              <div className="panel-header">
+                <div>
+                  <h2 className="section-title">核心目标锚点</h2>
+                  <p className="small">这里定义这条任务真正要完成什么。结构、表达和提示词技巧可以优化，但目标与关键交付物不能漂移。</p>
+                </div>
+              </div>
+              <div className="form-grid">
+                <label className="label">
+                  核心目标
+                  <textarea
+                    className="textarea"
+                    value={goalAnchorGoal}
+                    onChange={(event) => {
+                      setGoalAnchorDirty(true)
+                      setGoalAnchorGoal(event.target.value)
+                    }}
+                    disabled={!canEdit}
+                    placeholder="这条提示词最终到底要完成什么任务。"
+                  />
+                </label>
+                <label className="label">
+                  关键交付物
+                  <textarea
+                    className="textarea"
+                    value={goalAnchorDeliverable}
+                    onChange={(event) => {
+                      setGoalAnchorDirty(true)
+                      setGoalAnchorDeliverable(event.target.value)
+                    }}
+                    disabled={!canEdit}
+                    placeholder="最重要的最终输出产物是什么。"
+                  />
+                </label>
+                <label className="label">
+                  防漂移条款
+                  <textarea
+                    className="textarea"
+                    value={goalAnchorDriftGuardText}
+                    onChange={(event) => {
+                      setGoalAnchorDirty(true)
+                      setGoalAnchorDriftGuardText(event.target.value)
+                    }}
+                    disabled={!canEdit}
+                    placeholder="每行一条：什么样的改写会被视为偏题。"
+                  />
+                </label>
+              </div>
+              <p className="small">reviewer 会把“是否忠实于这里的核心目标和交付物”当成硬门槛；即使更安全、更规范，只要偏题也不能高分通过。</p>
+              <div className="button-row">
+                {canEdit ? (
+                  <button className="button ghost" type="button" onClick={saveGoalAnchor} disabled={savingGoalAnchor}>
+                    {savingGoalAnchor ? '保存中...' : '保存核心目标锚点'}
+                  </button>
+                ) : null}
+              </div>
             </section>
 
             <section className="panel">

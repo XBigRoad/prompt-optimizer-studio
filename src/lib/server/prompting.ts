@@ -1,4 +1,5 @@
-import type { PromptPackVersion } from '@/lib/server/types'
+import { formatGoalAnchorForPrompt } from '@/lib/server/goal-anchor'
+import type { GoalAnchor, PromptPackVersion } from '@/lib/server/types'
 
 export function compactFeedback(
   feedback: string[],
@@ -28,6 +29,7 @@ export function buildOptimizerPrompts(input: {
   pack: PromptPackVersion
   currentPrompt: string
   previousFeedback: string[]
+  goalAnchor: GoalAnchor
   nextRoundInstruction?: string | null
   threshold: number
 }) {
@@ -49,6 +51,8 @@ export function buildOptimizerPrompts(input: {
   const compactedFeedback = compactFeedback(input.previousFeedback)
   const user = [
     `Threshold: ${input.threshold}`,
+    'Non-negotiable goal anchor:',
+    formatGoalAnchorForPrompt(input.goalAnchor),
     'Current prompt:',
     input.currentPrompt,
     'High-signal feedback from the previous round:',
@@ -66,6 +70,7 @@ export function buildOptimizerPrompts(input: {
 export function buildJudgePrompts(input: {
   pack: PromptPackVersion
   candidatePrompt: string
+  goalAnchor: GoalAnchor
   threshold: number
   judgeIndex: number
 }) {
@@ -73,6 +78,7 @@ export function buildJudgePrompts(input: {
     `You are isolated judge #${input.judgeIndex + 1} for Prompt Optimizer Studio.`,
     'You are not the optimizer. Critique strictly and independently.',
     'Assume this is a fresh new conversation with no prior chat context.',
+    'Goal fidelity is a hard gate. If the candidate drifts from the goal, loses the deliverable, or violates the drift guard, you must set hasMaterialIssues=true and keep the score below 90.',
     'Return JSON only with fields: score, hasMaterialIssues, summary, findings, suggestedChanges.',
     'Keep findings and suggestedChanges concise strings only. Each array should contain at most 6 short items.',
     'Do not return nested objects inside findings or suggestedChanges.',
@@ -83,6 +89,8 @@ export function buildJudgePrompts(input: {
 
   const user = [
     `Passing threshold: ${input.threshold}`,
+    'Goal anchor:',
+    formatGoalAnchorForPrompt(input.goalAnchor),
     'Prompt to judge:',
     input.candidatePrompt,
     'Return only JSON.',
