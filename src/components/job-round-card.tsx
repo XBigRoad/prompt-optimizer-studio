@@ -74,57 +74,65 @@ export function JobRoundCard({
             <summary>查看优化后提示词</summary>
             <pre className="pre compact">{candidate.optimizedPrompt}</pre>
           </details>
-          <div className="panel-grid">
-            <div>
-              <strong>主要修改</strong>
-              <ul className="list compact-list">
-                {candidate.majorChanges.map((item, index) => <li key={`${candidate.id}-major-${index}`}>{item}</li>)}
-              </ul>
-            </div>
-            <div>
-              <strong>MVE</strong>
-              <p className="small">{candidate.mve}</p>
-            </div>
-            <div>
-              <strong>死胡同信号</strong>
-              <ul className="list compact-list">
-                {candidate.deadEndSignals.map((item, index) => <li key={`${candidate.id}-signal-${index}`}>{item}</li>)}
-              </ul>
-            </div>
-            <div>
-              <strong>修订补丁</strong>
-              <ul className="list compact-list">
-                {candidate.aggregatedIssues.map((item, index) => <li key={`${candidate.id}-issue-${index}`}>{item}</li>)}
-              </ul>
-            </div>
-          </div>
-          {review ? (
-            <div className="judge-card">
-              <div className="card-header">
-                <strong>复核结果</strong>
-                <span className={`status ${review.hasMaterialIssues ? 'manual_review' : 'completed'}`}>{review.score}</span>
+          <div className="round-analysis-grid">
+            <div className="round-analysis-stack">
+              <div className="panel round-mve-panel">
+                <strong>MVE</strong>
+                <pre className="pre compact round-mve-pre">{candidate.mve}</pre>
               </div>
-              {review.driftLabels.length > 0 ? (
-                <>
-                  <strong>偏题标签</strong>
-                  <div className="inline-actions">
-                    {review.driftLabels.map((item, index) => (
-                      <span className="pill manual_review" key={`${review.id}-drift-${index}`}>{item}</span>
-                    ))}
-                  </div>
-                  {review.driftExplanation ? <p className="small">{review.driftExplanation}</p> : null}
-                </>
-              ) : null}
-              <strong>发现的问题</strong>
-              <ul className="list compact-list">
-                {review.findings.map((item, index) => <li key={`${review.id}-finding-${index}`}>{item}</li>)}
-              </ul>
-              <strong>建议修改</strong>
-              <ul className="list compact-list">
-                {review.suggestedChanges.map((item, index) => <li key={`${review.id}-suggestion-${index}`}>{item}</li>)}
-              </ul>
+              <div className="round-insight-grid">
+                <div className="panel round-info-panel">
+                  <strong>主要修改</strong>
+                  <ul className="list compact-list">
+                    {candidate.majorChanges.map((item, index) => <li key={`${candidate.id}-major-${index}`}>{item}</li>)}
+                  </ul>
+                </div>
+                <div className="panel round-info-panel">
+                  <strong>死胡同信号</strong>
+                  <ul className="list compact-list">
+                    {candidate.deadEndSignals.map((item, index) => <li key={`${candidate.id}-signal-${index}`}>{item}</li>)}
+                  </ul>
+                </div>
+                <div className="panel round-info-panel">
+                  <strong>修订补丁</strong>
+                  <ul className="list compact-list">
+                    {candidate.aggregatedIssues.map((item, index) => <li key={`${candidate.id}-issue-${index}`}>{item}</li>)}
+                  </ul>
+                </div>
+              </div>
             </div>
-          ) : null}
+            {review ? (
+              <div className="judge-card round-review-panel">
+                <div className="card-header round-review-header">
+                  <strong>复核结果</strong>
+                  <span className={`status ${review.hasMaterialIssues ? 'manual_review' : 'completed'}`}>{review.score}</span>
+                </div>
+                {review.driftLabels.length > 0 ? (
+                  <div className="round-review-section">
+                    <strong>偏题标签</strong>
+                    <div className="inline-actions">
+                      {review.driftLabels.map((item, index) => (
+                        <span className="pill manual_review" key={`${review.id}-drift-${index}`}>{item}</span>
+                      ))}
+                    </div>
+                    {review.driftExplanation ? <p className="small">{review.driftExplanation}</p> : null}
+                  </div>
+                ) : null}
+                <div className="round-review-section">
+                  <strong>发现的问题</strong>
+                  <ul className="list compact-list">
+                    {review.findings.map((item, index) => <li key={`${review.id}-finding-${index}`}>{item}</li>)}
+                  </ul>
+                </div>
+                <div className="round-review-section">
+                  <strong>建议修改</strong>
+                  <ul className="list compact-list">
+                    {review.suggestedChanges.map((item, index) => <li key={`${review.id}-suggestion-${index}`}>{item}</li>)}
+                  </ul>
+                </div>
+              </div>
+            ) : null}
+          </div>
         </div>
       ) : null}
     </article>

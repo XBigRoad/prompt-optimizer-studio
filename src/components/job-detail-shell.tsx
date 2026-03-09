@@ -103,6 +103,7 @@ export function JobDetailShell({ jobId }: { jobId: string }) {
   const [resumingStep, setResumingStep] = useState(false)
   const [resumingAuto, setResumingAuto] = useState(false)
   const [copyingPrompt, setCopyingPrompt] = useState(false)
+  const [compareMode, setCompareMode] = useState(false)
   const [actionMessage, setActionMessage] = useState<string | null>(null)
   const [expandedRounds, setExpandedRounds] = useState<Record<string, boolean>>({})
 
@@ -197,6 +198,10 @@ export function JobDetailShell({ jobId }: { jobId: string }) {
     knownPendingSteeringIdsRef.current = nextPendingSet
   }, [detail])
 
+  useEffect(() => {
+    setCompareMode(false)
+  }, [jobId])
+
   const model = useMemo<JobDetailViewModel | null>(() => {
     if (!detail) return null
     return {
@@ -221,6 +226,7 @@ export function JobDetailShell({ jobId }: { jobId: string }) {
       lastReviewScore: detail.job.lastReviewScore,
       errorMessage: detail.job.errorMessage,
       latestFullPrompt: resolveLatestFullPrompt(detail.job.rawPrompt, detail.candidates),
+      initialPrompt: detail.job.rawPrompt,
       modelsLabel: getTaskModelLabel(detail.job.optimizerModel, detail.job.judgeModel),
       effectiveMaxRounds: detail.job.maxRoundsOverride ?? settings.maxRounds,
       candidates: detail.candidates,
@@ -555,6 +561,7 @@ export function JobDetailShell({ jobId }: { jobId: string }) {
               resumingStep,
               resumingAuto,
               copyingPrompt,
+              compareMode,
               expandedRounds,
             }}
             form={{
@@ -581,6 +588,7 @@ export function JobDetailShell({ jobId }: { jobId: string }) {
               onResumeAuto: resumeAuto,
               onCancelTask: cancelTask,
               onCopyLatestPrompt: copyLatestPrompt,
+              onToggleCompareMode: () => setCompareMode((current) => !current),
               onToggleRound: (candidateId) => setExpandedRounds((current) => ({ ...current, [candidateId]: !current[candidateId] })),
               onTaskModelChange: (value) => {
                 setModelDirty(true)

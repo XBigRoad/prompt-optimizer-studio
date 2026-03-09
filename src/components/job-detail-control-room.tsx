@@ -50,6 +50,7 @@ export type JobDetailViewModel = {
   lastReviewScore: number
   errorMessage: string | null
   latestFullPrompt: string
+  initialPrompt: string
   modelsLabel: string
   effectiveMaxRounds: number
   candidates: RoundCandidateView[]
@@ -79,6 +80,7 @@ export function JobDetailControlRoom({
     resumingStep: boolean
     resumingAuto: boolean
     copyingPrompt: boolean
+    compareMode: boolean
     expandedRounds: Record<string, boolean>
   }
   form: {
@@ -105,6 +107,7 @@ export function JobDetailControlRoom({
     onResumeAuto: () => void
     onCancelTask: () => void
     onCopyLatestPrompt: () => void
+    onToggleCompareMode: () => void
     onToggleRound: (candidateId: string) => void
     onTaskModelChange: (value: string) => void
     onMaxRoundsOverrideChange: (value: string) => void
@@ -175,11 +178,54 @@ export function JobDetailControlRoom({
             <h2 className="section-title">当前最新完整提示词</h2>
             <p className="small">这是你现在最应该复制和判断的版本。后续所有诊断都只是为这个结果服务。</p>
           </div>
-          <button className="button primary-action" type="button" onClick={handlers.onCopyLatestPrompt} disabled={ui.copyingPrompt}>
-            {ui.copyingPrompt ? '复制中...' : '复制完整提示词'}
-          </button>
+          <div className="result-stage-actions">
+            <button className="button ghost" type="button" onClick={handlers.onToggleCompareMode}>
+              {ui.compareMode ? '退出对比' : '进入对比'}
+            </button>
+            <button className="button primary-action" type="button" onClick={handlers.onCopyLatestPrompt} disabled={ui.copyingPrompt}>
+              {ui.copyingPrompt ? '复制中...' : '复制完整提示词'}
+            </button>
+          </div>
         </div>
-        <pre className="pre result-pre">{model.latestFullPrompt}</pre>
+        <AnimatePresence mode="wait" initial={false}>
+          {ui.compareMode ? (
+            <motion.div
+              key="compare-mode"
+              className="result-compare-grid"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+            >
+              <div className="panel result-panel result-panel-initial">
+                <div className="result-panel-head">
+                  <span className="eyebrow subdued">初始输入</span>
+                  <strong>初始版提示词</strong>
+                </div>
+                <p className="small">这是任务刚创建时的原始输入，用来和当前版直接对照。</p>
+                <pre className="pre result-pre result-pre-initial">{model.initialPrompt}</pre>
+              </div>
+              <div className="panel result-panel result-panel-latest">
+                <div className="result-panel-head">
+                  <span className="eyebrow">当前结果</span>
+                  <strong>当前最新完整提示词</strong>
+                </div>
+                <p className="small">复制按钮始终复制右侧这一版，方便你直接带走当前可用结果。</p>
+                <pre className="pre result-pre result-pre-latest">{model.latestFullPrompt}</pre>
+              </div>
+            </motion.div>
+          ) : (
+            <motion.div
+              key="latest-only"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+            >
+              <pre className="pre result-pre">{model.latestFullPrompt}</pre>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </section>
 
       <section className="understanding-stage">
@@ -513,9 +559,9 @@ function ReadonlyGoalField({
   value: string
 }) {
   return (
-    <div className="active-goal-card compact-goal-card">
+    <div className="active-goal-card compact-goal-card compact-scroll-card">
       <div className="label">{label}</div>
-      <div className="active-goal-value">{value}</div>
+      <div className="active-goal-value active-goal-scroll">{value}</div>
     </div>
   )
 }

@@ -409,6 +409,12 @@ main {
 
 .compact-goal-grid {
   gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+}
+
+.compact-goal-grid > :last-child {
+  grid-column: 1 / -1;
 }
 
 .active-goal-card,
@@ -419,6 +425,10 @@ main {
   border: 1px solid rgba(72, 50, 27, 0.12);
   border-radius: var(--radius-lg);
   background: rgba(255, 253, 248, 0.9);
+}
+
+.compact-scroll-card {
+  align-content: start;
 }
 
 .active-steering-callout {
@@ -435,18 +445,24 @@ main {
 .active-goal-value {
   margin: 0;
   white-space: pre-wrap;
-  line-height: 1.65;
+  line-height: 1.6;
   color: var(--ink);
 }
 
 .active-goal-value {
   min-height: 86px;
-  max-height: 11.5rem;
-  overflow: hidden;
+  max-height: 12.5rem;
+  overflow: auto;
+  scrollbar-gutter: stable;
+  overflow-wrap: anywhere;
   padding: 14px 16px;
   border: 1px solid rgba(72, 50, 27, 0.12);
   border-radius: var(--radius-md);
   background: rgba(255, 252, 246, 0.78);
+}
+
+.active-goal-scroll {
+  font-size: 0.95rem;
 }
 
 .compact-goal-card {
@@ -545,6 +561,47 @@ main {
 
 .applied-steering-panel {
   margin-bottom: 14px;
+}
+
+.round-analysis-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr);
+  align-items: start;
+}
+
+.round-analysis-stack,
+.round-review-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.round-insight-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.round-info-panel {
+  align-content: start;
+}
+
+.round-mve-panel {
+  gap: 10px;
+}
+
+.round-mve-pre {
+  max-height: 220px;
+  font-size: 0.9rem;
+}
+
+.round-review-header {
+  align-items: center;
+}
+
+.round-review-section {
+  display: grid;
+  gap: 8px;
 }
 
 .steering-impact-card {
@@ -881,6 +938,45 @@ main {
   justify-content: center;
 }
 
+.result-stage-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.result-compare-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  align-items: stretch;
+}
+
+.result-panel {
+  align-content: start;
+}
+
+.result-panel-head {
+  display: grid;
+  gap: 6px;
+}
+
+.eyebrow.subdued {
+  color: var(--ink-soft);
+}
+
+.result-pre-initial {
+  max-height: 540px;
+  background: rgba(255, 252, 246, 0.82);
+  color: var(--ink);
+  border: 1px solid rgba(72, 50, 27, 0.14);
+}
+
+.result-pre-latest {
+  max-height: 540px;
+}
+
 .secondary-actions .button {
   padding: 10px 14px;
 }
@@ -969,7 +1065,9 @@ main {
   .summary-cluster,
   .control-stage-grid,
   .control-form-layout,
-  .active-goal-grid {
+  .active-goal-grid,
+  .result-compare-grid,
+  .round-analysis-grid {
     grid-template-columns: 1fr;
   }
 

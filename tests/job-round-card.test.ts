@@ -66,4 +66,7 @@ test('round card still reveals full diagnostics and applied steering when expand
   assert.match(html, /复核结果/)
   assert.match(html, /本轮采用的人工引导/)
   assert.match(html, /Keep the 老中医 judgment tone, but preserve the original conclusion\./)
+  assert.match(html, /class="round-analysis-grid"/)
+  assert.match(html, /class="panel round-mve-panel"/)
+  assert.match(html, /class="judge-card round-review-panel"/)
 })

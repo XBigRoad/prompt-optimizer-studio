@@ -90,6 +90,37 @@ test('history lane exposes grouped search when history is the active focus', () 
 })
 
 test('job detail control room keeps result before goal, controls, and diagnostics', () => {
+  const html = renderToStaticMarkup(createElement(JobDetailControlRoom, makeDetailProps()))
+
+  const resultIndex = html.indexOf('当前最新完整提示词')
+  const goalIndex = html.indexOf('长期规则')
+  const controlIndex = html.indexOf('任务控制')
+  const diagnosticIndex = html.indexOf('优化过程诊断')
+
+  assert.ok(resultIndex >= 0)
+  assert.ok(goalIndex > resultIndex)
+  assert.ok(controlIndex > goalIndex)
+  assert.ok(diagnosticIndex > controlIndex)
+})
+
+test('job detail result stage can switch into compare mode without changing the primary copy target', () => {
+  const defaultHtml = renderToStaticMarkup(createElement(JobDetailControlRoom, makeDetailProps()))
+  const compareHtml = renderToStaticMarkup(createElement(JobDetailControlRoom, makeDetailProps({
+    ui: { compareMode: true },
+  })))
+
+  assert.match(defaultHtml, /当前最新完整提示词/)
+  assert.match(defaultHtml, /进入对比/)
+  assert.doesNotMatch(defaultHtml, /初始版提示词/)
+
+  assert.match(compareHtml, /退出对比/)
+  assert.match(compareHtml, /初始版提示词/)
+  assert.match(compareHtml, /当前最新完整提示词/)
+  assert.match(compareHtml, /复制完整提示词/)
+  assert.match(compareHtml, /class="result-compare-grid"/)
+})
+
+test('job detail readonly goal fields use compact scrollable summaries', () => {
   const html = renderToStaticMarkup(createElement(JobDetailControlRoom, {
     model: makeDetailModel(),
     models: [],
@@ -108,12 +139,13 @@ test('job detail control room keeps result before goal, controls, and diagnostic
       resumingStep: false,
       resumingAuto: false,
       copyingPrompt: false,
+      compareMode: false,
       expandedRounds: {},
     },
     form: {
       taskModel: 'gpt-5.2',
       maxRoundsOverrideValue: '12',
-      pendingSteeringInput: '保持结果导向',
+      pendingSteeringInput: '',
       goalAnchorGoal: '保持原始任务目标',
       goalAnchorDeliverable: '输出完整优化提示词',
       goalAnchorDriftGuardText: '不要偏离目标',
@@ -134,6 +166,7 @@ test('job detail control room keeps result before goal, controls, and diagnostic
       onResumeAuto: () => {},
       onCancelTask: () => {},
       onCopyLatestPrompt: () => {},
+      onToggleCompareMode: () => {},
       onToggleRound: () => {},
       onTaskModelChange: () => {},
       onMaxRoundsOverrideChange: () => {},
@@ -145,15 +178,8 @@ test('job detail control room keeps result before goal, controls, and diagnostic
     },
   }))
 
-  const resultIndex = html.indexOf('当前最新完整提示词')
-  const goalIndex = html.indexOf('长期规则')
-  const controlIndex = html.indexOf('任务控制')
-  const diagnosticIndex = html.indexOf('优化过程诊断')
-
-  assert.ok(resultIndex >= 0)
-  assert.ok(goalIndex > resultIndex)
-  assert.ok(controlIndex > goalIndex)
-  assert.ok(diagnosticIndex > controlIndex)
+  assert.equal((html.match(/class="active-goal-value active-goal-scroll"/g) ?? []).length, 3)
+  assert.equal((html.match(/class="active-goal-card compact-goal-card compact-scroll-card"/g) ?? []).length, 3)
 })
 
 test('job detail exposes pending steering cards and goal-anchor merge entry when steering exists', () => {
@@ -189,6 +215,7 @@ test('job detail exposes pending steering cards and goal-anchor merge entry when
       resumingStep: false,
       resumingAuto: false,
       copyingPrompt: false,
+      compareMode: false,
       expandedRounds: {},
     },
     form: {
@@ -215,6 +242,7 @@ test('job detail exposes pending steering cards and goal-anchor merge entry when
       onResumeAuto: () => {},
       onCancelTask: () => {},
       onCopyLatestPrompt: () => {},
+      onToggleCompareMode: () => {},
       onToggleRound: () => {},
       onTaskModelChange: () => {},
       onMaxRoundsOverrideChange: () => {},
@@ -271,6 +299,7 @@ test('goal-anchor draft note explains that saving is still required', () => {
       resumingStep: false,
       resumingAuto: false,
       copyingPrompt: false,
+      compareMode: false,
       expandedRounds: {},
     },
     form: {
@@ -297,6 +326,7 @@ test('goal-anchor draft note explains that saving is still required', () => {
       onResumeAuto: () => {},
       onCancelTask: () => {},
       onCopyLatestPrompt: () => {},
+      onToggleCompareMode: () => {},
       onToggleRound: () => {},
       onTaskModelChange: () => {},
       onMaxRoundsOverrideChange: () => {},
@@ -381,6 +411,71 @@ function makeJob(id: string, status: DashboardJobView['status']): DashboardJobVi
   }
 }
 
+function makeDetailProps(overrides: {
+  model?: Partial<JobDetailViewModel>
+  ui?: Partial<Parameters<typeof JobDetailControlRoom>[0]['ui']>
+  form?: Partial<Parameters<typeof JobDetailControlRoom>[0]['form']>
+} = {}) {
+  return {
+    model: { ...makeDetailModel(), ...overrides.model },
+    models: [],
+    ui: {
+      loading: false,
+      error: null,
+      actionMessage: null,
+      savingModels: false,
+      savingMaxRounds: false,
+      savingSteering: false,
+      generatingGoalAnchorDraft: false,
+      savingGoalAnchor: false,
+      retrying: false,
+      cancelling: false,
+      pausing: false,
+      resumingStep: false,
+      resumingAuto: false,
+      copyingPrompt: false,
+      compareMode: false,
+      expandedRounds: {},
+      ...overrides.ui,
+    },
+    form: {
+      taskModel: 'gpt-5.2',
+      maxRoundsOverrideValue: '12',
+      pendingSteeringInput: '保持结果导向',
+      goalAnchorGoal: '保持原始任务目标',
+      goalAnchorDeliverable: '输出完整优化提示词',
+      goalAnchorDriftGuardText: '不要偏离目标',
+      goalAnchorDraftReady: false,
+      selectedPendingSteeringIds: [],
+      ...overrides.form,
+    },
+    handlers: {
+      onRetry: () => {},
+      onSaveModel: () => {},
+      onSaveMaxRoundsOverride: () => {},
+      onAddPendingSteering: () => {},
+      onRemovePendingSteeringItem: () => {},
+      onClearPendingSteering: () => {},
+      onGenerateGoalAnchorDraft: () => {},
+      onSaveGoalAnchor: () => {},
+      onPauseTask: () => {},
+      onResumeStep: () => {},
+      onResumeAuto: () => {},
+      onCancelTask: () => {},
+      onCopyLatestPrompt: () => {},
+      onToggleCompareMode: () => {},
+      onToggleRound: () => {},
+      onTaskModelChange: () => {},
+      onMaxRoundsOverrideChange: () => {},
+      onPendingSteeringInputChange: () => {},
+      onGoalAnchorGoalChange: () => {},
+      onGoalAnchorDeliverableChange: () => {},
+      onGoalAnchorDriftGuardChange: () => {},
+      onTogglePendingSteeringSelection: () => {},
+    },
+  }
+}
+
 function makeDetailModel(): JobDetailViewModel {
   return {
     jobId: 'job-1',
@@ -411,6 +506,7 @@ function makeDetailModel(): JobDetailViewModel {
     lastReviewScore: 94,
     errorMessage: null,
     latestFullPrompt: 'LATEST FULL PROMPT',
+    initialPrompt: 'INITIAL RAW PROMPT',
     modelsLabel: 'gpt-5.2',
     effectiveMaxRounds: 12,
     candidates: [],

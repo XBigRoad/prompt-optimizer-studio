@@ -1,6 +1,7 @@
 {
-  "generatedAt": "2026-03-09T18:22:04.834Z",
-  "dbPath": "/Volumes/1TB_No.1/Dev_Workspace/prompt-optimizer-studio/.worktrees/open-source-hardening/data/readme-demo.db",
-  "dashboardFeaturedJobId": "eaad4861-cf42-4625-9551-4ea7093d8010",
-  "detailScreenshotJobId": "eaad4861-cf42-4625-9551-4ea7093d8010"
+  "generatedAt": "2026-03-09T19:58:19.130Z",
+  "fixture": "scripts/demo-fixtures/real-live-script-job.json",
+  "jobCount": 1,
+  "dashboardFeaturedJobId": "4b2035e7-85c6-4058-9a1c-0bba4ae4395f",
+  "detailScreenshotJobId": "4b2035e7-85c6-4058-9a1c-0bba4ae4395f"
 }
