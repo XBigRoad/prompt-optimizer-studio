@@ -42,7 +42,7 @@ export function SettingsControlRoom({
         <div className="detail-hero-grid">
           <div>
             <span className="eyebrow"><Sparkles size={16} /> 配置台</span>
-            <h1>设置控制台</h1>
+            <h1>配置台</h1>
             <p className="hero-lead">用同一套 Base URL / API Key / 模型别名，接入 OpenAI-compatible、Anthropic 官方和 Gemini 官方接口。</p>
           </div>
           <div className="summary-cluster">
