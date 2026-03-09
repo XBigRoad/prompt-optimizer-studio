@@ -122,6 +122,48 @@ export function focusDashboardJobs<T>(grouped: {
   }
 }
 
+export function groupHistoryJobsByTitle<T extends {
+  id: string
+  title: string
+  createdAt: string
+}>(jobs: T[]) {
+  const groups = new Map<string, { key: string; title: string; jobs: T[] }>()
+
+  for (const job of jobs) {
+    const key = normalizeDashboardTitle(job.title)
+    const existing = groups.get(key)
+    if (existing) {
+      existing.jobs.push(job)
+      continue
+    }
+    groups.set(key, {
+      key,
+      title: job.title.trim() || '未命名任务',
+      jobs: [job],
+    })
+  }
+
+  return [...groups.values()]
+    .map((group) => {
+      const jobsByRecency = [...group.jobs].sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+      return {
+        ...group,
+        title: jobsByRecency[0]?.title.trim() || group.title,
+        jobs: jobsByRecency,
+      }
+    })
+    .sort((left, right) => {
+      const leftLatest = left.jobs[0]?.createdAt ?? ''
+      const rightLatest = right.jobs[0]?.createdAt ?? ''
+      return rightLatest.localeCompare(leftLatest)
+    })
+}
+
+function normalizeDashboardTitle(title: string) {
+  const normalized = title.replace(/\s+/g, '').trim().toLocaleLowerCase()
+  return normalized || 'untitled'
+}
+
 export function getJobDisplayError(errorMessage: string | null) {
   if (!errorMessage) {
     return null

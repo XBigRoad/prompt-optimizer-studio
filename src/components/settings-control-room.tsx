@@ -74,13 +74,13 @@ export function SettingsControlRoom({
             <div>
               <span className="eyebrow"><Link2 size={16} /> 连接</span>
               <h2 className="section-title">连接</h2>
-              <p className="small">这里只负责让应用能连上 CPAMC，并拿到模型别名列表。</p>
+              <p className="small">这里支持连接任意 OpenAI 兼容 Base URL，并拉取可用模型列表。</p>
             </div>
           </div>
           <div className="form-grid">
             <label className="label">
-              CPAMC Base URL
-              <input className="input" value={form.cpamcBaseUrl} onChange={(event) => onFormChange('cpamcBaseUrl', event.target.value)} placeholder="http://localhost:8317/v1" />
+              Base URL
+              <input className="input" value={form.cpamcBaseUrl} onChange={(event) => onFormChange('cpamcBaseUrl', event.target.value)} placeholder="https://api.openai.com/v1" />
             </label>
             <label className="label">
               API Key
@@ -88,7 +88,7 @@ export function SettingsControlRoom({
             </label>
           </div>
           <div className="button-row">
-            <button className="button ghost" type="button" onClick={onRefreshModels} disabled={loadingModels}>{loadingModels ? '刷新中...' : '刷新模型别名'}</button>
+            <button className="button ghost" type="button" onClick={onRefreshModels} disabled={loadingModels}>{loadingModels ? '刷新中...' : '刷新模型列表'}</button>
             <button className="button secondary" type="button" onClick={onTestConnection} disabled={testing}>{testing ? '测试中...' : '测试连接'}</button>
           </div>
         </section>
@@ -101,13 +101,13 @@ export function SettingsControlRoom({
               <p className="small">这里只影响新任务创建时的默认快照，不会改动已有任务。</p>
             </div>
           </div>
-          <datalist id="cpamc-models">
+          <datalist id="model-aliases">
             {models.map((model) => <option key={model.id} value={model.id} />)}
           </datalist>
           <div className="form-grid">
             <label className="label">
-              默认任务模型别名
-              <input className="input" list="cpamc-models" value={form.defaultTaskModel} onChange={(event) => onFormChange('defaultTaskModel', event.target.value)} placeholder="例如：gpt-5.2" />
+              默认模型别名
+              <input className="input" list="model-aliases" value={form.defaultTaskModel} onChange={(event) => onFormChange('defaultTaskModel', event.target.value)} placeholder="例如：gpt-5.2" />
             </label>
           </div>
         </section>

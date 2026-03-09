@@ -8,6 +8,7 @@ import {
   finalizeCancelledJob,
   getJobById,
   getOptimizerSeed,
+  heartbeatJobClaim,
   updateJobProgress,
   updateJobReviewState,
 } from '@/lib/server/jobs'
@@ -27,6 +28,9 @@ export function ensureWorkerStarted() {
     if (globalWorkerState.__promptOptimizerWorker?.intervalId) {
       clearInterval(globalWorkerState.__promptOptimizerWorker.intervalId)
     }
+    if (globalWorkerState.__promptOptimizerWorker?.heartbeatIntervalId) {
+      clearInterval(globalWorkerState.__promptOptimizerWorker.heartbeatIntervalId)
+    }
     globalWorkerState.__promptOptimizerWorker = createWorkerRuntimeState(WORKER_OWNER_ID)
   }
 
@@ -39,6 +43,9 @@ export function ensureWorkerStarted() {
   state.intervalId = setInterval(() => {
     void pumpQueue()
   }, 2500)
+  state.heartbeatIntervalId = setInterval(() => {
+    beatActiveJobs()
+  }, 5000)
   void pumpQueue()
 }
 
@@ -75,16 +82,29 @@ async function pumpQueue() {
     return
   }
 
-  const job = claimNextRunnableJob()
+  const job = claimNextRunnableJob(WORKER_OWNER_ID)
   if (!job) {
     return
   }
 
   state.activeCount += 1
+  state.activeJobIds.add(job.id)
   try {
     await runJob(job.id)
   } finally {
+    state.activeJobIds.delete(job.id)
     state.activeCount -= 1
+  }
+}
+
+function beatActiveJobs() {
+  const state = globalWorkerState.__promptOptimizerWorker
+  if (!state) {
+    return
+  }
+
+  for (const jobId of state.activeJobIds) {
+    heartbeatJobClaim(jobId, WORKER_OWNER_ID)
   }
 }
 

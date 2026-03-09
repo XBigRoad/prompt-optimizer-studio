@@ -1,10 +1,11 @@
 'use client'
 
-import { motion } from 'framer-motion'
-import { Plus, SendHorizontal } from 'lucide-react'
+import { AnimatePresence, motion } from 'framer-motion'
+import { ChevronDown, Plus, SendHorizontal } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 
 import { DashboardControlRoom } from '@/components/dashboard-control-room'
+import { StudioFrame } from '@/components/studio-frame'
 import { focusDashboardJobs, partitionDashboardJobs } from '@/lib/presentation'
 
 type JobStatus = 'pending' | 'running' | 'paused' | 'completed' | 'failed' | 'manual_review' | 'cancelled'
@@ -63,6 +64,7 @@ export function DashboardShell() {
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [actionableOnly, setActionableOnly] = useState(false)
+  const [submissionExpanded, setSubmissionExpanded] = useState(false)
   const [actionInFlight, setActionInFlight] = useState<string | null>(null)
   const [actionMessage, setActionMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -174,6 +176,7 @@ export function DashboardShell() {
       setJobs((current) => [...result.jobs, ...current])
       setError(null)
       setActionMessage('新任务已送入控制室。')
+      setSubmissionExpanded(false)
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : 'Failed to create jobs.')
       setActionMessage(null)
@@ -233,72 +236,100 @@ export function DashboardShell() {
 
   return (
     <main>
-      <motion.div
-        className="shell"
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-      >
-        <DashboardControlRoom
-          actionableOnly={actionableOnly}
-          loading={loading}
-          groups={controlRoomGroups}
-          stats={controlRoomStats}
-          actionInFlight={actionInFlight}
-          onToggleActionableOnly={() => setActionableOnly((current) => !current)}
-          onCopyPrompt={copyLatestPrompt}
-          onResumeStep={resumeStep}
-          onResumeAuto={resumeAuto}
-        />
+      <StudioFrame title="任务控制室" currentPath="/">
+        <motion.div
+          className="shell"
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+        >
+          <DashboardControlRoom
+            actionableOnly={actionableOnly}
+            loading={loading}
+            groups={controlRoomGroups}
+            stats={controlRoomStats}
+            actionInFlight={actionInFlight}
+            onToggleActionableOnly={() => setActionableOnly((current) => !current)}
+            onCopyPrompt={copyLatestPrompt}
+            onResumeStep={resumeStep}
+            onResumeAuto={resumeAuto}
+          />
 
-        <section className="panel submission-station">
-          <div className="section-head">
-            <div>
-              <span className="eyebrow"><Plus size={16} /> 投递台</span>
-              <h2 className="section-title">批量投递新任务</h2>
-              <p className="small">这里保持高效率录入，首页控制室负责处理和跟进。</p>
-            </div>
-            <div className="button-row">
-              <button className="button ghost" type="button" onClick={() => setDrafts((current) => [...current, createEmptyDraft(settings)])}>
-                新增一条
-              </button>
-              <button className="button primary-action" type="button" onClick={submitJobs} disabled={submitting}>
-                <SendHorizontal size={16} /> {submitting ? '提交中...' : '提交到队列'}
-              </button>
-            </div>
-          </div>
-          <datalist id="cpamc-model-aliases">
-            {models.map((model) => <option key={model.id} value={model.id} />)}
-          </datalist>
-          <div className="panel-grid">
-            {drafts.map((draft, index) => (
-              <div className="draft-card control-card subdued" key={draft.id}>
-                <div className="card-topline">
-                  <span className="status pending">草稿 {index + 1}</span>
-                </div>
-                <label className="label">
-                  标题
-                  <input className="input" value={draft.title} onChange={(event) => updateDraft(setDrafts, draft.id, 'title', event.target.value)} placeholder="例如：医疗分诊控制台" />
-                </label>
-                <label className="label">
-                  优化模型别名
-                  <input className="input" list="cpamc-model-aliases" value={draft.optimizerModel} onChange={(event) => updateDraft(setDrafts, draft.id, 'optimizerModel', event.target.value)} placeholder={settings.defaultOptimizerModel || '例如：gpt-5.2'} />
-                </label>
-                <label className="label">
-                  裁判模型别名
-                  <input className="input" list="cpamc-model-aliases" value={draft.judgeModel} onChange={(event) => updateDraft(setDrafts, draft.id, 'judgeModel', event.target.value)} placeholder={settings.defaultJudgeModel || '例如：gpt-5.2'} />
-                </label>
-                <label className="label">
-                  初版提示词
-                  <textarea className="textarea" value={draft.rawPrompt} onChange={(event) => updateDraft(setDrafts, draft.id, 'rawPrompt', event.target.value)} placeholder="贴入一句话需求、初版 prompt，或待优化长提示词。" />
-                </label>
+          <section className={`panel submission-station${submissionExpanded ? ' expanded' : ' collapsed'}`}>
+            <div className="section-head">
+              <div>
+                <span className="eyebrow"><Plus size={16} /> 投递台</span>
+                <h2 className="section-title">批量投递新任务</h2>
+                <p className="small">先处理控制室，再按需展开录入新任务。</p>
               </div>
-            ))}
-          </div>
-          {actionMessage ? <div className="notice success">{actionMessage}</div> : null}
-          {error ? <div className="notice error">{error}</div> : null}
-        </section>
-      </motion.div>
+              <div className="button-row">
+                <button className="button ghost" type="button" onClick={() => setSubmissionExpanded((current) => !current)}>
+                  <ChevronDown size={16} className={submissionExpanded ? 'rotate-180' : ''} />
+                  {submissionExpanded ? '收起投递台' : '展开投递台'}
+                </button>
+                {submissionExpanded ? (
+                  <>
+                    <button className="button ghost" type="button" onClick={() => setDrafts((current) => [...current, createEmptyDraft(settings)])}>
+                      新增一条
+                    </button>
+                    <button className="button primary-action" type="button" onClick={submitJobs} disabled={submitting}>
+                      <SendHorizontal size={16} /> {submitting ? '提交中...' : '提交到队列'}
+                    </button>
+                  </>
+                ) : (
+                  <button className="button primary-action" type="button" onClick={() => setSubmissionExpanded(true)}>
+                    <Plus size={16} /> 新增任务
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <AnimatePresence initial={false}>
+              {submissionExpanded ? (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+                  className="submission-body"
+                >
+                  <datalist id="cpamc-model-aliases">
+                    {models.map((model) => <option key={model.id} value={model.id} />)}
+                  </datalist>
+                  <div className="panel-grid">
+                    {drafts.map((draft, index) => (
+                      <div className="draft-card control-card subdued" key={draft.id}>
+                        <div className="card-topline">
+                          <span className="status pending">草稿 {index + 1}</span>
+                        </div>
+                        <label className="label">
+                          标题
+                          <input className="input" value={draft.title} onChange={(event) => updateDraft(setDrafts, draft.id, 'title', event.target.value)} placeholder="例如：医疗分诊控制台" />
+                        </label>
+                        <label className="label">
+                          优化模型别名
+                          <input className="input" list="cpamc-model-aliases" value={draft.optimizerModel} onChange={(event) => updateDraft(setDrafts, draft.id, 'optimizerModel', event.target.value)} placeholder={settings.defaultOptimizerModel || '例如：gpt-5.2'} />
+                        </label>
+                        <label className="label">
+                          裁判模型别名
+                          <input className="input" list="cpamc-model-aliases" value={draft.judgeModel} onChange={(event) => updateDraft(setDrafts, draft.id, 'judgeModel', event.target.value)} placeholder={settings.defaultJudgeModel || '例如：gpt-5.2'} />
+                        </label>
+                        <label className="label">
+                          初版提示词
+                          <textarea className="textarea" value={draft.rawPrompt} onChange={(event) => updateDraft(setDrafts, draft.id, 'rawPrompt', event.target.value)} placeholder="贴入一句话需求、初版 prompt，或待优化长提示词。" />
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                </motion.div>
+              ) : null}
+            </AnimatePresence>
+
+            {actionMessage ? <div className="notice success">{actionMessage}</div> : null}
+            {error ? <div className="notice error">{error}</div> : null}
+          </section>
+        </motion.div>
+      </StudioFrame>
     </main>
   )
 }

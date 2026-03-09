@@ -77,11 +77,11 @@ export function saveSettings(input: Partial<AppSettings>) {
 
 export function validateCpamcConnection(settings: Pick<AppSettings, 'cpamcBaseUrl' | 'cpamcApiKey'>) {
   if (!settings.cpamcBaseUrl.trim()) {
-    throw new Error('请先配置 CPAMC Base URL。')
+    throw new Error('请先配置 Base URL。')
   }
 
   if (!settings.cpamcApiKey.trim()) {
-    throw new Error('请先配置 CPAMC API Key。')
+    throw new Error('请先配置 API Key。')
   }
 }
 

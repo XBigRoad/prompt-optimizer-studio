@@ -210,13 +210,13 @@ test('job controls support paused state, resume modes, and max round overrides',
     const pausedPending = pauseJob(job.id)
     assert.equal(pausedPending.status, 'paused')
     assert.equal(pausedPending.pauseRequestedAt, null)
-    assert.equal(claimNextRunnableJob(), null)
+    assert.equal(claimNextRunnableJob('worker-a'), null)
 
     const resumedStep = resumeJobStep(job.id)
     assert.equal(resumedStep.status, 'pending')
     assert.equal(resumedStep.runMode, 'step')
 
-    const claimed = claimNextRunnableJob()
+    const claimed = claimNextRunnableJob('worker-a')
     assert.equal(claimed?.id, job.id)
     assert.equal(claimed?.status, 'running')
 
@@ -315,6 +315,107 @@ test('job controls support paused state, resume modes, and max round overrides',
     const detail = (await import('../src/lib/server/jobs')).getJobDetail(job.id)
     assert.deepEqual(detail?.candidates[0]?.judges[0]?.driftLabels, ['over_safety_generalization'])
     assert.equal(detail?.candidates[0]?.judges[0]?.driftExplanation, '为了规避风险，输出已经退化成泛化安全建议。')
+  } finally {
+    process.chdir(originalCwd)
+    global.fetch = originalFetch
+    if (originalDbPath === undefined) {
+      delete process.env.PROMPT_OPTIMIZER_DB_PATH
+    } else {
+      process.env.PROMPT_OPTIMIZER_DB_PATH = originalDbPath
+    }
+  }
+})
+
+test('job claim lease prevents double-claiming the same running job', async () => {
+  const originalCwd = process.cwd()
+  const originalDbPath = process.env.PROMPT_OPTIMIZER_DB_PATH
+  const originalFetch = global.fetch
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'po-controls-claim-lease-'))
+  process.env.PROMPT_OPTIMIZER_DB_PATH = path.join(tempDir, 'test.db')
+  process.chdir(tempDir)
+
+  try {
+    const { resetDbForTests } = await import('../src/lib/server/db')
+    resetDbForTests()
+    const { saveSettings } = await import('../src/lib/server/settings')
+    const { claimNextRunnableJob, createJobs } = await import('../src/lib/server/jobs')
+
+    saveSettings({
+      cpamcBaseUrl: 'http://localhost:8317/v1',
+      cpamcApiKey: 'secret',
+      defaultOptimizerModel: 'gpt-5.2',
+      defaultJudgeModel: 'gpt-5.2',
+      maxRounds: 8,
+    })
+
+    global.fetch = (async () => {
+      throw new Error('simulated goal anchor generation failure')
+    }) as typeof fetch
+
+    const [job] = await createJobs([
+      { title: 'Claim job', rawPrompt: 'Improve this prompt', optimizerModel: 'gpt-5.2', judgeModel: 'gpt-5.2' },
+    ])
+
+    const firstClaim = claimNextRunnableJob('worker-a')
+    assert.equal(firstClaim?.id, job.id)
+    assert.equal(firstClaim?.status, 'running')
+
+    const secondClaim = claimNextRunnableJob('worker-b')
+    assert.equal(secondClaim, null)
+  } finally {
+    process.chdir(originalCwd)
+    global.fetch = originalFetch
+    if (originalDbPath === undefined) {
+      delete process.env.PROMPT_OPTIMIZER_DB_PATH
+    } else {
+      process.env.PROMPT_OPTIMIZER_DB_PATH = originalDbPath
+    }
+  }
+})
+
+test('stale running job lease can be reclaimed by another worker', async () => {
+  const originalCwd = process.cwd()
+  const originalDbPath = process.env.PROMPT_OPTIMIZER_DB_PATH
+  const originalFetch = global.fetch
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'po-controls-claim-recover-'))
+  process.env.PROMPT_OPTIMIZER_DB_PATH = path.join(tempDir, 'test.db')
+  process.chdir(tempDir)
+
+  try {
+    const { resetDbForTests, getDb } = await import('../src/lib/server/db')
+    resetDbForTests()
+    const { saveSettings } = await import('../src/lib/server/settings')
+    const { claimNextRunnableJob, createJobs } = await import('../src/lib/server/jobs')
+
+    saveSettings({
+      cpamcBaseUrl: 'http://localhost:8317/v1',
+      cpamcApiKey: 'secret',
+      defaultOptimizerModel: 'gpt-5.2',
+      defaultJudgeModel: 'gpt-5.2',
+      maxRounds: 8,
+    })
+
+    global.fetch = (async () => {
+      throw new Error('simulated goal anchor generation failure')
+    }) as typeof fetch
+
+    const [job] = await createJobs([
+      { title: 'Recover job', rawPrompt: 'Improve this prompt', optimizerModel: 'gpt-5.2', judgeModel: 'gpt-5.2' },
+    ])
+
+    const firstClaim = claimNextRunnableJob('worker-a')
+    assert.equal(firstClaim?.id, job.id)
+
+    getDb().prepare(`
+      UPDATE jobs
+      SET active_worker_id = 'worker-a',
+          worker_heartbeat_at = '2026-03-08T00:00:00.000Z'
+      WHERE id = ?
+    `).run(job.id)
+
+    const reclaimed = claimNextRunnableJob('worker-b')
+    assert.equal(reclaimed?.id, job.id)
+    assert.equal(reclaimed?.status, 'running')
   } finally {
     process.chdir(originalCwd)
     global.fetch = originalFetch

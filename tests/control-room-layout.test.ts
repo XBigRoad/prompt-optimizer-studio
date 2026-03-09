@@ -10,6 +10,7 @@ import {
 } from '../src/components/dashboard-control-room'
 import {
   JobDetailControlRoom,
+  getDetailNoticeItems,
   type JobDetailViewModel,
 } from '../src/components/job-detail-control-room'
 import { SettingsControlRoom } from '../src/components/settings-control-room'
@@ -38,6 +39,29 @@ test('dashboard control room prioritizes attention, running, and latest results'
   assert.match(html, /自动运行中/)
   assert.match(html, /最新结果/)
   assert.match(html, /历史任务/)
+})
+
+test('history lane exposes grouped search when history is the active focus', () => {
+  const html = renderToStaticMarkup(createElement(DashboardControlRoom, {
+    actionableOnly: false,
+    loading: false,
+    groups: {
+      attention: [],
+      running: [],
+      queued: [],
+      recentCompleted: [],
+      history: [makeJob('history-old', 'failed')],
+    },
+    stats: { attention: 0, running: 0, queued: 0, recentCompleted: 0, history: 1 },
+    actionInFlight: null,
+    onToggleActionableOnly: () => {},
+    onCopyPrompt: async () => {},
+    onResumeStep: async () => {},
+    onResumeAuto: async () => {},
+  }))
+
+  assert.match(html, /搜索标题，例如：老中医/)
+  assert.match(html, /1 次运行/)
 })
 
 test('job detail control room keeps result before goal, controls, and diagnostics', () => {
@@ -129,6 +153,25 @@ test('settings control room groups connection, defaults, and runtime strategy', 
   assert.match(html, /连接/)
   assert.match(html, /默认模型/)
   assert.match(html, /运行策略/)
+  assert.match(html, /Base URL/)
+  assert.match(html, /API Key/)
+  assert.doesNotMatch(html, /CPAMC/)
+})
+
+test('job detail notices produce stable unique keys for AnimatePresence', () => {
+  const notices = getDetailNoticeItems({
+    loading: true,
+    actionMessage: 'saved',
+    error: 'boom',
+    displayError: 'mapped error',
+  })
+
+  assert.deepEqual(notices.map((item) => item.key), [
+    'loading',
+    'action-message',
+    'ui-error',
+    'display-error',
+  ])
 })
 
 function makeJob(id: string, status: DashboardJobView['status']): DashboardJobView {

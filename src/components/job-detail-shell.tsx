@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react'
 
 import { JobDetailControlRoom, type JobDetailViewModel } from '@/components/job-detail-control-room'
 import { type RoundCandidateView } from '@/components/job-round-card'
+import { StudioFrame } from '@/components/studio-frame'
 import { getTaskModelLabel, resolveLatestFullPrompt } from '@/lib/presentation'
 
 type JobStatus = 'pending' | 'running' | 'paused' | 'completed' | 'failed' | 'manual_review' | 'cancelled'
@@ -412,78 +413,80 @@ export function JobDetailShell({ jobId }: { jobId: string }) {
 
   return (
     <main>
-      <motion.div
-        className="shell"
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-      >
-        <JobDetailControlRoom
-          model={model}
-          models={models}
-          ui={{
-            loading,
-            error,
-            actionMessage,
-            savingModels,
-            savingMaxRounds,
-            savingSteering,
-            savingGoalAnchor,
-            retrying,
-            cancelling,
-            pausing,
-            resumingStep,
-            resumingAuto,
-            copyingPrompt,
-            expandedRounds,
-          }}
-          form={{
-            taskModel,
-            maxRoundsOverrideValue,
-            nextRoundInstruction,
-            goalAnchorGoal,
-            goalAnchorDeliverable,
-            goalAnchorDriftGuardText,
-          }}
-          handlers={{
-            onRetry: retry,
-            onSaveModel: saveModel,
-            onSaveMaxRoundsOverride: saveMaxRoundsOverride,
-            onSaveNextRoundInstruction: saveNextRoundInstruction,
-            onSaveGoalAnchor: saveGoalAnchor,
-            onPauseTask: pauseTask,
-            onResumeStep: resumeStep,
-            onResumeAuto: resumeAuto,
-            onCancelTask: cancelTask,
-            onCopyLatestPrompt: copyLatestPrompt,
-            onToggleRound: (candidateId) => setExpandedRounds((current) => ({ ...current, [candidateId]: !current[candidateId] })),
-            onTaskModelChange: (value) => {
-              setModelDirty(true)
-              setTaskModel(value)
-            },
-            onMaxRoundsOverrideChange: (value) => {
-              setMaxRoundsDirty(true)
-              setMaxRoundsOverrideValue(value)
-            },
-            onNextRoundInstructionChange: (value) => {
-              setSteeringDirty(true)
-              setNextRoundInstruction(value)
-            },
-            onGoalAnchorGoalChange: (value) => {
-              setGoalAnchorDirty(true)
-              setGoalAnchorGoal(value)
-            },
-            onGoalAnchorDeliverableChange: (value) => {
-              setGoalAnchorDirty(true)
-              setGoalAnchorDeliverable(value)
-            },
-            onGoalAnchorDriftGuardChange: (value) => {
-              setGoalAnchorDirty(true)
-              setGoalAnchorDriftGuardText(value)
-            },
-          }}
-        />
-      </motion.div>
+      <StudioFrame title="结果台" currentPath={`/jobs/${jobId}`}>
+        <motion.div
+          className="shell"
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+        >
+          <JobDetailControlRoom
+            model={model}
+            models={models}
+            ui={{
+              loading,
+              error,
+              actionMessage,
+              savingModels,
+              savingMaxRounds,
+              savingSteering,
+              savingGoalAnchor,
+              retrying,
+              cancelling,
+              pausing,
+              resumingStep,
+              resumingAuto,
+              copyingPrompt,
+              expandedRounds,
+            }}
+            form={{
+              taskModel,
+              maxRoundsOverrideValue,
+              nextRoundInstruction,
+              goalAnchorGoal,
+              goalAnchorDeliverable,
+              goalAnchorDriftGuardText,
+            }}
+            handlers={{
+              onRetry: retry,
+              onSaveModel: saveModel,
+              onSaveMaxRoundsOverride: saveMaxRoundsOverride,
+              onSaveNextRoundInstruction: saveNextRoundInstruction,
+              onSaveGoalAnchor: saveGoalAnchor,
+              onPauseTask: pauseTask,
+              onResumeStep: resumeStep,
+              onResumeAuto: resumeAuto,
+              onCancelTask: cancelTask,
+              onCopyLatestPrompt: copyLatestPrompt,
+              onToggleRound: (candidateId) => setExpandedRounds((current) => ({ ...current, [candidateId]: !current[candidateId] })),
+              onTaskModelChange: (value) => {
+                setModelDirty(true)
+                setTaskModel(value)
+              },
+              onMaxRoundsOverrideChange: (value) => {
+                setMaxRoundsDirty(true)
+                setMaxRoundsOverrideValue(value)
+              },
+              onNextRoundInstructionChange: (value) => {
+                setSteeringDirty(true)
+                setNextRoundInstruction(value)
+              },
+              onGoalAnchorGoalChange: (value) => {
+                setGoalAnchorDirty(true)
+                setGoalAnchorGoal(value)
+              },
+              onGoalAnchorDeliverableChange: (value) => {
+                setGoalAnchorDirty(true)
+                setGoalAnchorDeliverable(value)
+              },
+              onGoalAnchorDriftGuardChange: (value) => {
+                setGoalAnchorDirty(true)
+                setGoalAnchorDriftGuardText(value)
+              },
+            }}
+          />
+        </motion.div>
+      </StudioFrame>
     </main>
   )
 }

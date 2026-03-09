@@ -75,6 +75,8 @@ export function getDb() {
       final_candidate_id TEXT,
       conversation_policy TEXT NOT NULL,
       conversation_group_id TEXT,
+      active_worker_id TEXT,
+      worker_heartbeat_at TEXT,
       cancel_requested_at TEXT,
       pause_requested_at TEXT,
       error_message TEXT,
@@ -133,6 +135,8 @@ export function getDb() {
   ensureColumn(db, 'jobs', 'max_rounds_override', 'INTEGER')
   ensureColumn(db, 'jobs', 'next_round_instruction', 'TEXT')
   ensureColumn(db, 'jobs', 'next_round_instruction_updated_at', 'TEXT')
+  ensureColumn(db, 'jobs', 'active_worker_id', 'TEXT')
+  ensureColumn(db, 'jobs', 'worker_heartbeat_at', 'TEXT')
   ensureColumn(db, 'jobs', 'cancel_requested_at', 'TEXT')
   ensureColumn(db, 'jobs', 'pause_requested_at', 'TEXT')
   ensureColumn(db, 'jobs', 'pass_streak', 'INTEGER NOT NULL DEFAULT 0')

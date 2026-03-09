@@ -5,16 +5,24 @@ import {
   Activity,
   AlertTriangle,
   CheckCircle2,
+  ChevronDown,
   ChevronRight,
   Clock3,
   Copy,
   History,
-  PauseCircle,
   PlayCircle,
+  Search,
   Sparkles,
 } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
 
-import { getConversationPolicyLabel, getJobDisplayError, getJobStatusLabel, getPromptPreview } from '@/lib/presentation'
+import {
+  getConversationPolicyLabel,
+  getJobDisplayError,
+  getJobStatusLabel,
+  getPromptPreview,
+  groupHistoryJobsByTitle,
+} from '@/lib/presentation'
 
 export type DashboardJobView = {
   id: string
@@ -29,6 +37,10 @@ export type DashboardJobView = {
   optimizerModel: string
   judgeModel: string
 }
+
+type LaneKey = 'attention' | 'running' | 'recent-completed' | 'history'
+
+type HistoryGroupView = ReturnType<typeof groupHistoryJobsByTitle<DashboardJobView>>[number]
 
 export function DashboardControlRoom({
   actionableOnly,
@@ -63,6 +75,72 @@ export function DashboardControlRoom({
   onResumeStep: (job: DashboardJobView) => Promise<void>
   onResumeAuto: (job: DashboardJobView) => Promise<void>
 }) {
+  const [historyQuery, setHistoryQuery] = useState('')
+  const [expandedHistoryGroups, setExpandedHistoryGroups] = useState<Record<string, boolean>>({})
+
+  const historyGroups = useMemo(() => {
+    const normalizedQuery = normalizeTitleQuery(historyQuery)
+    return groupHistoryJobsByTitle(groups.history).filter((group) => (
+      normalizedQuery.length === 0 || normalizeTitleQuery(group.title).includes(normalizedQuery)
+    ))
+  }, [groups.history, historyQuery])
+
+  const lanes = useMemo(() => {
+    const available = [
+      {
+        key: 'attention' as const,
+        title: '待你处理',
+        description: '这些任务需要你判断是否继续自动跑，或先加人工引导再推进。',
+        icon: <AlertTriangle size={18} />,
+        jobs: groups.attention,
+        emptyMessage: '当前没有需要你立即处理的任务。',
+      },
+      {
+        key: 'running' as const,
+        title: '自动运行中',
+        description: '这些任务已经在跑，先观察结果，不要同时给自己制造额外噪音。',
+        icon: <Activity size={18} />,
+        jobs: groups.running,
+        emptyMessage: '当前没有自动运行中的任务。',
+      },
+      {
+        key: 'recent-completed' as const,
+        title: '最新结果',
+        description: '这里只保留最近完成结果，方便你直接回到最有价值的产出。',
+        icon: <CheckCircle2 size={18} />,
+        jobs: groups.recentCompleted,
+        emptyMessage: '最近还没有完成结果。',
+      },
+      {
+        key: 'history' as const,
+        title: '历史任务',
+        description: '把旧任务按标题归拢，先搜名字，再展开具体运行记录。',
+        icon: <History size={18} />,
+        jobs: groups.history,
+        emptyMessage: '暂无历史任务。',
+      },
+    ]
+
+    return actionableOnly
+      ? available.filter((item) => item.key === 'attention' || item.key === 'running')
+      : available
+  }, [actionableOnly, groups.attention, groups.history, groups.recentCompleted, groups.running])
+
+  const defaultLane = useMemo(() => {
+    const withContent = lanes.find((lane) => (
+      lane.key === 'history' ? historyGroups.length > 0 : lane.jobs.length > 0
+    ))
+    return withContent?.key ?? lanes[0]?.key ?? 'attention'
+  }, [historyGroups.length, lanes])
+
+  const [activeLane, setActiveLane] = useState<LaneKey>(defaultLane)
+
+  useEffect(() => {
+    setActiveLane(defaultLane)
+  }, [defaultLane])
+
+  const currentLane = lanes.find((lane) => lane.key === activeLane) ?? lanes[0]
+
   return (
     <section className="control-room">
       <div className="control-room-hero">
@@ -70,7 +148,7 @@ export function DashboardControlRoom({
           <span className="eyebrow"><Sparkles size={16} /> Prompt Optimizer 控制室</span>
           <h2 className="control-room-title">任务控制室</h2>
           <p className="hero-lead">
-            先处理要你决策的任务，再观察自动运行中的任务，最后回看最新结果。首页只保留真正需要判断和推动的内容。
+            先处理要你决策的任务，再观察自动运行中的任务，然后查看最新结果或翻出同标题历史运行。
           </p>
           <div className="button-row">
             <button
@@ -93,46 +171,71 @@ export function DashboardControlRoom({
 
       {loading ? <div className="notice">正在读取控制室数据...</div> : null}
 
-      <LayoutGroup>
-        <div className="control-room-grid">
-          <DashboardLane
-            title="待你处理"
-            description="这些任务需要你判断是否继续自动跑，或先加人工引导再推进。"
-            icon={<AlertTriangle size={18} />}
-            jobs={groups.attention}
-            emptyMessage="当前没有需要你立即处理的任务。"
-            actionInFlight={actionInFlight}
-            onCopyPrompt={onCopyPrompt}
-            onResumeAuto={onResumeAuto}
-            onResumeStep={onResumeStep}
-          />
-          <DashboardLane
-            title="自动运行中"
-            description="这些任务已经在跑，先观察结果，不要同时给自己制造额外噪音。"
-            icon={<Activity size={18} />}
-            jobs={groups.running}
-            emptyMessage="当前没有自动运行中的任务。"
-            actionInFlight={actionInFlight}
-            onCopyPrompt={onCopyPrompt}
-            onResumeAuto={onResumeAuto}
-            onResumeStep={onResumeStep}
-          />
-          <DashboardLane
-            title="最新结果"
-            description="这里只保留最近完成结果，方便你直接回到最有价值的产出。"
-            icon={<CheckCircle2 size={18} />}
-            jobs={groups.recentCompleted}
-            emptyMessage="最近还没有完成结果。"
-            actionInFlight={actionInFlight}
-            onCopyPrompt={onCopyPrompt}
-            onResumeAuto={onResumeAuto}
-            onResumeStep={onResumeStep}
-          />
+      <section className="control-board">
+        <div className="lane-switcher" role="tablist" aria-label="控制板视图切换">
+          {lanes.map((lane) => (
+            <button
+              key={lane.key}
+              type="button"
+              className={`lane-chip${activeLane === lane.key ? ' active' : ''}`}
+              onClick={() => setActiveLane(lane.key)}
+            >
+              {lane.icon}
+              <span>{lane.title}</span>
+              <strong>{lane.key === 'history' ? historyGroups.length : lane.jobs.length}</strong>
+            </button>
+          ))}
         </div>
-      </LayoutGroup>
+
+        <LayoutGroup>
+          <AnimatePresence mode="wait">
+            {currentLane ? (
+              <motion.div
+                key={currentLane.key}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+                className="lane-content"
+              >
+                {currentLane.key === 'history' ? (
+                  <HistoryLane
+                    title={currentLane.title}
+                    description={currentLane.description}
+                    icon={currentLane.icon}
+                    groups={historyGroups}
+                    query={historyQuery}
+                    onQueryChange={setHistoryQuery}
+                    expandedGroups={expandedHistoryGroups}
+                    onToggleGroup={(groupKey) => setExpandedHistoryGroups((current) => ({
+                      ...current,
+                      [groupKey]: !current[groupKey],
+                    }))}
+                    emptyMessage={currentLane.emptyMessage}
+                    onCopyPrompt={onCopyPrompt}
+                  />
+                ) : (
+                  <DashboardLane
+                    title={currentLane.title}
+                    description={currentLane.description}
+                    icon={currentLane.icon}
+                    jobs={currentLane.jobs}
+                    emptyMessage={currentLane.emptyMessage}
+                    actionInFlight={actionInFlight}
+                    onCopyPrompt={onCopyPrompt}
+                    onResumeAuto={onResumeAuto}
+                    onResumeStep={onResumeStep}
+                    compact
+                  />
+                )}
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
+        </LayoutGroup>
+      </section>
 
       {!actionableOnly ? (
-        <div className="control-room-secondary">
+        <div className="control-room-secondary compact-secondary">
           <DashboardLane
             title="排队中"
             description="已入队但还没进入自动优化。放在次层，避免和需要你决策的任务抢注意力。"
@@ -145,30 +248,6 @@ export function DashboardControlRoom({
             onResumeStep={onResumeStep}
             compact
           />
-
-          <details className="history-drawer">
-            <summary>
-              <span><History size={16} /> 历史任务</span>
-              <span className="meta">{groups.history.length} 条</span>
-            </summary>
-            {groups.history.length === 0 ? (
-              <div className="notice">暂无历史任务。</div>
-            ) : (
-              <div className="history-grid">
-                {groups.history.map((job) => (
-                  <DashboardJobCard
-                    key={job.id}
-                    job={job}
-                    actionInFlight={actionInFlight}
-                    onCopyPrompt={onCopyPrompt}
-                    onResumeAuto={onResumeAuto}
-                    onResumeStep={onResumeStep}
-                    subdued
-                  />
-                ))}
-              </div>
-            )}
-          </details>
         </div>
       ) : null}
     </section>
@@ -207,22 +286,155 @@ function DashboardLane({
           <p className="small">{description}</p>
         </div>
       </div>
-      <AnimatePresence mode="popLayout">
-        <motion.div layout className="lane-grid">
-          {jobs.length === 0 ? <div className="notice">{emptyMessage}</div> : null}
-          {jobs.map((job) => (
-            <DashboardJobCard
-              key={job.id}
-              job={job}
-              actionInFlight={actionInFlight}
-              onCopyPrompt={onCopyPrompt}
-              onResumeAuto={onResumeAuto}
-              onResumeStep={onResumeStep}
-            />
-          ))}
-        </motion.div>
-      </AnimatePresence>
+      <motion.div layout className="lane-grid">
+        {jobs.length === 0 ? <div className="notice">{emptyMessage}</div> : null}
+        {jobs.map((job) => (
+          <DashboardJobCard
+            key={job.id}
+            job={job}
+            actionInFlight={actionInFlight}
+            onCopyPrompt={onCopyPrompt}
+            onResumeAuto={onResumeAuto}
+            onResumeStep={onResumeStep}
+          />
+        ))}
+      </motion.div>
     </section>
+  )
+}
+
+function HistoryLane({
+  title,
+  description,
+  icon,
+  groups,
+  query,
+  onQueryChange,
+  expandedGroups,
+  onToggleGroup,
+  emptyMessage,
+  onCopyPrompt,
+}: {
+  title: string
+  description: string
+  icon: React.ReactNode
+  groups: HistoryGroupView[]
+  query: string
+  onQueryChange: (value: string) => void
+  expandedGroups: Record<string, boolean>
+  onToggleGroup: (groupKey: string) => void
+  emptyMessage: string
+  onCopyPrompt: (job: DashboardJobView) => Promise<void>
+}) {
+  return (
+    <section className="control-lane history-lane compact">
+      <div className="lane-header">
+        <div className="lane-heading">
+          <span className="eyebrow">{icon}{title}</span>
+          <h3 className="section-title">{title}</h3>
+          <p className="small">{description}</p>
+        </div>
+        <label className="history-search" aria-label="搜索历史任务">
+          <Search size={16} />
+          <input
+            className="input"
+            value={query}
+            onChange={(event) => onQueryChange(event.target.value)}
+            placeholder="搜索标题，例如：老中医"
+          />
+        </label>
+      </div>
+
+      <div className="history-stack">
+        {groups.length === 0 ? <div className="notice">{query.trim() ? '没有匹配的历史任务。' : emptyMessage}</div> : null}
+        {groups.map((group) => (
+          <HistoryGroupCard
+            key={group.key}
+            group={group}
+            expanded={Boolean(expandedGroups[group.key])}
+            onToggle={() => onToggleGroup(group.key)}
+            onCopyPrompt={onCopyPrompt}
+          />
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function HistoryGroupCard({
+  group,
+  expanded,
+  onToggle,
+  onCopyPrompt,
+}: {
+  group: HistoryGroupView
+  expanded: boolean
+  onToggle: () => void
+  onCopyPrompt: (job: DashboardJobView) => Promise<void>
+}) {
+  const latestJob = group.jobs[0]
+  if (!latestJob) {
+    return null
+  }
+
+  return (
+    <motion.article layout className="history-group-card">
+      <button type="button" className="history-group-toggle" onClick={onToggle}>
+        <div className="history-group-summary">
+          <div className="card-topline">
+            <span className={`status ${latestJob.status}`}>{getJobStatusLabel(latestJob.status)}</span>
+            <span className="meta">{group.jobs.length} 次运行</span>
+          </div>
+          <h3>{group.title}</h3>
+          <p className="prompt-preview">{getPromptPreview(latestJob.latestPrompt, 120)}</p>
+          <div className="card-metrics">
+            <span>最近更新 {formatDate(latestJob.createdAt)}</span>
+            <span>最新最佳 {latestJob.bestAverageScore.toFixed(2)}</span>
+          </div>
+        </div>
+        <span className={`history-group-chevron${expanded ? ' expanded' : ''}`}>
+          <ChevronDown size={18} />
+        </span>
+      </button>
+
+      <AnimatePresence initial={false}>
+        {expanded ? (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+            className="history-run-list"
+          >
+            {group.jobs.map((job) => (
+              <div className="history-run-row" key={job.id}>
+                <div className="history-run-copy">
+                  <div className="card-topline">
+                    <span className={`status ${job.status}`}>{getJobStatusLabel(job.status)}</span>
+                    <span className="meta">{formatDate(job.createdAt)}</span>
+                  </div>
+                  <div className="card-metrics compact-metrics">
+                    <span>轮次 {job.currentRound}</span>
+                    <span>最佳均分 {job.bestAverageScore.toFixed(2)}</span>
+                    <span>模型 {job.optimizerModel}</span>
+                  </div>
+                </div>
+                <div className="inline-actions secondary-actions">
+                  {(job.status === 'completed' || job.status === 'manual_review' || job.status === 'paused') ? (
+                    <button className="button ghost" type="button" onClick={() => void onCopyPrompt(job)}>
+                      <Copy size={16} /> 复制
+                    </button>
+                  ) : null}
+                  <Link href={`/jobs/${job.id}` as Route} className="button ghost">
+                    详情 <ChevronRight size={16} />
+                  </Link>
+                </div>
+              </div>
+            ))}
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+    </motion.article>
   )
 }
 
@@ -258,12 +470,12 @@ function DashboardJobCard({
         <span className="meta">{formatDate(job.createdAt)}</span>
       </div>
       <h3>{job.title}</h3>
-      <p className="prompt-preview">{getPromptPreview(job.latestPrompt, 140)}</p>
-      <div className="card-metrics">
+      <p className="prompt-preview">{getPromptPreview(job.latestPrompt, subdued ? 96 : 140)}</p>
+      <div className="card-metrics compact-metrics">
         <span>轮次 {job.currentRound}</span>
         <span>最佳均分 {job.bestAverageScore.toFixed(2)}</span>
       </div>
-      <div className="card-metrics">
+      <div className="card-metrics compact-metrics">
         <span>模型 {job.optimizerModel}</span>
         <span>{getConversationPolicyLabel(job.conversationPolicy)}</span>
       </div>
@@ -327,4 +539,8 @@ function formatDate(value: string) {
     hour: '2-digit',
     minute: '2-digit',
   }).format(new Date(value))
+}
+
+function normalizeTitleQuery(value: string) {
+  return value.replace(/\s+/g, '').trim().toLocaleLowerCase()
 }

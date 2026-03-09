@@ -26,6 +26,8 @@ import type {
 
 export { getJobDisplayError }
 
+const JOB_CLAIM_STALE_AFTER_MS = 30_000
+
 export async function createJobs(inputs: JobInput[]) {
   const settings = getSettings()
   validateCpamcConnection(settings)
@@ -417,6 +419,8 @@ export function pauseJob(jobId: string) {
   db.prepare(`
     UPDATE jobs
     SET status = 'paused',
+        active_worker_id = NULL,
+        worker_heartbeat_at = NULL,
         pause_requested_at = NULL,
         updated_at = ?
     WHERE id = ?
@@ -459,6 +463,8 @@ export function cancelJob(jobId: string) {
   db.prepare(`
     UPDATE jobs
     SET status = 'cancelled',
+        active_worker_id = NULL,
+        worker_heartbeat_at = NULL,
         cancel_requested_at = NULL,
         pause_requested_at = NULL,
         error_message = '任务已取消。',
@@ -474,6 +480,8 @@ export function finalizeCancelledJob(jobId: string) {
   db.prepare(`
     UPDATE jobs
     SET status = 'cancelled',
+        active_worker_id = NULL,
+        worker_heartbeat_at = NULL,
         cancel_requested_at = NULL,
         pause_requested_at = NULL,
         error_message = '任务已取消。',
@@ -524,6 +532,8 @@ export function updateJobReviewState(jobId: string, input: {
         current_round = ?,
         final_candidate_id = ?,
         status = ?,
+        active_worker_id = CASE WHEN ? = 'running' THEN active_worker_id ELSE NULL END,
+        worker_heartbeat_at = CASE WHEN ? = 'running' THEN ? ELSE NULL END,
         pause_requested_at = NULL,
         error_message = ?,
         updated_at = ?
@@ -536,6 +546,9 @@ export function updateJobReviewState(jobId: string, input: {
     input.currentRound,
     input.finalCandidateId ?? null,
     input.status,
+    input.status,
+    input.status,
+    new Date().toISOString(),
     input.errorMessage ?? null,
     new Date().toISOString(),
     jobId,
@@ -559,6 +572,8 @@ export function resetJobForRetry(id: string) {
     UPDATE jobs
     SET status = 'pending',
         run_mode = 'auto',
+        active_worker_id = NULL,
+        worker_heartbeat_at = NULL,
         current_round = 0,
         best_average_score = 0,
         next_round_instruction = NULL,
@@ -692,6 +707,8 @@ export function updateJobProgress(jobId: string, input: {
         current_round = ?,
         best_average_score = ?,
         final_candidate_id = ?,
+        active_worker_id = CASE WHEN ? = 'running' THEN active_worker_id ELSE NULL END,
+        worker_heartbeat_at = CASE WHEN ? = 'running' THEN worker_heartbeat_at ELSE NULL END,
         pause_requested_at = CASE WHEN ? = 'running' THEN pause_requested_at ELSE NULL END,
         error_message = ?,
         updated_at = ?
@@ -702,31 +719,74 @@ export function updateJobProgress(jobId: string, input: {
     input.bestAverageScore,
     input.finalCandidateId ?? null,
     input.status,
+    input.status,
+    input.status,
     input.errorMessage ?? null,
     new Date().toISOString(),
     jobId,
   )
 }
 
-export function claimNextRunnableJob() {
+export function heartbeatJobClaim(jobId: string, workerOwnerId: string) {
   const db = getDb()
+  db.prepare(`
+    UPDATE jobs
+    SET worker_heartbeat_at = ?
+    WHERE id = ?
+      AND status = 'running'
+      AND active_worker_id = ?
+  `).run(new Date().toISOString(), jobId, workerOwnerId)
+}
+
+export function claimNextRunnableJob(workerOwnerId: string) {
+  const db = getDb()
+  const now = new Date().toISOString()
+  const staleBefore = new Date(Date.now() - JOB_CLAIM_STALE_AFTER_MS).toISOString()
   const row = db.prepare(`
     SELECT id
     FROM jobs
-    WHERE status IN ('pending', 'running')
+    WHERE status = 'pending'
+       OR (
+         status = 'running'
+         AND (
+           active_worker_id IS NULL
+           OR active_worker_id = ''
+           OR worker_heartbeat_at IS NULL
+           OR worker_heartbeat_at <= ?
+         )
+       )
     ORDER BY CASE status WHEN 'running' THEN 0 ELSE 1 END, datetime(created_at) ASC
     LIMIT 1
-  `).get() as { id?: string } | undefined
+  `).get(staleBefore) as { id?: string } | undefined
 
   if (!row?.id) {
     return null
   }
 
-  db.prepare(`
+  const result = db.prepare(`
     UPDATE jobs
-    SET status = 'running', updated_at = ?
+    SET status = 'running',
+        active_worker_id = ?,
+        worker_heartbeat_at = ?,
+        updated_at = ?
     WHERE id = ?
-  `).run(new Date().toISOString(), row.id)
+      AND (
+        status = 'pending'
+        OR (
+          status = 'running'
+          AND (
+            active_worker_id IS NULL
+            OR active_worker_id = ''
+            OR worker_heartbeat_at IS NULL
+            OR worker_heartbeat_at <= ?
+          )
+        )
+      )
+  `).run(workerOwnerId, now, now, row.id, staleBefore)
+
+  if (result.changes === 0) {
+    return null
+  }
 
   return requireJob(row.id)
 }
@@ -756,6 +816,8 @@ function resumeJob(jobId: string, runMode: JobRunMode) {
     UPDATE jobs
     SET status = 'pending',
         run_mode = ?,
+        active_worker_id = NULL,
+        worker_heartbeat_at = NULL,
         cancel_requested_at = NULL,
         pause_requested_at = NULL,
         error_message = NULL,

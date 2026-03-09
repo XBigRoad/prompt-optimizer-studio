@@ -2,7 +2,9 @@ export interface WorkerRuntimeState {
   ownerId: string
   started: boolean
   intervalId: ReturnType<typeof setInterval> | null
+  heartbeatIntervalId: ReturnType<typeof setInterval> | null
   activeCount: number
+  activeJobIds: Set<string>
 }
 
 export function createWorkerRuntimeState(ownerId: string): WorkerRuntimeState {
@@ -10,7 +12,9 @@ export function createWorkerRuntimeState(ownerId: string): WorkerRuntimeState {
     ownerId,
     started: false,
     intervalId: null,
+    heartbeatIntervalId: null,
     activeCount: 0,
+    activeJobIds: new Set(),
   }
 }
 

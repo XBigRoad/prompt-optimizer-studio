@@ -136,10 +136,22 @@ export function JobDetailControlRoom({
       </section>
 
       <AnimatePresence>
-        {ui.loading ? <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="notice">正在读取任务详情...</motion.div> : null}
-        {ui.actionMessage ? <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="notice success">{ui.actionMessage}</motion.div> : null}
-        {ui.error ? <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="notice error">{ui.error}</motion.div> : null}
-        {getJobDisplayError(model.errorMessage) ? <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="notice error">{getJobDisplayError(model.errorMessage)}</motion.div> : null}
+        {getDetailNoticeItems({
+          loading: ui.loading,
+          actionMessage: ui.actionMessage,
+          error: ui.error,
+          displayError: getJobDisplayError(model.errorMessage),
+        }).map((notice) => (
+          <motion.div
+            key={notice.key}
+            initial={{ opacity: 0, y: notice.tone === 'info' ? 0 : 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            className={`notice${notice.tone === 'success' ? ' success' : notice.tone === 'error' ? ' error' : ''}`}
+          >
+            {notice.text}
+          </motion.div>
+        ))}
       </AnimatePresence>
 
       <section className="result-stage">
@@ -267,6 +279,30 @@ export function JobDetailControlRoom({
       </section>
     </div>
   )
+}
+
+export function getDetailNoticeItems(input: {
+  loading: boolean
+  actionMessage: string | null
+  error: string | null
+  displayError: string | null
+}) {
+  const notices: Array<{ key: string; tone: 'info' | 'success' | 'error'; text: string }> = []
+
+  if (input.loading) {
+    notices.push({ key: 'loading', tone: 'info', text: '正在读取任务详情...' })
+  }
+  if (input.actionMessage) {
+    notices.push({ key: 'action-message', tone: 'success', text: input.actionMessage })
+  }
+  if (input.error) {
+    notices.push({ key: 'ui-error', tone: 'error', text: input.error })
+  }
+  if (input.displayError) {
+    notices.push({ key: 'display-error', tone: 'error', text: input.displayError })
+  }
+
+  return notices
 }
 
 function SummaryBadge({

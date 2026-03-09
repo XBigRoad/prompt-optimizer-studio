@@ -1,10 +1,10 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import Link from 'next/link'
 import { useEffect, useState } from 'react'
 
 import { SettingsControlRoom } from '@/components/settings-control-room'
+import { StudioFrame } from '@/components/studio-frame'
 
 interface SettingsForm {
   cpamcBaseUrl: string
@@ -177,32 +177,31 @@ export function SettingsShell() {
 
   return (
     <main>
-      <motion.div
-        className="shell"
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-      >
-        <div className="nav-row">
-          <Link href="/" className="link nav-chip">返回控制室</Link>
-        </div>
-        <SettingsControlRoom
-          form={form}
-          models={models}
-          loading={loading}
-          saving={saving}
-          testing={testing}
-          loadingModels={loadingModels}
-          message={message}
-          error={error}
-          onSave={save}
-          onTestConnection={testConnection}
-          onRefreshModels={refreshModels}
-          onFormChange={(field, value) => {
-            setForm((current) => ({ ...current, [field]: value }))
-          }}
-        />
-      </motion.div>
+      <StudioFrame title="配置台" currentPath="/settings">
+        <motion.div
+          className="shell"
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+        >
+          <SettingsControlRoom
+            form={form}
+            models={models}
+            loading={loading}
+            saving={saving}
+            testing={testing}
+            loadingModels={loadingModels}
+            message={message}
+            error={error}
+            onSave={save}
+            onTestConnection={testConnection}
+            onRefreshModels={refreshModels}
+            onFormChange={(field, value) => {
+              setForm((current) => ({ ...current, [field]: value }))
+            }}
+          />
+        </motion.div>
+      </StudioFrame>
     </main>
   )
 }
