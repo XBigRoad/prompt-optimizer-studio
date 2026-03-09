@@ -14,6 +14,8 @@
     "check": "npm run typecheck && npm run test && npm run build"
   },
   "dependencies": {
+    "framer-motion": "^12.35.1",
+    "lucide-react": "^0.577.0",
     "next": "16.1.6",
     "react": "19.1.0",
     "react-dom": "19.1.0"

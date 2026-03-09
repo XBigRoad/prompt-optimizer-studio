@@ -1,9 +1,10 @@
 'use client'
 
+import { motion } from 'framer-motion'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 
-import { getConversationPolicyLabel } from '@/lib/presentation'
+import { SettingsControlRoom } from '@/components/settings-control-room'
 
 interface SettingsForm {
   cpamcBaseUrl: string
@@ -176,98 +177,32 @@ export function SettingsShell() {
 
   return (
     <main>
-      <div className="shell">
-        <section className="hero">
-          <div className="nav-row">
-            <span className="pill pending">CPAMC 设置</span>
-            <Link href="/" className="link">返回队列</Link>
-          </div>
-          <div className="hero-grid">
-            <div>
-              <h1>只选一个任务模型别名。</h1>
-            </div>
-            <div>
-              <p>
-                这里保存的是默认任务模型别名。你选 `gpt-5.2`，优化器和裁判都会自动用它，provider 路由全部交给 `CPAMC`。
-              </p>
-            </div>
-          </div>
-        </section>
-
-        <section className="panel">
-          {loading ? <div className="notice">正在加载设置...</div> : null}
-          <div className="form-grid">
-            <label className="label">
-              CPAMC Base URL
-              <input className="input" value={form.cpamcBaseUrl} onChange={(event) => setForm((current) => ({ ...current, cpamcBaseUrl: event.target.value }))} placeholder="http://localhost:8317/v1" />
-            </label>
-            <label className="label">
-              API Key
-              <input className="input" type="password" value={form.cpamcApiKey} onChange={(event) => setForm((current) => ({ ...current, cpamcApiKey: event.target.value }))} placeholder="sk-..." />
-            </label>
-            <label className="label">
-              默认任务模型别名
-              <input className="input" list="cpamc-models" value={form.defaultTaskModel} onChange={(event) => setForm((current) => ({ ...current, defaultTaskModel: event.target.value }))} placeholder="例如：gpt-5.2" />
-            </label>
-            <label className="label">
-              分数阈值
-              <input className="input" type="number" value={form.scoreThreshold} onChange={(event) => setForm((current) => ({ ...current, scoreThreshold: Number(event.target.value) }))} />
-            </label>
-            <label className="label">
-              裁判数量
-              <input className="input" type="number" value={form.judgePassCount} onChange={(event) => setForm((current) => ({ ...current, judgePassCount: Number(event.target.value) }))} />
-            </label>
-            <label className="label">
-              最大轮数
-              <input className="input" type="number" value={form.maxRounds} onChange={(event) => setForm((current) => ({ ...current, maxRounds: Number(event.target.value) }))} />
-            </label>
-            <label className="label">
-              无提升上限
-              <input className="input" type="number" value={form.noImprovementLimit} onChange={(event) => setForm((current) => ({ ...current, noImprovementLimit: Number(event.target.value) }))} />
-            </label>
-            <label className="label">
-              并发数
-              <input className="input" type="number" value={form.workerConcurrency} onChange={(event) => setForm((current) => ({ ...current, workerConcurrency: Number(event.target.value) }))} />
-            </label>
-            <label className="label">
-              会话策略
-              <select className="select" value={form.conversationPolicy} onChange={(event) => setForm((current) => ({ ...current, conversationPolicy: event.target.value as SettingsForm['conversationPolicy'] }))}>
-                <option value="stateless">{getConversationPolicyLabel('stateless')}</option>
-                <option value="pooled-3x">{getConversationPolicyLabel('pooled-3x')}</option>
-              </select>
-            </label>
-          </div>
-          <datalist id="cpamc-models">
-            {models.map((model) => <option key={model.id} value={model.id} />)}
-          </datalist>
-          <div className="button-row">
-            <button className="button ghost" type="button" onClick={refreshModels} disabled={loadingModels}>
-              {loadingModels ? '刷新中...' : '刷新模型别名'}
-            </button>
-            <button className="button secondary" type="button" onClick={testConnection} disabled={testing}>
-              {testing ? '测试中...' : '测试连接'}
-            </button>
-            <button className="button" type="button" onClick={save} disabled={saving}>
-              {saving ? '保存中...' : '保存设置'}
-            </button>
-          </div>
-          <div className="panel-grid">
-            <div className="notice">
-              当前可用模型别名：{models.length > 0 ? `${models.length} 个` : '尚未拉到，仍可手动输入别名。'}
-            </div>
-            <div className="notice">
-              默认任务模型只影响新任务，不会改动旧任务快照。当前会话策略：{getConversationPolicyLabel(form.conversationPolicy)}
-            </div>
-          </div>
-          {models.length > 0 ? (
-            <div className="inline-actions">
-              {models.map((model) => <span key={model.id} className="pill pending">{model.label}</span>)}
-            </div>
-          ) : null}
-          {message ? <div className="notice success">{message}</div> : null}
-          {error ? <div className="notice error">{error}</div> : null}
-        </section>
-      </div>
+      <motion.div
+        className="shell"
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+      >
+        <div className="nav-row">
+          <Link href="/" className="link nav-chip">返回控制室</Link>
+        </div>
+        <SettingsControlRoom
+          form={form}
+          models={models}
+          loading={loading}
+          saving={saving}
+          testing={testing}
+          loadingModels={loadingModels}
+          message={message}
+          error={error}
+          onSave={save}
+          onTestConnection={testConnection}
+          onRefreshModels={refreshModels}
+          onFormChange={(field, value) => {
+            setForm((current) => ({ ...current, [field]: value }))
+          }}
+        />
+      </motion.div>
     </main>
   )
 }
