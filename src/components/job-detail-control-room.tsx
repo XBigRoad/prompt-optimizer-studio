@@ -130,7 +130,7 @@ export function JobDetailControlRoom({
       <section className="detail-hero">
         <div className="nav-row">
           <Link href="/" className="link nav-chip"><ArrowLeft size={16} /> 返回控制室</Link>
-          <Link href="/settings" className="link nav-chip"><Settings2 size={16} /> 设置</Link>
+          <Link href="/settings" className="link nav-chip"><Settings2 size={16} /> 配置台</Link>
         </div>
         <div className="detail-hero-grid">
           <div>
@@ -196,32 +196,20 @@ export function JobDetailControlRoom({
                 </p>
               </div>
             </div>
-            <div className="active-goal-grid">
-              <ReadonlyGoalField
-                label="长期目标"
-                value={model.goalAnchor.goal}
-                hint="这是长期约束，不会因为临时人工引导而被自动改写。"
-              />
-              <ReadonlyGoalField
-                label="长期交付物"
-                value={model.goalAnchor.deliverable}
-                hint="后续轮次必须继续产出这类最终结果。"
-              />
-              <ReadonlyGoalField
-                label="长期边界"
-                value={model.goalAnchor.driftGuard.join('\n')}
-                hint="这些边界条款会持续生效，直到你主动保存新的长期规则。"
-              />
+            <div className="active-goal-grid compact-goal-grid">
+              <ReadonlyGoalField label="长期目标" value={model.goalAnchor.goal} />
+              <ReadonlyGoalField label="长期交付物" value={model.goalAnchor.deliverable} />
+              <ReadonlyGoalField label="长期边界" value={model.goalAnchor.driftGuard.join('\n')} />
             </div>
+            <p className="small goal-summary-note">长期规则会持续约束后续轮次；临时引导只影响下一轮，除非你明确保存新的长期规则。</p>
             {hasPendingSteering ? (
               <div className="pending-steering-stack">
                 <div className="section-head compact-head">
                   <div>
                     <strong>待生效引导</strong>
-                    <p className="small">这些引导会按当前顺序进入下一轮 optimizer，但不会直接改写长期规则字段。</p>
+                    <p className="small">这些条目会按当前顺序进入下一轮；勾选并保存后，才会进入长期规则。</p>
                   </div>
                 </div>
-                <p className="small pending-selection-note">这里展示的是当前标记结果。显示“准备写入长期规则”的条目，会在你生成草稿并保存后进入长期规则。</p>
                 <AnimatePresence initial={false}>
                   {model.pendingSteeringItems.map((item, index) => (
                     <motion.div
@@ -291,23 +279,29 @@ export function JobDetailControlRoom({
             <div className="explanation-card">
               <strong>长期解释</strong>
               <p className="small"><strong>原始任务摘要：</strong>{model.goalAnchorExplanation.sourceSummary}</p>
-              <ul className="list compact-list">
-                {model.goalAnchorExplanation.rationale.map((item, index) => (
-                  <li key={`goal-rationale-${index}`}>{item}</li>
-                ))}
-              </ul>
+              <details className="fold-card explanation-fold">
+                <summary>查看提炼依据</summary>
+                <ul className="list compact-list">
+                  {model.goalAnchorExplanation.rationale.map((item, index) => (
+                    <li key={`goal-rationale-${index}`}>{item}</li>
+                  ))}
+                </ul>
+              </details>
             </div>
             {hasPendingSteering ? (
               <div className="explanation-card steering-impact-card">
                 <strong>当前这组引导会怎样影响下一轮</strong>
-                <ul className="list compact-list">
-                  {model.pendingSteeringItems.map((item) => (
-                    <li key={`impact-${item.id}`}>{item.text}</li>
-                  ))}
-                  <li>optimizer 会按当前顺序吸收这组引导，再基于完整提示词做最小必要改动。</li>
-                  <li>reviewer 不会看到这些引导原文，只会看到下一轮产出的候选提示词。</li>
-                  <li>如果下一轮把其中内容写进完整提示词，后续轮次会继续受影响。</li>
-                </ul>
+                <p className="small">本轮会按当前顺序吸收 {model.pendingSteeringItems.length} 条引导；如果下一轮把其中内容写进完整提示词，后续轮次会继续受影响。</p>
+                <details className="fold-card explanation-fold">
+                  <summary>查看影响细节</summary>
+                  <ul className="list compact-list">
+                    {model.pendingSteeringItems.map((item) => (
+                      <li key={`impact-${item.id}`}>{item.text}</li>
+                    ))}
+                    <li>optimizer 会按当前顺序吸收这组引导，再基于完整提示词做最小必要改动。</li>
+                    <li>reviewer 不会看到这些引导原文，只会看到下一轮产出的候选提示词。</li>
+                  </ul>
+                </details>
               </div>
             ) : null}
           </div>
@@ -514,17 +508,14 @@ function SummaryBadge({
 function ReadonlyGoalField({
   label,
   value,
-  hint,
 }: {
   label: string
   value: string
-  hint: string
 }) {
   return (
-    <div className="active-goal-card">
+    <div className="active-goal-card compact-goal-card">
       <div className="label">{label}</div>
       <div className="active-goal-value">{value}</div>
-      <p className="small active-goal-hint">{hint}</p>
     </div>
   )
 }

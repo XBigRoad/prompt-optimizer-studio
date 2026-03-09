@@ -158,7 +158,6 @@ export function DashboardControlRoom({
             >
               {actionableOnly ? '恢复完整看板' : '只看我现在要处理的'}
             </button>
-            <Link href="/settings" className="button ghost">前往设置</Link>
           </div>
         </div>
         <div className="summary-cluster">

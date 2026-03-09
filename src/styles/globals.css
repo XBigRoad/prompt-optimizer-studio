@@ -407,6 +407,10 @@ main {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.compact-goal-grid {
+  gap: 12px;
+}
+
 .active-goal-card,
 .active-steering-callout {
   display: grid;
@@ -436,16 +440,31 @@ main {
 }
 
 .active-goal-value {
-  min-height: 112px;
+  min-height: 86px;
+  max-height: 11.5rem;
+  overflow: hidden;
   padding: 14px 16px;
   border: 1px solid rgba(72, 50, 27, 0.12);
   border-radius: var(--radius-md);
   background: rgba(255, 252, 246, 0.78);
 }
 
-.active-goal-hint,
+.compact-goal-card {
+  gap: 8px;
+  padding: 16px;
+}
+
+.goal-summary-note,
 .field-note {
   margin: 0;
+}
+
+.explanation-fold {
+  margin-top: 2px;
+}
+
+.explanation-fold .compact-list {
+  margin-top: 10px;
 }
 
 .steering-control-field .textarea {

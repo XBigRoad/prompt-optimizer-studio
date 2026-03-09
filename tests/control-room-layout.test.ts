@@ -39,6 +39,8 @@ test('dashboard control room prioritizes attention, running, and latest results'
   assert.match(html, /自动运行中/)
   assert.match(html, /最新结果/)
   assert.match(html, /历史任务/)
+  assert.doesNotMatch(html, /前往设置/)
+  assert.doesNotMatch(html, /前往配置台/)
 })
 
 test('running dashboard cards keep only one detail entry point', () => {
@@ -235,6 +237,8 @@ test('job detail exposes pending steering cards and goal-anchor merge entry when
   assert.match(html, /生成长期规则草稿/)
   assert.match(html, /待生效列表/)
   assert.match(html, /勾选后，生成草稿并保存，才会进入长期规则/)
+  assert.match(html, /查看提炼依据/)
+  assert.match(html, /查看影响细节/)
   assert.match(html, /reviewer 不会看到这些引导原文/)
   assert.doesNotMatch(html, /待生效引导卡片/)
 })
