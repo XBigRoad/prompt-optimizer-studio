@@ -36,29 +36,48 @@ A future `Web Local Edition` is planned as a separate product shape:
 - 前端更新可统一下发
 - 用户数据保存在浏览器本地
 
+
+## License Positioning
+
+### English
+
+This repository is licensed under `AGPL-3.0-only`.
+
+Plain-language intent:
+- you can use, modify, and self-host it
+- if you modify it and provide it to other users over a network, you must provide the corresponding source code to those users as well
+
+### 中文
+
+当前仓库采用 `AGPL-3.0-only` 开源。
+
+用人话解释：
+- 你可以使用、修改并自托管它
+- 但如果你修改后把它作为在线服务提供给其他用户使用，也需要向这些用户提供对应源码
+
 ## GitHub About
 
 ### English
 
-Self-hosted, Docker-ready, local-first prompt optimization control room with pause/resume, one-round stepping, human steering, and copy-ready full prompts.
+Self-hosted, Docker-ready, local-first prompt optimization studio with copy-ready full prompts, human steering between rounds, and broad Base URL / API Key connectivity.
 
 ### 中文
 
-一个自托管、支持 Docker、本地优先的提示词优化控制室：支持暂停/恢复、继续一轮、人工引导，并始终优先交付可直接复制的完整提示词。
+一个自托管、支持 Docker、本地优先的提示词优化工作台：支持暂停/恢复、继续一轮、人工引导，并通过统一的 Base URL / API Key 接入多种模型协议。
 
 ## Repository Short Pitch
 
 ### English
 
-Prompt Optimizer Studio is built for people who want iterative prompt optimization without losing control. The current repo ships a self-hosted server edition with a Docker-ready deployment path, keeps the latest full prompt front and center, lets operators pause and inject one-time steering between rounds, and supports any OpenAI-compatible Base URL and API key without exposing provider-internal paths in the UI.
+Prompt Optimizer Studio is built for people who want iterative prompt optimization without losing control. The current repo ships a Docker-ready self-hosted server edition, keeps the latest full prompt front and center, lets operators pause and inject one-time steering between rounds, and supports OpenAI-compatible endpoints plus Anthropic and Gemini official APIs without exposing provider-internal paths in the UI.
 
 ### 中文
 
-Prompt Optimizer Studio 面向那些想做多轮提示词优化、但又不想失去控制权的人。当前仓库交付的是一个支持 Docker 的自托管服务端版：它把最新完整提示词始终放在最前面，支持中途暂停并插入一次性的下一轮人工引导，同时兼容任意 OpenAI-compatible Base URL 与 API Key，并且不会在 UI 中暴露 provider 内部路径。
+Prompt Optimizer Studio 面向那些想做多轮提示词优化、但又不想失去控制权的人。当前仓库交付的是一个支持 Docker 的自托管服务端版：它把最新完整提示词始终放在最前面，支持中途暂停并插入一次性的下一轮人工引导，同时兼容 OpenAI-compatible 接口以及 Anthropic / Gemini 官方 API，并且不会在 UI 中暴露 provider 内部路径。
 
 ## Suggested Topics
 
-`prompt-engineering`, `prompt-optimizer`, `nextjs`, `react`, `typescript`, `sqlite`, `openai-compatible`, `local-first`, `self-hosted`, `developer-tools`, `ai-tooling`
+`prompt-engineering`, `prompt-optimizer`, `nextjs`, `react`, `typescript`, `sqlite`, `docker`, `openai-compatible`, `anthropic`, `gemini`, `local-first`, `self-hosted`, `developer-tools`, `ai-tooling`
 
 ## Release Title
 
@@ -80,9 +99,10 @@ Highlights:
 - Human steering loop: pause a task, add one-time guidance, continue one round, or resume auto.
 - Goal-anchor drift guard: keep optimization aligned with the original task intent.
 - Reviewer isolation: the reviewer only sees the current candidate and scoring rules, not historical aggregate issue lists.
-- OpenAI-compatible connectivity: configure your own Base URL and API key from the settings console.
+- Multi-provider connectivity: configure your Base URL, API key, and model alias from the Config Desk, while the backend routes to OpenAI-compatible, Anthropic native, or Gemini native protocols.
 - Docker-ready self-hosting: ship with a Dockerfile, Compose path, persistent volume convention, and `/api/health` endpoint.
-- Control-room UI: redesigned home, detail, and settings pages with a cleaner operator-first layout.
+- AGPL-3.0-only license: modified hosted versions must make their corresponding source available to users.
+- Control-room UI: redesigned the Control Room, Result Desk, and Config Desk with a cleaner operator-first layout.
 - Worker lease fix: prevents the same running job from being claimed multiple times.
 
 Known note:
@@ -102,9 +122,10 @@ Prompt Optimizer Studio 现在已经可以作为首个公开版本发布。
 - 人工控制闭环：支持暂停任务、补充一次性下一轮引导、继续一轮、恢复自动运行。
 - 目标锚点防漂移：尽量让多轮优化持续贴合原始任务意图。
 - reviewer 隔离：reviewer 只看当前候选稿和评分规则，不看历史聚合问题列表。
-- 兼容 OpenAI 风格接入：可在设置页配置自己的 Base URL 和 API Key。
+- 多协议模型接入：可在配置台统一填写 Base URL、API Key 和模型别名，后端会自动路由到 OpenAI-compatible、Anthropic 原生或 Gemini 原生协议。
 - Docker 自托管就绪：内置 Dockerfile、Compose 路径、持久化卷约定，以及 `/api/health` 健康检查。
-- 控制室式 UI：首页、详情页、设置页都改成了更适合操作的产品化结构。
+- `AGPL-3.0-only` 协议：如果你修改后继续拿去做在线服务，对应源码也必须向用户提供。
+- 控制室式 UI：任务控制室、结果台、配置台都改成了更适合操作的产品化结构。
 - worker 租约修复：避免同一个运行中任务被重复 claim。
 
 已知说明：

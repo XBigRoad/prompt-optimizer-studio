@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for contributing to Prompt Optimizer Studio.
+Thanks for contributing to Prompt Optimizer Studio. By contributing, you agree that your contributions are provided under `AGPL-3.0-only`.
 
 ## English
 
@@ -51,7 +51,7 @@ docker build -t prompt-optimizer-studio:self-hosted .
 
 ## 中文
 
-感谢你为 Prompt Optimizer Studio 做贡献。
+感谢你为 Prompt Optimizer Studio 做贡献。提交贡献即表示你同意这些改动将以 `AGPL-3.0-only` 的方式提供。
 
 ### 基本约束
 

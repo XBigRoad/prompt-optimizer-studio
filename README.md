@@ -8,7 +8,7 @@ A local-first control room for iterative prompt refinement that keeps the latest
   <a href="https://img.shields.io/badge/edition-self--hosted-2d6a4f?style=flat-square"><img alt="Self-hosted" src="https://img.shields.io/badge/edition-self--hosted-2d6a4f?style=flat-square" /></a>
   <a href="https://img.shields.io/badge/storage-local%20SQLite-52796f?style=flat-square"><img alt="Local SQLite" src="https://img.shields.io/badge/storage-local%20SQLite-52796f?style=flat-square" /></a>
   <a href="https://img.shields.io/badge/providers-OpenAI%20compatible%20%7C%20Anthropic%20%7C%20Gemini-f4a261?style=flat-square"><img alt="Provider support" src="https://img.shields.io/badge/providers-OpenAI%20compatible%20%7C%20Anthropic%20%7C%20Gemini-f4a261?style=flat-square" /></a>
-  <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-1d3557?style=flat-square" /></a>
+  <a href="LICENSE"><img alt="AGPL-3.0 License" src="https://img.shields.io/badge/license-AGPL--3.0-1d3557?style=flat-square" /></a>
 </p>
 
 <p align="center">
@@ -22,6 +22,8 @@ A local-first control room for iterative prompt refinement that keeps the latest
   <a href="#中文">中文</a> ·
   <a href="#screenshots">Screenshots</a> ·
   <a href="#quick-start">Quick Start</a> ·
+  <a href="#faq">FAQ</a> ·
+  <a href="#license">License</a> ·
   <a href="docs/deployment/docker-self-hosted.md">Docker Guide</a>
 </p>
 
@@ -37,9 +39,9 @@ Current UI captured from local demo data generated with `npm run demo:seed`.
 | --- | --- |
 | <img src="docs/screenshots/dashboard-control-room.png" alt="Dashboard control room" width="100%" /> | <img src="docs/screenshots/job-detail-result-desk.png" alt="Job detail result desk" width="100%" /> |
 
-| Settings Console |
+| Config Desk |
 | --- |
-| <img src="docs/screenshots/settings-console.png" alt="Settings console" width="100%" /> |
+| <img src="docs/screenshots/settings-console.png" alt="Config desk" width="100%" /> |
 
 ---
 
@@ -99,7 +101,7 @@ This project is built to solve both problems:
   - Prioritizes tasks that need action, active runs, recent results, and discoverable history.
 - **Job detail = Result Desk**
   - Prioritizes the latest full prompt, then goal understanding, controls, and diagnostics.
-- **Settings = Console**
+- **Config Desk**
   - Separates connection, default model behavior, and the small set of runtime controls that actually affect behavior today.
 
 ### Tech Stack
@@ -167,7 +169,7 @@ For the full self-hosted Docker guide, see `docs/deployment/docker-self-hosted.m
 
 ### Configuration
 
-The app is configured from the **Settings** page.
+The app is configured from the **Config Desk**.
 
 The front-end stays intentionally simple:
 
@@ -191,7 +193,9 @@ Common `Base URL` examples:
 - `https://api.anthropic.com`
 - `https://generativelanguage.googleapis.com`
 
-The public settings page currently exposes only the runtime controls that are truly active: `scoreThreshold` and `maxRounds`.
+For official APIs, `Base URL` can be the provider's own root. It does not need to be a custom proxy path.
+
+The current public Config Desk only exposes the runtime controls that are truly active: `scoreThreshold` and `maxRounds`.
 
 ### Deployment Model
 
@@ -244,6 +248,21 @@ At the task level, the app supports:
 - `Next-Round Steering`
 - `Max Rounds Override`
 
+### FAQ
+
+- **Is this a hosted SaaS?**
+  - No. This repository currently ships the **Self-Hosted / Server Edition**.
+- **Where is data stored?**
+  - In the SQLite database on the machine or mounted volume running the app.
+- **Which APIs does it support?**
+  - The UI stays on `Base URL` + `API Key` + model alias, while the backend supports OpenAI-compatible, Anthropic official, and Gemini official APIs.
+- **Do official APIs work without a custom proxy URL?**
+  - Yes. Put the provider's official root into `Base URL`, and the backend will choose the right protocol automatically.
+- **Can I intervene during optimization?**
+  - Yes. You can pause a task, add next-round steering, continue exactly one round, or resume automatic execution.
+- **Why use AGPL-3.0?**
+  - Because the project is intended to stay open even when someone modifies it and offers it to others over a network.
+
 ### Design Principles
 
 - **Control before automation**
@@ -283,7 +302,11 @@ Active development.
 
 ### License
 
-This project is released under the `MIT` License. See `/LICENSE`.
+This project is released under the `AGPL-3.0-only` License. In plain language:
+
+- you can use, study, modify, and self-host it
+- if you distribute a modified version, or run a modified version for other users over a network, you must provide the corresponding source code under AGPL as well
+- see `/LICENSE` for the full license text
 
 ---
 
@@ -343,7 +366,7 @@ This project is released under the `MIT` License. See `/LICENSE`.
   - 优先展示需要你处理的任务、自动运行中的任务、最新结果，以及更容易发现的历史任务。
 - **详情页 = 结果台**
   - 先看最新完整提示词，再看目标理解、控制区和诊断区。
-- **设置页 = 配置台**
+- **配置台**
   - 把连接、默认模型和当前真正生效的运行控制拆开管理。
 
 ### 技术栈
@@ -411,7 +434,7 @@ Docker 默认会把 SQLite 数据库存到容器内的 `/app/data/prompt-optimiz
 
 ### 配置方式
 
-应用通过**设置页**完成配置。
+应用通过**配置台**完成配置。
 
 前台保持为一套统一输入：
 
@@ -435,7 +458,9 @@ Docker 默认会把 SQLite 数据库存到容器内的 `/app/data/prompt-optimiz
 - `https://api.anthropic.com`
 - `https://generativelanguage.googleapis.com`
 
-当前公开设置页只保留真正会影响行为的运行项：`scoreThreshold` 和 `maxRounds`。
+如果你接的是官方 API，`Base URL` 直接填写官方根地址即可，不需要额外自建代理路径。
+
+当前公开配置台只保留真正会影响行为的运行项：`scoreThreshold` 和 `maxRounds`。
 
 ### 发布形态
 
@@ -488,6 +513,21 @@ Docker Compose 默认会把数据库放在：
 - `下一轮人工引导`
 - `最大轮数覆盖`
 
+### FAQ
+
+- **这是一个官方在线 SaaS 吗？**
+  - 不是。当前仓库发布的是 **Self-Hosted / Server Edition（自托管服务端版）**。
+- **数据存在哪里？**
+  - 存在运行这套应用的机器或挂载卷里的 SQLite 数据库中。
+- **支持哪些 API / 模型接入？**
+  - 前台仍然只填 `Base URL`、`API Key` 和模型别名，后端支持 OpenAI-compatible、Anthropic 官方 API 和 Gemini 官方 API。
+- **如果是各家官方 API，没有自定义 Base URL 也能用吗？**
+  - 可以。把官方根地址直接填进 `Base URL` 即可，后端会自动选择对应协议。
+- **优化过程中可以人工干预吗？**
+  - 可以。你可以暂停任务、补充下一轮人工引导、只继续一轮，或者恢复自动运行。
+- **为什么改用 AGPL-3.0？**
+  - 因为这个项目希望即使被别人改成在线服务继续对外提供，也要保持对应修改源码可获得。
+
 ### 设计原则
 
 - **控制优先于自动化**
@@ -527,4 +567,8 @@ Docker Compose 默认会把数据库放在：
 
 ### 许可证
 
-本项目采用 `MIT` 许可证，详见 `/LICENSE`。
+本项目采用 `AGPL-3.0-only` 许可证。用人话来说：
+
+- 你可以自由使用、研究、修改和自托管
+- 如果你分发修改版，或者把修改版作为在线服务提供给其他用户使用，就需要按 AGPL 提供对应源码
+- 完整条款见 `/LICENSE`

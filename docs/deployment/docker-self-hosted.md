@@ -53,7 +53,7 @@ That path is backed by the named Compose volume mounted at `/app/data`.
 
 ### Runtime Notes
 
-- Base URL and API key are still configured from the Settings page.
+- Base URL and API key are still configured from the Config Desk.
 - Requests are sent from the server container, so this deployment shape is the broadest compatibility path for OpenAI-compatible endpoints.
 - Provider-internal routing details are still not exposed in the UI.
 
@@ -136,7 +136,7 @@ curl http://localhost:3000/api/health
 
 ### 运行说明
 
-- `Base URL` 和 `API Key` 仍然在设置页里配置。
+- `Base URL` 和 `API Key` 仍然在配置台里配置。
 - 请求由服务端容器发出，所以它依然是兼容 OpenAI-compatible 端点最广的一种部署形态。
 - UI 仍不会暴露 provider 内部路由细节。
 
