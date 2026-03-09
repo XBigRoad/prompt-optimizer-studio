@@ -1,10 +1,11 @@
 # Prompt Optimizer Studio
 
-A local-first control room for iterative prompt refinement that keeps the latest copy-ready full prompt front and center, while still letting the operator pause, steer, step one round, or resume auto.
+A self-hosted prompt optimization studio that keeps the latest copy-ready full prompt front and center, while still letting the operator pause, steer, step one round, or resume auto.
 
-一个本地优先的提示词优化控制室：把最新、可直接复制的完整提示词始终放在最前面，同时保留暂停、人工引导、继续一轮与恢复自动运行这些关键控制能力。
+一个自托管的提示词优化工作台：把最新、可直接复制的完整提示词始终放在最前面，同时保留暂停、人工引导、继续一轮与恢复自动运行这些关键控制能力。
 
 <p align="center">
+  <a href="https://img.shields.io/github/v/release/XBigRoad/prompt-optimizer-studio?display_name=tag&style=flat-square"><img alt="Latest release" src="https://img.shields.io/github/v/release/XBigRoad/prompt-optimizer-studio?display_name=tag&style=flat-square" /></a>
   <a href="https://img.shields.io/badge/edition-self--hosted-2d6a4f?style=flat-square"><img alt="Self-hosted" src="https://img.shields.io/badge/edition-self--hosted-2d6a4f?style=flat-square" /></a>
   <a href="https://img.shields.io/badge/storage-local%20SQLite-52796f?style=flat-square"><img alt="Local SQLite" src="https://img.shields.io/badge/storage-local%20SQLite-52796f?style=flat-square" /></a>
   <a href="https://img.shields.io/badge/providers-OpenAI%20compatible%20%7C%20Anthropic%20%7C%20Gemini-f4a261?style=flat-square"><img alt="Provider support" src="https://img.shields.io/badge/providers-OpenAI%20compatible%20%7C%20Anthropic%20%7C%20Gemini-f4a261?style=flat-square" /></a>
@@ -18,30 +19,39 @@ A local-first control room for iterative prompt refinement that keeps the latest
 </p>
 
 <p align="center">
-  <a href="#english">English</a> ·
-  <a href="#中文">中文</a> ·
+  <a href="https://github.com/XBigRoad/prompt-optimizer-studio/releases/tag/v0.1.0">First Release</a> ·
+  <a href="docs/deployment/docker-self-hosted.md">Docker Guide</a> ·
+  <a href="CONTRIBUTING.md">Contributing</a> ·
   <a href="#screenshots">Screenshots</a> ·
   <a href="#quick-start">Quick Start</a> ·
-  <a href="#faq">FAQ</a> ·
-  <a href="#license">License</a> ·
-  <a href="docs/deployment/docker-self-hosted.md">Docker Guide</a>
+  <a href="#english">English</a> ·
+  <a href="#中文">中文</a>
 </p>
 
-<p align="center">
-  <img src="docs/screenshots/dashboard-control-room.png" alt="Prompt Optimizer Studio dashboard" width="92%" />
-</p>
+> Release shape: `Self-Hosted / Server Edition` today. A separate `Web Local Edition` is planned later.
+> 
+> 当前发布形态：`Self-Hosted / Server Edition（自托管服务端版）`。`Web Local Edition` 会作为独立产品形态后续推进。
+
+## At A Glance
+
+| Final Prompt First | Human Steering | Broad Provider Support | Self-Hosted by Default |
+| --- | --- | --- | --- |
+| Copy the latest full prompt at any time.<br />随时复制当前最新完整提示词。 | Pause, guide the next round, continue one round, or resume auto.<br />暂停、插入下一轮引导、继续一轮，或恢复自动运行。 | `Base URL` + `API Key` + model alias in the UI; the backend routes OpenAI-compatible, Anthropic, and Gemini protocols.<br />前台统一输入，后端自动路由 OpenAI-compatible、Anthropic 与 Gemini 协议。 | Local SQLite, Docker deployment, `/api/health`, and no provider-internal route exposure.<br />本地 SQLite、Docker 部署、自带健康检查，并且不暴露 provider 内部路径。 |
+
+## Start Here
+
+- `Local dev / 本地开发`: `npm install && npm run dev`
+- `Docker self-hosted / Docker 自托管`: `cp .env.example .env && docker compose up -d --build`
+- `Release notes / 发布说明`: [`v0.1.0 - Self-Hosted Control Room`](https://github.com/XBigRoad/prompt-optimizer-studio/releases/tag/v0.1.0)
+- `Deployment doc / 部署文档`: [`docs/deployment/docker-self-hosted.md`](docs/deployment/docker-self-hosted.md)
 
 ## Screenshots
 
 Current UI captured from local demo data generated with `npm run demo:seed`.
 
-| Control Room | Result Desk |
-| --- | --- |
-| <img src="docs/screenshots/dashboard-control-room.png" alt="Dashboard control room" width="100%" /> | <img src="docs/screenshots/job-detail-result-desk.png" alt="Job detail result desk" width="100%" /> |
-
-| Config Desk |
-| --- |
-| <img src="docs/screenshots/settings-console.png" alt="Config desk" width="100%" /> |
+| Control Room | Result Desk | Config Desk |
+| --- | --- | --- |
+| <img src="docs/screenshots/dashboard-control-room.png" alt="Dashboard control room" width="100%" /> | <img src="docs/screenshots/job-detail-result-desk.png" alt="Job detail result desk" width="100%" /> | <img src="docs/screenshots/settings-console.png" alt="Config desk" width="100%" /> |
 
 ---
 
