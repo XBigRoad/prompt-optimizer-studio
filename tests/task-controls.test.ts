@@ -426,3 +426,80 @@ test('stale running job lease can be reclaimed by another worker', async () => {
     }
   }
 })
+
+
+test('job detail route builds a goal-anchor draft from selected steering ids only', async () => {
+  const originalCwd = process.cwd()
+  const originalDbPath = process.env.PROMPT_OPTIMIZER_DB_PATH
+  const originalFetch = global.fetch
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'po-controls-route-draft-'))
+  process.env.PROMPT_OPTIMIZER_DB_PATH = path.join(tempDir, 'test.db')
+  process.chdir(tempDir)
+
+  try {
+    const { resetDbForTests } = await import('../src/lib/server/db')
+    resetDbForTests()
+    const { saveSettings } = await import('../src/lib/server/settings')
+    const { addPendingSteeringItem, createJobs } = await import('../src/lib/server/jobs')
+    const route = await import('../src/app/api/jobs/[id]/route')
+
+    saveSettings({
+      cpamcBaseUrl: 'http://localhost:8317/v1',
+      cpamcApiKey: 'secret',
+      defaultOptimizerModel: 'gpt-5.2',
+      defaultJudgeModel: 'gpt-5.2',
+    })
+
+    global.fetch = (async () => new Response(JSON.stringify({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              goal: '保持任务原始目标',
+              deliverable: '输出原始任务要求的最终结果',
+              driftGuard: ['不要把任务改成别的事情'],
+              sourceSummary: '系统识别到原始任务要求保留核心目标。',
+              rationale: ['原始 prompt 很短，但明确给出了任务目标。'],
+            }),
+          },
+        },
+      ],
+    }), { status: 200 })) as typeof fetch
+
+    const [job] = await createJobs([
+      { title: 'Route steering draft job', rawPrompt: 'Prompt', optimizerModel: 'gpt-5.2', judgeModel: 'gpt-5.2' },
+    ])
+
+    addPendingSteeringItem(job.id, '语气更直接。')
+    const seeded = addPendingSteeringItem(job.id, '不要丢掉原始结论。')
+    const selectedId = seeded.pendingSteeringItems[1].id
+
+    const response = await route.PATCH(
+      new Request(`http://localhost/api/jobs/${job.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          steeringAction: { type: 'build_goal_anchor_draft', itemIds: [selectedId] },
+        }),
+      }),
+      { params: Promise.resolve({ id: job.id }) },
+    )
+
+    assert.equal(response.status, 200)
+    const payload = await response.json() as {
+      goalAnchorDraft: { driftGuard: string[] }
+      consumePendingSteeringIds: string[]
+    }
+    assert.deepEqual(payload.consumePendingSteeringIds, [selectedId])
+    assert.equal(payload.goalAnchorDraft.driftGuard.some((item) => item.includes('不要丢掉原始结论。')), true)
+    assert.equal(payload.goalAnchorDraft.driftGuard.some((item) => item.includes('语气更直接。')), false)
+  } finally {
+    process.chdir(originalCwd)
+    global.fetch = originalFetch
+    if (originalDbPath === undefined) {
+      delete process.env.PROMPT_OPTIMIZER_DB_PATH
+    } else {
+      process.env.PROMPT_OPTIMIZER_DB_PATH = originalDbPath
+    }
+  }
+})

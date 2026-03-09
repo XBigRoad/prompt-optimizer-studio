@@ -501,9 +501,11 @@ function DashboardJobCard({
               <Copy size={16} /> 复制
             </button>
           ) : null}
-          <Link href={`/jobs/${job.id}${canAct ? '#next-round-steering' : ''}` as Route} className="button ghost">
-            {canAct ? '编辑引导' : '详情'}
-          </Link>
+          {primary.kind === 'action' ? (
+            <Link href={`/jobs/${job.id}${canAct ? '#next-round-steering' : ''}` as Route} className="button ghost">
+              {canAct ? '编辑引导' : '详情'}
+            </Link>
+          ) : null}
         </div>
       </div>
     </motion.article>

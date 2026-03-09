@@ -41,6 +41,29 @@ test('dashboard control room prioritizes attention, running, and latest results'
   assert.match(html, /历史任务/)
 })
 
+test('running dashboard cards keep only one detail entry point', () => {
+  const html = renderToStaticMarkup(createElement(DashboardControlRoom, {
+    actionableOnly: false,
+    loading: false,
+    groups: {
+      attention: [],
+      running: [makeJob('single-detail', 'running')],
+      queued: [],
+      recentCompleted: [],
+      history: [],
+    },
+    stats: { attention: 0, running: 1, queued: 0, recentCompleted: 0, history: 0 },
+    actionInFlight: null,
+    onToggleActionableOnly: () => {},
+    onCopyPrompt: async () => {},
+    onResumeStep: async () => {},
+    onResumeAuto: async () => {},
+  }))
+
+  assert.equal(html.split('/jobs/single-detail').length - 1, 1)
+  assert.match(html, /打开详情/)
+})
+
 test('history lane exposes grouped search when history is the active focus', () => {
   const html = renderToStaticMarkup(createElement(DashboardControlRoom, {
     actionableOnly: false,
@@ -93,6 +116,7 @@ test('job detail control room keeps result before goal, controls, and diagnostic
       goalAnchorDeliverable: '输出完整优化提示词',
       goalAnchorDriftGuardText: '不要偏离目标',
       goalAnchorDraftReady: false,
+      selectedPendingSteeringIds: [],
     },
     handlers: {
       onRetry: () => {},
@@ -115,11 +139,12 @@ test('job detail control room keeps result before goal, controls, and diagnostic
       onGoalAnchorGoalChange: () => {},
       onGoalAnchorDeliverableChange: () => {},
       onGoalAnchorDriftGuardChange: () => {},
+      onTogglePendingSteeringSelection: () => {},
     },
   }))
 
   const resultIndex = html.indexOf('当前最新完整提示词')
-  const goalIndex = html.indexOf('核心目标锚点')
+  const goalIndex = html.indexOf('长期规则')
   const controlIndex = html.indexOf('任务控制')
   const diagnosticIndex = html.indexOf('优化过程诊断')
 
@@ -172,6 +197,7 @@ test('job detail exposes pending steering cards and goal-anchor merge entry when
       goalAnchorDeliverable: '输出完整优化提示词',
       goalAnchorDriftGuardText: '不要偏离目标',
       goalAnchorDraftReady: false,
+      selectedPendingSteeringIds: ['steer-1'],
     },
     handlers: {
       onRetry: () => {},
@@ -194,6 +220,7 @@ test('job detail exposes pending steering cards and goal-anchor merge entry when
       onGoalAnchorGoalChange: () => {},
       onGoalAnchorDeliverableChange: () => {},
       onGoalAnchorDriftGuardChange: () => {},
+      onTogglePendingSteeringSelection: () => {},
     },
   }))
 
@@ -202,8 +229,84 @@ test('job detail exposes pending steering cards and goal-anchor merge entry when
   assert.match(html, /语气更直接，但保留老中医式判断和原有核心结论。/)
   assert.match(html, /最终给我的仍然应该是可一键复制的完整提示词。/)
   assert.match(html, /当前这组引导会怎样影响下一轮/)
-  assert.match(html, /写入稳定锚点/)
+  assert.match(html, /运行控制/)
+  assert.match(html, /下一轮引导/)
+  assert.match(html, /追加一条人工引导/)
+  assert.match(html, /生成长期规则草稿/)
+  assert.match(html, /待生效列表/)
+  assert.match(html, /勾选后，生成草稿并保存，才会进入长期规则/)
   assert.match(html, /reviewer 不会看到这些引导原文/)
+  assert.doesNotMatch(html, /待生效引导卡片/)
+})
+
+test('goal-anchor draft note explains that saving is still required', () => {
+  const steeredModel = makeDetailModel()
+  steeredModel.pendingSteeringItems = [
+    {
+      id: 'steer-1',
+      text: '真实一些。',
+      createdAt: '2026-03-09T10:00:00.000Z',
+    },
+  ]
+
+  const html = renderToStaticMarkup(createElement(JobDetailControlRoom, {
+    model: steeredModel,
+    models: [],
+    ui: {
+      loading: false,
+      error: null,
+      actionMessage: null,
+      savingModels: false,
+      savingMaxRounds: false,
+      savingSteering: false,
+      generatingGoalAnchorDraft: false,
+      savingGoalAnchor: false,
+      retrying: false,
+      cancelling: false,
+      pausing: false,
+      resumingStep: false,
+      resumingAuto: false,
+      copyingPrompt: false,
+      expandedRounds: {},
+    },
+    form: {
+      taskModel: 'gpt-5.2',
+      maxRoundsOverrideValue: '12',
+      pendingSteeringInput: '',
+      goalAnchorGoal: '保持原始任务目标',
+      goalAnchorDeliverable: '输出完整优化提示词',
+      goalAnchorDriftGuardText: '不要偏离目标\n真实一些。',
+      goalAnchorDraftReady: true,
+      selectedPendingSteeringIds: ['steer-1'],
+    },
+    handlers: {
+      onRetry: () => {},
+      onSaveModel: () => {},
+      onSaveMaxRoundsOverride: () => {},
+      onAddPendingSteering: () => {},
+      onRemovePendingSteeringItem: () => {},
+      onClearPendingSteering: () => {},
+      onGenerateGoalAnchorDraft: () => {},
+      onSaveGoalAnchor: () => {},
+      onPauseTask: () => {},
+      onResumeStep: () => {},
+      onResumeAuto: () => {},
+      onCancelTask: () => {},
+      onCopyLatestPrompt: () => {},
+      onToggleRound: () => {},
+      onTaskModelChange: () => {},
+      onMaxRoundsOverrideChange: () => {},
+      onPendingSteeringInputChange: () => {},
+      onGoalAnchorGoalChange: () => {},
+      onGoalAnchorDeliverableChange: () => {},
+      onGoalAnchorDriftGuardChange: () => {},
+      onTogglePendingSteeringSelection: () => {},
+    },
+  }))
+
+  assert.match(html, /已把选中项带入长期规则编辑区/)
+  assert.match(html, /现在还只是草稿。点击“保存长期规则”后，选中的条目才会成为长期规则/) 
+  assert.match(html, /未选中的条目会继续留在待生效列表/)
 })
 
 test('settings control room groups connection, defaults, and active runtime fields only', () => {

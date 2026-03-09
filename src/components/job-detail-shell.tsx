@@ -1,7 +1,7 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { JobDetailControlRoom, type JobDetailViewModel } from '@/components/job-detail-control-room'
 import { type RoundCandidateView } from '@/components/job-round-card'
@@ -85,6 +85,8 @@ export function JobDetailShell({ jobId }: { jobId: string }) {
   const [goalAnchorDriftGuardText, setGoalAnchorDriftGuardText] = useState('')
   const [goalAnchorDraftReady, setGoalAnchorDraftReady] = useState(false)
   const [goalAnchorDraftConsumeIds, setGoalAnchorDraftConsumeIds] = useState<string[]>([])
+  const [selectedPendingSteeringIds, setSelectedPendingSteeringIds] = useState<string[]>([])
+  const knownPendingSteeringIdsRef = useRef<Set<string>>(new Set())
   const [modelDirty, setModelDirty] = useState(false)
   const [maxRoundsDirty, setMaxRoundsDirty] = useState(false)
   const [goalAnchorDirty, setGoalAnchorDirty] = useState(false)
@@ -168,6 +170,32 @@ export function JobDetailShell({ jobId }: { jobId: string }) {
     setGoalAnchorDraftReady(false)
     setGoalAnchorDraftConsumeIds([])
   }, [detail, goalAnchorDirty])
+
+  useEffect(() => {
+    if (!detail) return
+
+    const nextPendingIds = detail.job.pendingSteeringItems.map((item) => item.id)
+    const nextPendingSet = new Set(nextPendingIds)
+    const knownPendingIds = knownPendingSteeringIdsRef.current
+
+    setSelectedPendingSteeringIds((current) => {
+      const surviving = current.filter((id) => nextPendingSet.has(id))
+      const selectedSet = new Set(surviving)
+      const nextSelected = [...surviving]
+      const isFirstSync = knownPendingIds.size === 0 && current.length === 0
+
+      for (const id of nextPendingIds) {
+        if ((isFirstSync || !knownPendingIds.has(id)) && !selectedSet.has(id)) {
+          selectedSet.add(id)
+          nextSelected.push(id)
+        }
+      }
+
+      return nextSelected
+    })
+
+    knownPendingSteeringIdsRef.current = nextPendingSet
+  }, [detail])
 
   const model = useMemo<JobDetailViewModel | null>(() => {
     if (!detail) return null
@@ -349,12 +377,12 @@ export function JobDetailShell({ jobId }: { jobId: string }) {
       const response = await fetch(`/api/jobs/${jobId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ steeringAction: { type: 'build_goal_anchor_draft' } }),
+        body: JSON.stringify({ steeringAction: { type: 'build_goal_anchor_draft', itemIds: selectedPendingSteeringIds } }),
       })
       const payload = await response.json()
       if (!response.ok) throw new Error(payload.error ?? 'Draft generation failed.')
       if (!payload.goalAnchorDraft) {
-        throw new Error('未生成合并草案。')
+        throw new Error('未生成长期规则草稿。')
       }
       setError(null)
       setGoalAnchorGoal(payload.goalAnchorDraft.goal)
@@ -363,7 +391,7 @@ export function JobDetailShell({ jobId }: { jobId: string }) {
       setGoalAnchorDirty(true)
       setGoalAnchorDraftReady(true)
       setGoalAnchorDraftConsumeIds(payload.consumePendingSteeringIds ?? [])
-      setActionMessage('已生成稳定锚点合并草案，请确认后保存。')
+      setActionMessage(`已把选中的 ${payload.consumePendingSteeringIds?.length ?? 0} 条引导带入长期规则编辑区，请确认后保存。`)
     } catch (draftError) {
       setError(draftError instanceof Error ? draftError.message : 'Draft generation failed.')
       setActionMessage(null)
@@ -393,7 +421,7 @@ export function JobDetailShell({ jobId }: { jobId: string }) {
       setGoalAnchorDirty(false)
       const consumedPending = goalAnchorDraftReady && goalAnchorDraftConsumeIds.length > 0
       resetDraftState()
-      setActionMessage(consumedPending ? '稳定锚点已保存，并已吸收当前这组待生效引导。' : '核心目标锚点已保存。后续所有轮次都会受它约束。')
+      setActionMessage(consumedPending ? '长期规则已保存，并已吸收本次选中的待生效引导。' : '长期规则已保存。后续所有轮次都会受它约束。')
       mergeJobUpdate(payload.job)
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : 'Save failed.')
@@ -537,6 +565,7 @@ export function JobDetailShell({ jobId }: { jobId: string }) {
               goalAnchorDeliverable,
               goalAnchorDriftGuardText,
               goalAnchorDraftReady,
+              selectedPendingSteeringIds,
             }}
             handlers={{
               onRetry: retry,
@@ -575,6 +604,18 @@ export function JobDetailShell({ jobId }: { jobId: string }) {
               onGoalAnchorDriftGuardChange: (value) => {
                 setGoalAnchorDirty(true)
                 setGoalAnchorDriftGuardText(value)
+              },
+              onTogglePendingSteeringSelection: (itemId) => {
+                resetDraftState()
+                setSelectedPendingSteeringIds((current) => {
+                  const currentSet = new Set(current)
+                  if (currentSet.has(itemId)) {
+                    return current.filter((id) => id !== itemId)
+                  }
+
+                  const orderedPendingIds = detail?.job.pendingSteeringItems.map((item) => item.id) ?? []
+                  return orderedPendingIds.filter((id) => currentSet.has(id) || id === itemId)
+                })
               },
             }}
           />

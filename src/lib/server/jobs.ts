@@ -341,7 +341,7 @@ export function updateJobGoalAnchor(
 ) {
   const job = requireJob(jobId)
   if (job.status === 'completed') {
-    throw new Error('已完成任务不能修改核心目标锚点。')
+    throw new Error('已完成任务不能修改长期规则。')
   }
 
   const now = new Date().toISOString()
@@ -411,10 +411,19 @@ export function consumePendingSteeringItems(jobId: string, consumedItemIds: stri
   return setPendingSteeringItems(jobId, job.pendingSteeringItems.filter((item) => !consumedSet.has(item.id)))
 }
 
-export function buildGoalAnchorDraftFromPendingSteering(jobId: string) {
+export function buildGoalAnchorDraftFromPendingSteering(jobId: string, selectedItemIds?: string[]) {
   const job = requireJob(jobId)
   if (job.pendingSteeringItems.length === 0) {
-    throw new Error('当前没有待写入稳定锚点的人工引导。')
+    throw new Error('当前没有待写入长期规则的人工引导。')
+  }
+
+  const selectedItemSet = selectedItemIds ? new Set(selectedItemIds) : null
+  const selectedItems = selectedItemSet
+    ? job.pendingSteeringItems.filter((item) => selectedItemSet.has(item.id))
+    : job.pendingSteeringItems
+
+  if (selectedItemSet && selectedItems.length === 0) {
+    throw new Error('请至少选择一条要写入长期规则的引导。')
   }
 
   return {
@@ -423,10 +432,10 @@ export function buildGoalAnchorDraftFromPendingSteering(jobId: string) {
       deliverable: job.goalAnchor.deliverable,
       driftGuard: uniqueOrderedStrings([
         ...job.goalAnchor.driftGuard,
-        ...job.pendingSteeringItems.map((item) => item.text),
+        ...selectedItems.map((item) => item.text),
       ]),
     },
-    consumePendingSteeringIds: job.pendingSteeringItems.map((item) => item.id),
+    consumePendingSteeringIds: selectedItems.map((item) => item.id),
   }
 }
 

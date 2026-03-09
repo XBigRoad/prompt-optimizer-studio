@@ -356,11 +356,45 @@ main {
 }
 
 
+.control-stage-grid,
 .control-form-layout {
   display: grid;
-  grid-template-columns: minmax(240px, 0.8fr) minmax(320px, 1.2fr);
+  grid-template-columns: minmax(260px, 0.82fr) minmax(320px, 1.18fr);
   gap: 16px;
   align-items: start;
+}
+
+.control-subpanel {
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+  border: 1px solid rgba(72, 50, 27, 0.12);
+  border-radius: var(--radius-lg);
+  background: rgba(255, 252, 246, 0.78);
+}
+
+.steering-control-panel {
+  border-color: rgba(231, 90, 99, 0.16);
+  background: rgba(255, 248, 245, 0.82);
+}
+
+.runtime-action-stack {
+  display: grid;
+  gap: 12px;
+}
+
+.runtime-primary-actions,
+.runtime-secondary-actions {
+  gap: 10px;
+}
+
+.runtime-primary-actions .button,
+.runtime-secondary-actions .button {
+  flex: 1 1 160px;
+}
+
+.runtime-save-actions {
+  gap: 10px;
 }
 
 .compact-control-grid,
@@ -415,7 +449,7 @@ main {
 }
 
 .steering-control-field .textarea {
-  min-height: 160px;
+  min-height: 132px;
 }
 
 .steering-control-stack,
@@ -425,7 +459,8 @@ main {
 }
 
 .control-pending-list {
-  margin-top: 6px;
+  gap: 12px;
+  margin-top: 2px;
 }
 
 .steering-card,
@@ -457,6 +492,30 @@ main {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+}
+
+.steering-card-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.selection-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.selection-toggle input {
+  margin: 0;
+  accent-color: var(--melon-deep);
+}
+
+.pending-selection-note {
+  margin: -4px 0 0;
 }
 
 .goal-anchor-draft-note {
@@ -549,6 +608,12 @@ main {
     opacity var(--motion-fast) var(--ease-smooth),
     box-shadow var(--motion-fast) var(--ease-smooth),
     background-color var(--motion-fast) var(--ease-smooth);
+}
+
+.button.compact {
+  gap: 6px;
+  padding: 10px 14px;
+  font-size: 0.94rem;
 }
 
 .button:hover {
@@ -883,6 +948,7 @@ main {
   .settings-grid,
   .understanding-grid,
   .summary-cluster,
+  .control-stage-grid,
   .control-form-layout,
   .active-goal-grid {
     grid-template-columns: 1fr;

@@ -129,7 +129,7 @@ test('legacy single steering migrates into the pending list and consumption remo
   }
 })
 
-test('goal-anchor draft can be generated from pending steering and confirmed save consumes that batch', async () => {
+test('goal-anchor draft can be generated from selected pending steering only and confirmed save consumes only that subset', async () => {
   const originalCwd = process.cwd()
   const originalDbPath = process.env.PROMPT_OPTIMIZER_DB_PATH
   const originalFetch = global.fetch
@@ -158,17 +158,25 @@ test('goal-anchor draft can be generated from pending steering and confirmed sav
 
     addPendingSteeringItem(job.id, '语气更直接。')
     addPendingSteeringItem(job.id, '不要丢掉原始结论。')
+    const seeded = addPendingSteeringItem(job.id, '保持像老中医一样的主判断。')
+    const selectedIds = [
+      seeded.pendingSteeringItems[0].id,
+      seeded.pendingSteeringItems[2].id,
+    ]
 
-    const draft = buildGoalAnchorDraftFromPendingSteering(job.id)
+    const draft = buildGoalAnchorDraftFromPendingSteering(job.id, selectedIds)
     assert.equal(draft.goalAnchor.goal, '保持任务原始目标')
     assert.equal(draft.goalAnchor.deliverable, '输出原始任务要求的最终结果')
-    assert.deepEqual(draft.consumePendingSteeringIds.length, 2)
+    assert.deepEqual(draft.consumePendingSteeringIds, selectedIds)
     assert.equal(draft.goalAnchor.driftGuard.some((item) => item.includes('语气更直接。')), true)
-    assert.equal(draft.goalAnchor.driftGuard.some((item) => item.includes('不要丢掉原始结论。')), true)
+    assert.equal(draft.goalAnchor.driftGuard.some((item) => item.includes('保持像老中医一样的主判断。')), true)
+    assert.equal(draft.goalAnchor.driftGuard.some((item) => item.includes('不要丢掉原始结论。')), false)
 
     const saved = updateJobGoalAnchor(job.id, draft.goalAnchor, { consumePendingSteeringIds: draft.consumePendingSteeringIds })
-    assert.deepEqual(saved.pendingSteeringItems, [])
+    assert.deepEqual(saved.pendingSteeringItems.map((item) => item.text), ['不要丢掉原始结论。'])
     assert.equal(saved.goalAnchor.driftGuard.some((item) => item.includes('语气更直接。')), true)
+    assert.equal(saved.goalAnchor.driftGuard.some((item) => item.includes('保持像老中医一样的主判断。')), true)
+    assert.equal(saved.goalAnchor.driftGuard.some((item) => item.includes('不要丢掉原始结论。')), false)
   } finally {
     process.chdir(originalCwd)
     global.fetch = originalFetch

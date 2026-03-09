@@ -20,7 +20,7 @@ type SteeringAction =
   | { type: 'add'; text: string }
   | { type: 'remove'; itemId: string }
   | { type: 'clear' }
-  | { type: 'build_goal_anchor_draft' }
+  | { type: 'build_goal_anchor_draft'; itemIds?: string[] }
 
 export async function GET(
   _request: Request,
@@ -87,7 +87,7 @@ export async function PATCH(
           updatedJob = clearPendingSteeringItems(id)
           break
         case 'build_goal_anchor_draft': {
-          const draft = buildGoalAnchorDraftFromPendingSteering(id)
+          const draft = buildGoalAnchorDraftFromPendingSteering(id, body.steeringAction.itemIds)
           goalAnchorDraft = draft.goalAnchor
           consumePendingSteeringIds = draft.consumePendingSteeringIds
           updatedJob = getJobById(id) ?? updatedJob
