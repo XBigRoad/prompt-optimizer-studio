@@ -142,7 +142,23 @@ The backend expects a compatible surface exposing:
 - `GET /models`
 - `POST /chat/completions`
 
-### Storage
+### Deployment Model
+
+This repository currently ships the **Self-Hosted / Server Edition**.
+
+What that means today:
+
+- Run it locally: data is stored on the machine running the app.
+- Deploy it to your own server: data is stored on that deployment environment, not in each user browser.
+- This release does **not** currently provide an official hosted browser-local edition.
+
+Future direction:
+
+- A planned `Web Local Edition` may offer a hosted frontend with browser-local storage and centralized frontend updates.
+- That future edition is still a design-stage direction, not a shipping feature in the current repo.
+- See `docs/plans/2026-03-09-web-local-edition-design.md`.
+
+### Storage (Current Self-Hosted Edition)
 
 By default, the local SQLite database is stored at:
 
@@ -184,7 +200,7 @@ At the task level, the app supports:
 ### Roadmap
 
 - Historical data cleanup for legacy duplicate rounds
-- Public-ready README and release polish
+- Future `Web Local Edition` with browser-local persistence and hosted frontend updates
 - Better prompt-pack management
 - Richer result comparison views
 - Safer import/export for prompt jobs
@@ -323,7 +339,23 @@ npm run check
 - `GET /models`
 - `POST /chat/completions`
 
-### 数据存储
+### 发布形态
+
+当前这个仓库发布的是 **Self-Hosted / Server Edition（自托管服务端版）**。
+
+这意味着：
+
+- 你在本地运行时，数据保存在运行这套应用的本机上。
+- 如果你把当前版本部署到自己的服务器，数据会保存在那台部署环境上，而不是每个用户自己的浏览器里。
+- 当前仓库版本**并不等于**“官方在线版 + 浏览器本地存储版”。
+
+未来方向：
+
+- 计划中的 `Web Local Edition` 会是另一种产品形态：线上访问，但数据保存在用户浏览器本地，同时前端更新可以统一下发。
+- 这个方向目前还只是设计方案，不是当前仓库已经交付的功能。
+- 设计文档见 `docs/plans/2026-03-09-web-local-edition-design.md`。
+
+### 数据存储（当前自托管版）
 
 默认 SQLite 数据库位置：
 
@@ -365,7 +397,7 @@ PROMPT_OPTIMIZER_DB_PATH=/your/custom/path.db
 ### 路线图
 
 - 清理历史遗留的重复轮号数据
-- 补齐开源发布页和 release 体验
+- 未来 `Web Local Edition`：浏览器本地存储 + 托管前端更新
 - 更好的 prompt pack 管理能力
 - 更丰富的结果对比视图
 - 更安全的任务导入导出能力
