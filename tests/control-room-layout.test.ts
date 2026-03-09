@@ -206,18 +206,14 @@ test('job detail exposes pending steering cards and goal-anchor merge entry when
   assert.match(html, /reviewer 不会看到这些引导原文/)
 })
 
-test('settings control room groups connection, defaults, and runtime strategy', () => {
+test('settings control room groups connection, defaults, and active runtime fields only', () => {
   const html = renderToStaticMarkup(createElement(SettingsControlRoom, {
     form: {
-      cpamcBaseUrl: 'http://localhost:8317/v1',
+      cpamcBaseUrl: 'https://api.openai.com/v1',
       cpamcApiKey: 'secret',
       defaultTaskModel: 'gpt-5.2',
       scoreThreshold: 95,
-      judgePassCount: 3,
       maxRounds: 8,
-      noImprovementLimit: 2,
-      workerConcurrency: 1,
-      conversationPolicy: 'stateless',
     },
     models: [],
     loading: false,
@@ -235,8 +231,14 @@ test('settings control room groups connection, defaults, and runtime strategy', 
   assert.match(html, /连接/)
   assert.match(html, /默认模型/)
   assert.match(html, /运行策略/)
+  assert.match(html, /OpenAI-compatible、Anthropic 官方和 Gemini 官方接口/)
+  assert.match(html, /协议识别/)
   assert.match(html, /Base URL/)
   assert.match(html, /API Key/)
+  assert.doesNotMatch(html, /裁判数量/)
+  assert.doesNotMatch(html, /无提升上限/)
+  assert.doesNotMatch(html, /并发数/)
+  assert.doesNotMatch(html, /会话策略/)
   assert.doesNotMatch(html, /CPAMC/)
 })
 

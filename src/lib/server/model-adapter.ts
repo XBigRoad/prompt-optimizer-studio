@@ -1,29 +1,20 @@
 import type { ModelAdapter, OptimizationResult, RoundJudgment } from '@/lib/engine/optimization-cycle'
 import { normalizeGoalAnchor } from '@/lib/server/goal-anchor'
 import { normalizeGoalAnchorExplanation } from '@/lib/server/goal-anchor-explanation'
+import { createProviderAdapter } from '@/lib/server/provider-adapter'
 import type { GoalAnchor, GoalAnchorExplanation, PromptPackVersion, AppSettings, SteeringItem } from '@/lib/server/types'
-import { extractJsonObject } from '@/lib/server/json'
 import { buildGoalAnchorPrompts, buildJudgePrompts, buildOptimizerPrompts } from '@/lib/server/prompting'
 
-interface ChatCompletionChoice {
-  message?: {
-    content?: string | Array<{ text?: string; type?: string }>
-  }
-}
-
-interface ChatCompletionResponse {
-  choices?: ChatCompletionChoice[]
-  error?: {
-    message?: string
-  }
-}
-
 export class CpamcModelAdapter implements ModelAdapter {
+  private readonly providerAdapter: ReturnType<typeof createProviderAdapter>
+
   constructor(
     private readonly settings: Pick<AppSettings, 'cpamcBaseUrl' | 'cpamcApiKey' | 'scoreThreshold'>,
     private readonly pack: PromptPackVersion,
     private readonly models: { optimizerModel: string; judgeModel: string },
-  ) {}
+  ) {
+    this.providerAdapter = createProviderAdapter(settings)
+  }
 
   async optimizePrompt(input: {
     currentPrompt: string
@@ -78,7 +69,7 @@ export class CpamcModelAdapter implements ModelAdapter {
   }
 
   private async requestJson(model: string, system: string, user: string, timeoutMs: number) {
-    return requestJsonFromCpamc(this.settings, model, system, user, timeoutMs)
+    return this.providerAdapter.requestJson({ model, system, user, timeoutMs })
   }
 }
 
@@ -88,91 +79,17 @@ export async function generateGoalAnchorWithModel(
   rawPrompt: string,
 ) {
   const { system, user } = buildGoalAnchorPrompts({ rawPrompt })
-  const payload = await requestJsonFromCpamc(settings, model, system, user, 12_000, 1)
+  const payload = await createProviderAdapter(settings).requestJson({
+    model,
+    system,
+    user,
+    timeoutMs: 12_000,
+    maxAttempts: 1,
+  })
   return {
     goalAnchor: normalizeGoalAnchor(payload as Partial<GoalAnchor>),
     explanation: normalizeGoalAnchorExplanation(payload as Partial<GoalAnchorExplanation>),
   }
-}
-
-async function requestJsonFromCpamc(
-  settings: Pick<AppSettings, 'cpamcBaseUrl' | 'cpamcApiKey'>,
-  model: string,
-  system: string,
-  user: string,
-  timeoutMs: number,
-  maxAttempts: number = 3,
-) {
-  const endpoint = `${settings.cpamcBaseUrl.replace(/\/$/, '')}/chat/completions`
-  const body = {
-    model,
-    temperature: 0.2,
-    messages: [
-      { role: 'system', content: system },
-      { role: 'user', content: user },
-    ],
-  }
-
-  const response = await requestWithRetry(async () => {
-    const result = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${settings.cpamcApiKey}`,
-      },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(timeoutMs),
-    })
-
-    if (!result.ok) {
-      const text = await result.text()
-      const error = new Error(`CPAMC request failed (${result.status}): ${text.slice(0, 500)}`)
-      if (result.status === 408 || result.status === 429 || result.status >= 500) {
-        ;(error as Error & { retriable?: boolean }).retriable = true
-      }
-      throw error
-    }
-
-    return result.json() as Promise<ChatCompletionResponse>
-  }, maxAttempts)
-
-  const content = extractText(response)
-  return extractJsonObject(content) as Record<string, unknown>
-}
-
-async function requestWithRetry<T>(operation: () => Promise<T>, maxAttempts: number = 3) {
-  let attempt = 0
-  let lastError: unknown
-
-  while (attempt < maxAttempts) {
-    try {
-      return await operation()
-    } catch (error) {
-      lastError = error
-      attempt += 1
-      const retriable = error instanceof Error && 'retriable' in error ? Boolean((error as Error & { retriable?: boolean }).retriable) : true
-      if (!retriable || attempt >= maxAttempts) {
-        throw error
-      }
-      await wait(500 * 2 ** (attempt - 1))
-    }
-  }
-
-  throw lastError
-}
-
-function extractText(response: ChatCompletionResponse) {
-  const content = response.choices?.[0]?.message?.content
-  if (typeof content === 'string') {
-    return content
-  }
-  if (Array.isArray(content)) {
-    return content.map((part) => part.text ?? '').join('\n')
-  }
-  if (response.error?.message) {
-    throw new Error(response.error.message)
-  }
-  throw new Error('CPAMC returned an empty completion.')
 }
 
 export function normalizeTextArray(value: unknown) {
@@ -217,8 +134,4 @@ function normalizeTextItem(value: unknown): string | null {
   }
 
   return String(value)
-}
-
-function wait(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms))
 }

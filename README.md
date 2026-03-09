@@ -61,8 +61,8 @@ This project is built to solve both problems:
   - The optimizer receives only the current prompt, the latest slim patch, and optional next-round steering.
 - **Run controls that matter**
   - `Pause`, `Continue One Round`, `Resume Auto`, and per-task `Max Rounds Override` are built into the workflow.
-- **OpenAI-compatible connection model**
-  - Configure any compatible `Base URL` and `API Key` from the UI.
+- **Broad provider compatibility**
+  - Keep the UI on `Base URL` + `API Key` + model alias while the backend auto-selects OpenAI-compatible, Anthropic native, or Gemini native protocols.
 - **Single visible task model alias**
   - The UI keeps optimizer/reviewer model display simple and task-friendly, without exposing provider-internal route names.
 
@@ -82,7 +82,7 @@ This project is built to solve both problems:
 - **Job detail = Result Desk**
   - Prioritizes the latest full prompt, then goal understanding, controls, and diagnostics.
 - **Settings = Console**
-  - Separates connection, default model behavior, and runtime policy.
+  - Separates connection, default model behavior, and the small set of runtime controls that actually affect behavior today.
 
 ### Tech Stack
 
@@ -151,19 +151,29 @@ For the full self-hosted Docker guide, see `docs/deployment/docker-self-hosted.m
 
 The app is configured from the **Settings** page.
 
-You will typically provide:
+The front-end stays intentionally simple:
 
 - `Base URL`
 - `API Key`
 - default task model alias
-- scoring threshold and runtime policy
+- scoring threshold
+- max rounds
 
-You can point the app at OpenAI itself or any **OpenAI-compatible** endpoint.
+The backend infers the wire protocol from `Base URL`, so the UI does not expose provider-specific route details.
 
-The backend expects a compatible surface exposing:
+Supported today:
 
-- `GET /models`
-- `POST /chat/completions`
+- **OpenAI-compatible** endpoints using `GET /models` and `POST /chat/completions`
+- **Anthropic official API** using `GET /v1/models` and `POST /v1/messages`
+- **Gemini official API** using `GET /v1beta/models` and `POST /v1beta/models/{model}:generateContent`
+
+Common `Base URL` examples:
+
+- `https://api.openai.com/v1`
+- `https://api.anthropic.com`
+- `https://generativelanguage.googleapis.com`
+
+The public settings page currently exposes only the runtime controls that are truly active: `scoreThreshold` and `maxRounds`.
 
 ### Deployment Model
 
@@ -295,8 +305,8 @@ This project is released under the `MIT` License. See `/LICENSE`.
   - optimizer 只接收当前 prompt、最新精简 patch，以及可选的下一轮人工引导。
 - **关键运行控制完整**
   - 工作流内置 `暂停`、`继续一轮`、`恢复自动运行`、任务级 `最大轮数覆盖`。
-- **兼容 OpenAI 风格接口**
-  - 在设置页直接配置任意兼容的 `Base URL` 和 `API Key`。
+- **多 provider 接入兼容**
+  - 前台始终只填 `Base URL`、`API Key` 和模型别名，后端会自动选择 OpenAI-compatible、Anthropic 原生或 Gemini 原生协议。
 - **对用户只保留单一任务模型别名**
   - optimizer / reviewer 的模型展示保持简洁，不向用户暴露 provider 内部路径或底层路由名字。
 
@@ -316,7 +326,7 @@ This project is released under the `MIT` License. See `/LICENSE`.
 - **详情页 = 结果台**
   - 先看最新完整提示词，再看目标理解、控制区和诊断区。
 - **设置页 = 配置台**
-  - 把连接、默认模型、运行策略拆开管理。
+  - 把连接、默认模型和当前真正生效的运行控制拆开管理。
 
 ### 技术栈
 
@@ -385,19 +395,29 @@ Docker 默认会把 SQLite 数据库存到容器内的 `/app/data/prompt-optimiz
 
 应用通过**设置页**完成配置。
 
-通常需要提供：
+前台保持为一套统一输入：
 
 - `Base URL`
 - `API Key`
 - 默认任务模型别名
-- 分数阈值与运行策略
+- 分数阈值
+- 最大轮数
 
-你可以把它连到 OpenAI 本身，或任意**兼容 OpenAI 风格**的接口地址。
+后端会根据 `Base URL` 自动判断底层协议，因此前台不会暴露 provider 专用路径。
 
-后端默认期待一个兼容的接口面：
+当前支持：
 
-- `GET /models`
-- `POST /chat/completions`
+- **OpenAI-compatible**：`GET /models` + `POST /chat/completions`
+- **Anthropic 官方 API**：`GET /v1/models` + `POST /v1/messages`
+- **Gemini 官方 API**：`GET /v1beta/models` + `POST /v1beta/models/{model}:generateContent`
+
+常见 `Base URL` 示例：
+
+- `https://api.openai.com/v1`
+- `https://api.anthropic.com`
+- `https://generativelanguage.googleapis.com`
+
+当前公开设置页只保留真正会影响行为的运行项：`scoreThreshold` 和 `maxRounds`。
 
 ### 发布形态
 

@@ -11,11 +11,7 @@ interface SettingsForm {
   cpamcApiKey: string
   defaultTaskModel: string
   scoreThreshold: number
-  judgePassCount: number
   maxRounds: number
-  noImprovementLimit: number
-  workerConcurrency: number
-  conversationPolicy: 'stateless' | 'pooled-3x'
 }
 
 interface ModelOption {
@@ -28,11 +24,7 @@ const DEFAULT_FORM: SettingsForm = {
   cpamcApiKey: '',
   defaultTaskModel: '',
   scoreThreshold: 95,
-  judgePassCount: 3,
   maxRounds: 8,
-  noImprovementLimit: 2,
-  workerConcurrency: 1,
-  conversationPolicy: 'stateless',
 }
 
 export function SettingsShell() {
@@ -67,11 +59,7 @@ export function SettingsShell() {
             cpamcApiKey: settingsPayload.settings.cpamcApiKey,
             defaultTaskModel: settingsPayload.settings.defaultOptimizerModel,
             scoreThreshold: settingsPayload.settings.scoreThreshold,
-            judgePassCount: settingsPayload.settings.judgePassCount,
             maxRounds: settingsPayload.settings.maxRounds,
-            noImprovementLimit: settingsPayload.settings.noImprovementLimit,
-            workerConcurrency: settingsPayload.settings.workerConcurrency,
-            conversationPolicy: settingsPayload.settings.conversationPolicy,
           })
           setModels(modelsResponse.ok ? modelsPayload.models : [])
           setError(modelsResponse.ok ? null : modelsPayload.error ?? null)
@@ -105,11 +93,7 @@ export function SettingsShell() {
           defaultOptimizerModel: form.defaultTaskModel,
           defaultJudgeModel: form.defaultTaskModel,
           scoreThreshold: form.scoreThreshold,
-          judgePassCount: form.judgePassCount,
           maxRounds: form.maxRounds,
-          noImprovementLimit: form.noImprovementLimit,
-          workerConcurrency: form.workerConcurrency,
-          conversationPolicy: form.conversationPolicy,
         }),
       })
       const payload = await response.json()
@@ -119,6 +103,8 @@ export function SettingsShell() {
       setForm((current) => ({
         ...current,
         defaultTaskModel: payload.settings.defaultOptimizerModel,
+        scoreThreshold: payload.settings.scoreThreshold,
+        maxRounds: payload.settings.maxRounds,
       }))
       setMessage('设置已保存。')
       setError(null)
@@ -159,7 +145,14 @@ export function SettingsShell() {
   async function refreshModels() {
     setLoadingModels(true)
     try {
-      const response = await fetch('/api/settings/models', { cache: 'no-store' })
+      const response = await fetch('/api/settings/models', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          cpamcBaseUrl: form.cpamcBaseUrl,
+          cpamcApiKey: form.cpamcApiKey,
+        }),
+      })
       const payload = await response.json()
       if (!response.ok) {
         throw new Error(payload.error ?? 'Failed to fetch models.')

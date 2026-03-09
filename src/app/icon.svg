@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Prompt Optimizer Studio icon">
+  <defs>
+    <linearGradient id="flesh" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#ff6f6c" />
+      <stop offset="100%" stop-color="#ff9b72" />
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="16" fill="#fff7ea" />
+  <path d="M10 42c6-15 20-25 38-28 2 4 4 8 6 12-5 19-17 28-37 28-3-4-5-8-7-12Z" fill="#2d6a4f" />
+  <path d="M14 40c6-13 18-22 34-25 2 3 3 6 5 10-5 16-15 24-32 24-3-3-5-6-7-9Z" fill="#a7c957" />
+  <path d="M18 38c5-11 15-18 29-21 2 2 3 5 4 8-4 13-13 19-27 19-2-2-4-4-6-6Z" fill="url(#flesh)" />
+  <ellipse cx="34" cy="31" rx="2.1" ry="3.2" fill="#412722" transform="rotate(-18 34 31)" />
+  <ellipse cx="42" cy="28" rx="2.1" ry="3.2" fill="#412722" transform="rotate(-8 42 28)" />
+  <ellipse cx="27" cy="35" rx="2.1" ry="3.2" fill="#412722" transform="rotate(-24 27 35)" />
+</svg>
