@@ -1,0 +1,12 @@
+.git
+.worktrees
+.next
+node_modules
+out
+coverage
+*.log
+test-results
+tsconfig.tsbuildinfo
+data/*.db*
+docs
+tests

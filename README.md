@@ -124,6 +124,29 @@ http://localhost:3000
 npm run check
 ```
 
+#### Run With Docker
+
+```bash
+cp .env.example .env
+docker compose up -d --build
+```
+
+Then open:
+
+```text
+http://localhost:3000
+```
+
+Optional health check:
+
+```bash
+curl http://localhost:3000/api/health
+```
+
+Docker stores the SQLite database in `/app/data/prompt-optimizer.db` inside the container, backed by the named Compose volume by default.
+
+For the full self-hosted Docker guide, see `docs/deployment/docker-self-hosted.md`.
+
 ### Configuration
 
 The app is configured from the **Settings** page.
@@ -148,8 +171,9 @@ This repository currently ships the **Self-Hosted / Server Edition**.
 
 What that means today:
 
-- Run it locally: data is stored on the machine running the app.
-- Deploy it to your own server: data is stored on that deployment environment, not in each user browser.
+- Run it locally with `npm run dev` or `npm run start`: data is stored on the machine running the app.
+- Deploy it with Docker via `docker compose up -d`: data is stored in the mounted server-side volume for that deployment, not in each user browser.
+- The self-hosted server runtime remains the broadest compatibility path for OpenAI-compatible Base URLs because requests originate from the server, not a browser sandbox.
 - This release does **not** currently provide an official hosted browser-local edition.
 
 Future direction:
@@ -171,6 +195,14 @@ You can override it with:
 ```bash
 PROMPT_OPTIMIZER_DB_PATH=/your/custom/path.db
 ```
+
+The Docker Compose setup defaults to:
+
+```text
+/app/data/prompt-optimizer.db
+```
+
+That file lives inside the container but persists through the named Docker volume mounted at `/app/data`.
 
 ### Operator Controls
 
@@ -321,6 +353,29 @@ http://localhost:3000
 npm run check
 ```
 
+#### 使用 Docker 启动
+
+```bash
+cp .env.example .env
+docker compose up -d --build
+```
+
+然后打开：
+
+```text
+http://localhost:3000
+```
+
+可选健康检查：
+
+```bash
+curl http://localhost:3000/api/health
+```
+
+Docker 默认会把 SQLite 数据库存到容器内的 `/app/data/prompt-optimizer.db`，并通过 Compose 的命名卷持久化。
+
+完整 Docker 自托管说明见 `docs/deployment/docker-self-hosted.md`。
+
 ### 配置方式
 
 应用通过**设置页**完成配置。
@@ -345,8 +400,9 @@ npm run check
 
 这意味着：
 
-- 你在本地运行时，数据保存在运行这套应用的本机上。
-- 如果你把当前版本部署到自己的服务器，数据会保存在那台部署环境上，而不是每个用户自己的浏览器里。
+- 你可以直接用 `npm run dev` / `npm run start` 在本机运行，数据保存在运行这套应用的机器上。
+- 也可以用 `docker compose up -d` 做自托管部署，数据保存在容器挂载的服务端卷里，而不是每个用户自己的浏览器里。
+- 自托管服务端运行时仍然是兼容任意 OpenAI-compatible Base URL 的最佳路径，因为请求由服务端发出，不受浏览器沙箱限制。
 - 当前仓库版本**并不等于**“官方在线版 + 浏览器本地存储版”。
 
 未来方向：
@@ -368,6 +424,14 @@ data/prompt-optimizer.db
 ```bash
 PROMPT_OPTIMIZER_DB_PATH=/your/custom/path.db
 ```
+
+Docker Compose 默认会把数据库放在：
+
+```text
+/app/data/prompt-optimizer.db
+```
+
+这个文件位于容器内部，但会通过挂载到 `/app/data` 的命名卷持续保留。
 
 ### 任务控制能力
 

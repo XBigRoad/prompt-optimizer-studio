@@ -1,0 +1,17 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: prompt-optimizer-studio:self-hosted
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      PORT: "3000"
+      PROMPT_OPTIMIZER_DB_PATH: ${PROMPT_OPTIMIZER_DB_PATH:-/app/data/prompt-optimizer.db}
+    volumes:
+      - prompt_optimizer_data:/app/data
+    restart: unless-stopped
+
+volumes:
+  prompt_optimizer_data:
