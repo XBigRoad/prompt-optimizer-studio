@@ -110,6 +110,17 @@ export function JobDetailControlRoom({
   const canCancel = !['completed', 'cancelled'].includes(model.status)
   const canPause = !['completed', 'cancelled', 'paused'].includes(model.status)
   const canResume = !['completed', 'cancelled', 'running'].includes(model.status)
+  const activeSteering = model.nextRoundInstruction?.trim() ?? ''
+  const hasActiveSteering = activeSteering.length > 0
+  const activeGoalDescription = hasActiveSteering
+    ? '下一轮会先遵守稳定锚点，再额外吸收这条人工引导。'
+    : '这里定义任务不能漂移的核心目标与关键交付物。'
+  const activeExplanationDescription = hasActiveSteering
+    ? '原始任务理解和当前引导会一起决定下一轮怎么优化。'
+    : '帮助你快速判断系统对原始需求的理解有没有偏。'
+  const activeDriftGuard = hasActiveSteering
+    ? [...model.goalAnchor.driftGuard, `下一轮额外引导：${activeSteering}`]
+    : model.goalAnchor.driftGuard
 
   return (
     <div className="detail-control-room">
@@ -173,30 +184,87 @@ export function JobDetailControlRoom({
           <div className="panel understanding-panel">
             <div className="section-head">
               <div>
-                <span className="eyebrow"><ShieldCheck size={16} /> 目标理解层</span>
-                <h2 className="section-title">核心目标锚点</h2>
-                <p className="small">这里定义任务不能漂移的核心目标与关键交付物。</p>
+                <span className="eyebrow"><ShieldCheck size={16} /> {hasActiveSteering ? '当前有效约束' : '目标理解层'}</span>
+                <h2 className="section-title">{hasActiveSteering ? '当前有效目标视图' : '核心目标锚点'}</h2>
+                <p className="small">{activeGoalDescription}</p>
               </div>
-              {canEdit ? (
+              {!hasActiveSteering && canEdit ? (
                 <button className="button ghost" type="button" onClick={handlers.onSaveGoalAnchor} disabled={ui.savingGoalAnchor}>
                   {ui.savingGoalAnchor ? '保存中...' : '保存核心目标锚点'}
                 </button>
               ) : null}
             </div>
-            <div className="form-grid">
-              <label className="label">
-                核心目标
-                <textarea className="textarea" value={form.goalAnchorGoal} onChange={(event) => handlers.onGoalAnchorGoalChange(event.target.value)} disabled={!canEdit} />
-              </label>
-              <label className="label">
-                关键交付物
-                <textarea className="textarea" value={form.goalAnchorDeliverable} onChange={(event) => handlers.onGoalAnchorDeliverableChange(event.target.value)} disabled={!canEdit} />
-              </label>
-              <label className="label">
-                防漂移条款
-                <textarea className="textarea" value={form.goalAnchorDriftGuardText} onChange={(event) => handlers.onGoalAnchorDriftGuardChange(event.target.value)} disabled={!canEdit} />
-              </label>
-            </div>
+            {hasActiveSteering ? (
+              <>
+                <div className="active-steering-callout">
+                  <strong className="active-steering-title">已追加下一轮人工引导</strong>
+                  <p className="active-steering-text">{activeSteering}</p>
+                  <p className="small">这条引导会直接进入下一轮 optimizer；如果被下一轮写进新的完整提示词，后续轮次会间接受影响。</p>
+                </div>
+                <div className="active-goal-grid">
+                  <ReadonlyGoalField
+                    label="当前有效目标"
+                    value={model.goalAnchor.goal}
+                    hint="下一轮不会改动核心目标，只会沿着这条引导去优化表达与取舍。"
+                  />
+                  <ReadonlyGoalField
+                    label="当前有效交付物"
+                    value={model.goalAnchor.deliverable}
+                    hint="人工引导不会替换关键交付物，只会影响下一轮如何逼近它。"
+                  />
+                  <ReadonlyGoalField
+                    label="当前有效边界"
+                    value={activeDriftGuard.join('\n')}
+                    hint="稳定防漂移条款与这条一次性引导一起构成下一轮当前边界。"
+                  />
+                </div>
+                <details className="anchor-editor-drawer">
+                  <summary>{canEdit ? '编辑稳定锚点' : '查看稳定锚点'}</summary>
+                  <div className="anchor-editor-body">
+                    <div className="section-head compact-head">
+                      <div>
+                        <strong>稳定锚点</strong>
+                        <p className="small">这里编辑的是长期稳定约束，不会把一次性人工引导写成永久规则。</p>
+                      </div>
+                      {canEdit ? (
+                        <button className="button ghost" type="button" onClick={handlers.onSaveGoalAnchor} disabled={ui.savingGoalAnchor}>
+                          {ui.savingGoalAnchor ? '保存中...' : '保存稳定锚点'}
+                        </button>
+                      ) : null}
+                    </div>
+                    <div className="form-grid anchor-editor-grid">
+                      <label className="label">
+                        核心目标
+                        <textarea className="textarea" value={form.goalAnchorGoal} onChange={(event) => handlers.onGoalAnchorGoalChange(event.target.value)} disabled={!canEdit} />
+                      </label>
+                      <label className="label">
+                        关键交付物
+                        <textarea className="textarea" value={form.goalAnchorDeliverable} onChange={(event) => handlers.onGoalAnchorDeliverableChange(event.target.value)} disabled={!canEdit} />
+                      </label>
+                      <label className="label">
+                        防漂移条款
+                        <textarea className="textarea" value={form.goalAnchorDriftGuardText} onChange={(event) => handlers.onGoalAnchorDriftGuardChange(event.target.value)} disabled={!canEdit} />
+                      </label>
+                    </div>
+                  </div>
+                </details>
+              </>
+            ) : (
+              <div className="form-grid">
+                <label className="label">
+                  核心目标
+                  <textarea className="textarea" value={form.goalAnchorGoal} onChange={(event) => handlers.onGoalAnchorGoalChange(event.target.value)} disabled={!canEdit} />
+                </label>
+                <label className="label">
+                  关键交付物
+                  <textarea className="textarea" value={form.goalAnchorDeliverable} onChange={(event) => handlers.onGoalAnchorDeliverableChange(event.target.value)} disabled={!canEdit} />
+                </label>
+                <label className="label">
+                  防漂移条款
+                  <textarea className="textarea" value={form.goalAnchorDriftGuardText} onChange={(event) => handlers.onGoalAnchorDriftGuardChange(event.target.value)} disabled={!canEdit} />
+                </label>
+              </div>
+            )}
           </div>
 
           <div className="panel explanation-panel">
@@ -204,16 +272,19 @@ export function JobDetailControlRoom({
               <div>
                 <span className="eyebrow"><BrainCircuit size={16} /> 辅助判断</span>
                 <h2 className="section-title">提炼解释</h2>
-                <p className="small">帮助你快速判断系统对原始需求的理解有没有偏。</p>
+                <p className="small">{activeExplanationDescription}</p>
               </div>
             </div>
             <div className="explanation-card">
               <p className="small"><strong>原始任务摘要：</strong>{model.goalAnchorExplanation.sourceSummary}</p>
-              <strong>系统为什么这样提炼</strong>
+              {hasActiveSteering ? <p className="small"><strong>当前附加引导：</strong>{activeSteering}</p> : null}
+              <strong>{hasActiveSteering ? '系统为什么这样执行' : '系统为什么这样提炼'}</strong>
               <ul className="list compact-list">
                 {model.goalAnchorExplanation.rationale.map((item, index) => (
                   <li key={`goal-rationale-${index}`}>{item}</li>
                 ))}
+                {hasActiveSteering ? <li>下一轮会在不改变稳定目标与交付物的前提下吸收这条引导。</li> : null}
+                {hasActiveSteering ? <li>这条引导会直接进入下一轮 optimizer；如果被下一轮写进新的完整提示词，后续轮次会间接受影响。</li> : null}
               </ul>
             </div>
           </div>
@@ -231,18 +302,21 @@ export function JobDetailControlRoom({
         <datalist id="job-model-aliases">
           {models.map((modelOption) => <option key={modelOption.id} value={modelOption.id} />)}
         </datalist>
-        <div className="form-grid">
-          <label className="label">
-            任务模型别名
-            <input className="input" list="job-model-aliases" value={form.taskModel} onChange={(event) => handlers.onTaskModelChange(event.target.value)} disabled={!canEdit} />
-          </label>
-          <label className="label">
-            任务级最大轮数
-            <input className="input" type="number" min={1} max={99} value={form.maxRoundsOverrideValue} onChange={(event) => handlers.onMaxRoundsOverrideChange(event.target.value)} disabled={!canEdit} />
-          </label>
-          <label className="label" id="next-round-steering">
+        <div className="control-form-layout">
+          <div className="compact-control-grid">
+            <label className="label compact-control-field">
+              任务模型别名
+              <input className="input" list="job-model-aliases" value={form.taskModel} onChange={(event) => handlers.onTaskModelChange(event.target.value)} disabled={!canEdit} />
+            </label>
+            <label className="label compact-control-field">
+              任务级最大轮数
+              <input className="input" type="number" min={1} max={99} value={form.maxRoundsOverrideValue} onChange={(event) => handlers.onMaxRoundsOverrideChange(event.target.value)} disabled={!canEdit} />
+            </label>
+          </div>
+          <label className="label steering-control-field" id="next-round-steering">
             下一轮人工引导
             <textarea className="textarea" value={form.nextRoundInstruction} onChange={(event) => handlers.onNextRoundInstructionChange(event.target.value)} disabled={!canSteer} />
+            <span className="small field-note">这条引导只会直接作用于下一轮；如果下一轮把它吸收到完整提示词里，后续轮次会继续受影响。</span>
           </label>
         </div>
         <div className="button-row">
@@ -318,6 +392,25 @@ function SummaryBadge({
     <div className={`summary-card tone-${tone}`}>
       <div className="small">{label}</div>
       <div className="summary-value">{value}</div>
+    </div>
+  )
+}
+
+
+function ReadonlyGoalField({
+  label,
+  value,
+  hint,
+}: {
+  label: string
+  value: string
+  hint: string
+}) {
+  return (
+    <div className="active-goal-card">
+      <div className="label">{label}</div>
+      <div className="active-goal-value">{value}</div>
+      <p className="small active-goal-hint">{hint}</p>
     </div>
   )
 }

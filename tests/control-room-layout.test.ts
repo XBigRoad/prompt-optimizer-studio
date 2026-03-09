@@ -124,6 +124,66 @@ test('job detail control room keeps result before goal, controls, and diagnostic
   assert.ok(diagnosticIndex > controlIndex)
 })
 
+
+test('job detail exposes an active goal view when next-round steering exists', () => {
+  const steeredModel = makeDetailModel()
+  steeredModel.nextRoundInstruction = '语气更直接，但保留老中医式判断和原有核心结论。'
+
+  const html = renderToStaticMarkup(createElement(JobDetailControlRoom, {
+    model: steeredModel,
+    models: [],
+    ui: {
+      loading: false,
+      error: null,
+      actionMessage: null,
+      savingModels: false,
+      savingMaxRounds: false,
+      savingSteering: false,
+      savingGoalAnchor: false,
+      retrying: false,
+      cancelling: false,
+      pausing: false,
+      resumingStep: false,
+      resumingAuto: false,
+      copyingPrompt: false,
+      expandedRounds: {},
+    },
+    form: {
+      taskModel: 'gpt-5.2',
+      maxRoundsOverrideValue: '12',
+      nextRoundInstruction: steeredModel.nextRoundInstruction,
+      goalAnchorGoal: '保持原始任务目标',
+      goalAnchorDeliverable: '输出完整优化提示词',
+      goalAnchorDriftGuardText: '不要偏离目标',
+    },
+    handlers: {
+      onRetry: () => {},
+      onSaveModel: () => {},
+      onSaveMaxRoundsOverride: () => {},
+      onSaveNextRoundInstruction: () => {},
+      onSaveGoalAnchor: () => {},
+      onPauseTask: () => {},
+      onResumeStep: () => {},
+      onResumeAuto: () => {},
+      onCancelTask: () => {},
+      onCopyLatestPrompt: () => {},
+      onToggleRound: () => {},
+      onTaskModelChange: () => {},
+      onMaxRoundsOverrideChange: () => {},
+      onNextRoundInstructionChange: () => {},
+      onGoalAnchorGoalChange: () => {},
+      onGoalAnchorDeliverableChange: () => {},
+      onGoalAnchorDriftGuardChange: () => {},
+    },
+  }))
+
+  assert.match(html, /当前有效目标视图/)
+  assert.match(html, /已追加下一轮人工引导/)
+  assert.match(html, /语气更直接，但保留老中医式判断和原有核心结论。/)
+  assert.match(html, /这条引导会直接进入下一轮 optimizer/)
+  assert.match(html, /编辑稳定锚点/)
+})
+
 test('settings control room groups connection, defaults, and runtime strategy', () => {
   const html = renderToStaticMarkup(createElement(SettingsControlRoom, {
     form: {
