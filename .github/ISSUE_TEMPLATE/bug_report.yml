@@ -10,7 +10,7 @@ body:
         Thanks for filing a bug.
 
         Please do not paste API keys, tokens, or any other secrets here.
-        If the report is security-sensitive, use `SECURITY.md` instead of a public issue.
+        If the report is security-sensitive, use `SECURITY_EN.md` instead of a public issue.
   - type: dropdown
     id: area
     attributes:

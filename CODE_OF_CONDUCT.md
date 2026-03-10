@@ -1,50 +1,50 @@
-# Code of Conduct
+# 行为准则
 
-**English** | [Chinese](CODE_OF_CONDUCT_ZH.md)
+**中文** | [英文](CODE_OF_CONDUCT_EN.md)
 
-## Our Standard
+## 我们的基本标准
 
-We want Prompt Optimizer Studio to be a respectful, technically serious, and welcoming open-source project.
+我们希望 Prompt Optimizer Studio 是一个尊重他人、技术上严肃认真、同时欢迎贡献者参与的开源项目。
 
-Examples of behavior that contributes to a positive environment include:
+以下行为有助于形成积极的协作环境：
 
-- being respectful in disagreements
-- assuming good intent while still being rigorous
-- giving actionable technical feedback
-- focusing on user impact, evidence, and reproducibility
-- helping others understand decisions, tradeoffs, and constraints
+- 在分歧中保持尊重
+- 假定对方出于善意，同时保持技术上的严谨
+- 提供可执行、可落地的反馈
+- 讨论时关注用户影响、证据和可复现性
+- 帮助他人理解决策、取舍和约束
 
-Examples of unacceptable behavior include:
+以下行为不可接受：
 
-- harassment, discrimination, or intimidation
-- personal attacks, insults, or repeated bad-faith behavior
-- publishing private information without consent
-- spam, trolling, or deliberately disruptive behavior
-- demanding support in a hostile or abusive way
+- 骚扰、歧视、威胁或恐吓
+- 人身攻击、辱骂或反复恶意互动
+- 未经允许公开他人的私人信息
+- 垃圾信息、恶意刷屏或故意扰乱讨论
+- 以敌意或辱骂方式索要支持
 
-## Scope
+## 适用范围
 
-This Code of Conduct applies within GitHub issues, pull requests, discussions, release threads, and other project spaces.
+本行为准则适用于 GitHub issues、pull requests、discussions、release 讨论串以及其他与项目相关的公共空间。
 
-## Reporting
+## 举报方式
 
-If you experience or witness unacceptable behavior, contact the project maintainer through the contact channels available on the repository owner's GitHub profile.
+如果你遭遇或目睹不可接受的行为，请通过仓库所有者 GitHub 主页上的联系方式联系维护者。
 
-When reporting, include:
+举报时请尽量提供：
 
-- what happened
-- where it happened
-- links or screenshots if relevant
-- anything that helps establish context
+- 发生了什么
+- 发生地点
+- 相关链接或截图
+- 任何有助于建立上下文的信息
 
-Please avoid posting conduct reports publicly when privacy or safety is a concern.
+如果涉及隐私或安全问题，请尽量不要在公开场合直接发布举报内容。
 
-## Enforcement
+## 执行方式
 
-The maintainer may remove, edit, or reject comments, commits, issues, pull requests, or other contributions that violate this Code of Conduct.
+维护者可以移除、编辑或拒绝违反本行为准则的评论、提交、issue、pull request 或其他贡献内容。
 
-Enforcement decisions will aim to protect the health of the project and the people participating in it.
+所有执行决定都会以保护项目健康和参与者安全为优先。
 
-## Attribution
+## 说明
 
-This document is informed by the Contributor Covenant spirit, adapted to fit this repository's workflow and maintainer model.
+本文件参考了 Contributor Covenant 的精神，并结合本仓库当前的维护方式做了调整。

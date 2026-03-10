@@ -1,25 +1,25 @@
-# Security Policy
+# 安全策略
 
-**English** | [Chinese](SECURITY_ZH.md)
+**中文** | [英文](SECURITY_EN.md)
 
-## Supported Branch
+## 支持分支
 
-Security fixes are expected to land on the latest `main` branch first.
+安全修复默认先落到最新的 `main` 分支。
 
-## Reporting A Vulnerability
+## 漏洞报告方式
 
-Please do not open a public GitHub issue for suspected security problems.
+如果你怀疑存在安全问题，请不要直接提交公开 GitHub issue。
 
-Use one of these private channels instead:
+请优先使用以下私下渠道：
 
-- GitHub Private Vulnerability Reporting for this repository, if enabled
-- the maintainer contact listed on the repository profile, if private reporting is not enabled yet
+- 仓库启用后的 GitHub 私密漏洞报告
+- 如果暂未启用私密漏洞报告，则使用仓库维护者 GitHub 主页上的联系方式私下联系
 
-When reporting, include:
+报告时请尽量提供：
 
-- affected route, page, or feature
-- reproduction steps
-- impact summary
-- whether secrets, local files, or cross-user data could be exposed
+- 受影响的路由、页面或功能
+- 复现步骤
+- 影响范围说明
+- 是否可能泄露密钥、本地文件或跨用户数据
 
-We will aim to confirm receipt quickly, reproduce the issue, and prepare a fix before any public disclosure.
+我们会尽快确认、复现并在公开披露前准备修复方案。

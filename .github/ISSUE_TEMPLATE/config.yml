@@ -1,14 +1,14 @@
 blank_issues_enabled: true
 contact_links:
-  - name: Deployment guide
-    url: https://github.com/XBigRoad/prompt-optimizer-studio/blob/main/docs/deployment/docker-self-hosted.md
-    about: Check the Docker self-hosted guide before opening deployment questions.
   - name: Docker 自托管文档
-    url: https://github.com/XBigRoad/prompt-optimizer-studio/blob/main/docs/deployment/docker-self-hosted_ZH.md
+    url: https://github.com/XBigRoad/prompt-optimizer-studio/blob/main/docs/deployment/docker-self-hosted.md
     about: 如果是部署或 Docker 相关问题，请先查看中文部署文档。
-  - name: Security policy
-    url: https://github.com/XBigRoad/prompt-optimizer-studio/blob/main/SECURITY.md
-    about: Please report security-sensitive issues through the security process, not a public issue.
+  - name: Deployment guide
+    url: https://github.com/XBigRoad/prompt-optimizer-studio/blob/main/docs/deployment/docker-self-hosted_EN.md
+    about: Check the English Docker deployment guide before opening deployment questions.
   - name: 安全策略
-    url: https://github.com/XBigRoad/prompt-optimizer-studio/blob/main/SECURITY_ZH.md
+    url: https://github.com/XBigRoad/prompt-optimizer-studio/blob/main/SECURITY.md
     about: 如果问题涉及安全，请不要公开提交 issue，先看中文安全策略。
+  - name: Security policy
+    url: https://github.com/XBigRoad/prompt-optimizer-studio/blob/main/SECURITY_EN.md
+    about: Please report security-sensitive issues through the English security process, not a public issue.

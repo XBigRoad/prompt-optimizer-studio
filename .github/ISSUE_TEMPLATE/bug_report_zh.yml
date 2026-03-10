@@ -10,7 +10,7 @@ body:
         感谢反馈问题。
 
         请不要在这里粘贴 API Key、Token 或其他敏感信息。
-        如果问题涉及安全，请不要公开提交，优先查看 `SECURITY_ZH.md`。
+        如果问题涉及安全，请不要公开提交，优先查看 `SECURITY.md`。
   - type: dropdown
     id: area
     attributes:
