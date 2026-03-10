@@ -716,6 +716,12 @@ export function createCandidateWithJudges(jobId: string, input: {
   appliedSteeringItems?: SteeringItem[]
   judgments: JudgeRunRecord[]
 }) {
+  assertFiniteScore(input.scoreBefore, 'scoreBefore')
+  assertFiniteScore(input.averageScore, 'averageScore')
+  for (const judgment of input.judgments) {
+    assertFiniteScore(judgment.score, `judgments[${judgment.judgeIndex}].score`)
+  }
+
   const db = getDb()
   const candidateId = crypto.randomUUID()
   const createdAt = new Date().toISOString()
@@ -1005,6 +1011,12 @@ function requireJob(jobId: string) {
     throw new Error(`Job not found: ${jobId}`)
   }
   return job
+}
+
+function assertFiniteScore(value: unknown, fieldName: string) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw new Error(`候选稿分数字段无效：${fieldName}`)
+  }
 }
 
 function normalizeMaxRoundsOverride(value: number | null) {

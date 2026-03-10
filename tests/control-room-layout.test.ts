@@ -395,6 +395,18 @@ test('job detail notices produce stable unique keys for AnimatePresence', () => 
   ])
 })
 
+test('job detail notices map known internal score errors into friendly copy', () => {
+  const notices = getDetailNoticeItems({
+    loading: false,
+    actionMessage: null,
+    error: '候选稿分数字段无效：scoreBefore',
+    displayError: null,
+  })
+
+  assert.equal(notices[0]?.text, '模型本轮返回了无效分数，系统已拦截这次结果写入。请直接重试；若反复出现，建议更换模型或稍后再试。')
+})
+
+
 function makeJob(id: string, status: DashboardJobView['status']): DashboardJobView {
   return {
     id,

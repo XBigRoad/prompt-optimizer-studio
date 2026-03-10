@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from 'react'
 
 import { DashboardControlRoom } from '@/components/dashboard-control-room'
 import { StudioFrame } from '@/components/studio-frame'
-import { focusDashboardJobs, partitionDashboardJobs } from '@/lib/presentation'
+import { focusDashboardJobs, getJobDisplayError, partitionDashboardJobs } from '@/lib/presentation'
 
 type JobStatus = 'pending' | 'running' | 'paused' | 'completed' | 'failed' | 'manual_review' | 'cancelled'
 
@@ -326,7 +326,7 @@ export function DashboardShell() {
             </AnimatePresence>
 
             {actionMessage ? <div className="notice success">{actionMessage}</div> : null}
-            {error ? <div className="notice error">{error}</div> : null}
+            {error ? <div className="notice error">{getJobDisplayError(error) ?? error}</div> : null}
           </section>
         </motion.div>
       </StudioFrame>

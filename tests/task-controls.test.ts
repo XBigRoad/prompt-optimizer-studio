@@ -90,6 +90,7 @@ test('job controls support cancel, next-round model updates, and legacy error ma
     assert.equal(scheduled.optimizerModel, 'gpt-5.2')
     assert.equal(scheduled.pendingOptimizerModel, 'gpt-5.4')
     assert.equal(getJobDisplayError(scheduled.errorMessage), '这是旧版本遗留失败记录。现在可以直接修改模型后重新开始。')
+    assert.equal(getJobDisplayError('候选稿分数字段无效：scoreBefore'), '模型本轮返回了无效分数，系统已拦截这次结果写入。请直接重试；若反复出现，建议更换模型或稍后再试。')
 
     const cancelled = cancelJob(runningJob.id)
     assert.equal(cancelled.status, 'running')
@@ -493,6 +494,74 @@ test('job detail route builds a goal-anchor draft from selected steering ids onl
     assert.deepEqual(payload.consumePendingSteeringIds, [selectedId])
     assert.equal(payload.goalAnchorDraft.driftGuard.some((item) => item.includes('不要丢掉原始结论。')), true)
     assert.equal(payload.goalAnchorDraft.driftGuard.some((item) => item.includes('语气更直接。')), false)
+  } finally {
+    process.chdir(originalCwd)
+    global.fetch = originalFetch
+    if (originalDbPath === undefined) {
+      delete process.env.PROMPT_OPTIMIZER_DB_PATH
+    } else {
+      process.env.PROMPT_OPTIMIZER_DB_PATH = originalDbPath
+    }
+  }
+})
+
+
+test('createCandidateWithJudges rejects invalid numeric scores with a clear error before SQLite write', async () => {
+  const originalCwd = process.cwd()
+  const originalDbPath = process.env.PROMPT_OPTIMIZER_DB_PATH
+  const originalFetch = global.fetch
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'po-invalid-scores-'))
+  process.env.PROMPT_OPTIMIZER_DB_PATH = path.join(tempDir, 'test.db')
+  process.chdir(tempDir)
+
+  try {
+    const { resetDbForTests } = await import('../src/lib/server/db')
+    resetDbForTests()
+    const { saveSettings } = await import('../src/lib/server/settings')
+    const { createJobs, createCandidateWithJudges } = await import('../src/lib/server/jobs')
+
+    saveSettings({
+      cpamcBaseUrl: 'http://localhost:8317/v1',
+      cpamcApiKey: 'secret',
+      defaultOptimizerModel: 'gpt-5.2',
+      defaultJudgeModel: 'gpt-5.2',
+    })
+
+    global.fetch = (async () => new Response(JSON.stringify({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              goal: '保持任务原始目标',
+              deliverable: '输出原始任务要求的最终结果',
+              driftGuard: ['不要把任务改成别的事情'],
+              sourceSummary: '系统识别到原始任务要求保留核心目标。',
+              rationale: ['原始 prompt 很短，但明确给出了任务目标。'],
+            }),
+          },
+        },
+      ],
+    }), { status: 200 })) as typeof fetch
+
+    const [job] = await createJobs([
+      { title: 'Invalid score job', rawPrompt: 'A', optimizerModel: 'gpt-5.2', judgeModel: 'gpt-5.2' },
+    ])
+
+    assert.throws(
+      () => createCandidateWithJudges(job.id, {
+        roundNumber: 1,
+        optimizedPrompt: 'candidate',
+        strategy: 'preserve',
+        scoreBefore: Number('not-a-number'),
+        averageScore: 90,
+        majorChanges: [],
+        mve: 'mve',
+        deadEndSignals: [],
+        aggregatedIssues: [],
+        judgments: [],
+      }),
+      /候选稿分数字段无效：scoreBefore/,
+    )
   } finally {
     process.chdir(originalCwd)
     global.fetch = originalFetch

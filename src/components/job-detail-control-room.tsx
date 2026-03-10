@@ -525,7 +525,7 @@ export function getDetailNoticeItems(input: {
     notices.push({ key: 'action-message', tone: 'success', text: input.actionMessage })
   }
   if (input.error) {
-    notices.push({ key: 'ui-error', tone: 'error', text: input.error })
+    notices.push({ key: 'ui-error', tone: 'error', text: getJobDisplayError(input.error) ?? input.error })
   }
   if (input.displayError) {
     notices.push({ key: 'display-error', tone: 'error', text: input.displayError })

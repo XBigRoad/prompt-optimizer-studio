@@ -173,5 +173,9 @@ export function getJobDisplayError(errorMessage: string | null) {
     return '这是旧版本遗留失败记录。现在可以直接修改模型后重新开始。'
   }
 
+  if (/^候选稿分数字段无效：/.test(errorMessage)) {
+    return '模型本轮返回了无效分数，系统已拦截这次结果写入。请直接重试；若反复出现，建议更换模型或稍后再试。'
+  }
+
   return errorMessage
 }
