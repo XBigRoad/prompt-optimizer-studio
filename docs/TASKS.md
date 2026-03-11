@@ -79,7 +79,7 @@ Work files:
 - `src/lib/server/model-adapter.ts`
 - `src/app/api/settings/route.ts`
 
-### V0.2-03（WORKER / UI 原语成熟化与设置页选择器升级）⬜️
+### V0.2-03（WORKER / UI 原语成熟化与设置页选择器升级）✅
 
 目标：
 - 不只优化模型选择器，而是系统性替换高交互风险的自研原语
@@ -87,9 +87,9 @@ Work files:
 - 优先让设置页、首页、详情页的核心交互更成熟
 
 验收：
-- [ ] 模型字段改成真正的搜索下拉组件
-- [ ] 首页控制板、历史展开、详情页折叠/确认/反馈有明确的成熟原语替换方案
-- [ ] 不改西瓜配色，只优化交互、排版、滚动、反馈与一致性
+- [x] 模型字段改成真正的搜索下拉组件（cmdk + Radix Popover）
+- [x] 首页控制板 Tabs、历史展开 Accordion、危险操作确认 Dialog 全部换成成熟原语
+- [x] 不改西瓜配色，只优化交互、排版、滚动与一致性（侧栏可滚动、首页变短）
 
 建议 work files:
 - `src/components/settings-control-room.tsx`

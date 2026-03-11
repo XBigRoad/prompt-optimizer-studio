@@ -22,25 +22,25 @@ scope_lock:
 - "优先做公开版控制力与发布收口，不做无关架构重构。"
 
 ## Canonical task pointer
-last_completed_task_id: "V0.2-02"
-next_task_id: "V0.2-03"
+last_completed_task_id: "V0.2-03"
+next_task_id: "V0.2-04"
 next_task_owner: "WORKER"
 
 ## Human-readable block
 next_task:
-  id: "V0.2-03"
+  id: "V0.2-04"
   owner: "WORKER"
-  description: "UI 原语成熟化与设置页选择器升级：优先把模型选择器、tabs/accordion、危险操作确认和反馈系统替换成成熟组件。"
+  description: "手动完成任务并归档：允许用户接受当前最新完整提示词，显式把任务置为完成并进入历史/最新结果。"
 
 blockers:
-- "需要先确定 UI 原语选型（Radix/React Aria 等），避免引入重型 UI kit。"
+- "需要确定“手动完成”的状态机语义：允许触发的状态（推荐 paused/manual_review）、完成后的字段写入（final_candidate_id / status / error_message）。"
 
 notes:
 - "2026-03-08 的 handoff 仍保留为历史背景，但从现在开始以 `TASKS.md / SESSION_STATE.md / HANDOFF_LOG.md` 为持续更新三件套。"
 - "已把 `/Volumes/1TB_No.1/Mac Mini/提示词优化流水线.md` 里的三项待办同步进项目任务板。"
 - "2026-03-11 已新增设计文档：`docs/plans/2026-03-11-provider-coverage-and-release-strategy-design.md`。"
 - "已完成 V0.2-02：新增 apiProtocol（自动/手动协议）并扩展 provider adapter 覆盖 Mistral/Cohere；OpenAI-compatible 覆盖 Kimi/Qwen/GLM/DeepSeek 等平台。"
+- "已完成 V0.2-03：引入 Radix + cmdk，模型选择器升级为可搜索 Combobox；首页改为 Tabs 并把历史任务并到最新结果右侧；危险操作加入确认弹窗；侧栏修复滚动。"
 - "本轮已通过门禁：`npm run check`。"
 - "当前 release workflow 已存在：push `v*` tag 后自动跑 `npm run check` 并创建 GitHub Release。"
-- "当前工作树里存在一个未处理的自动生成文件改动：`next-env.d.ts`；本次文档整理没有动它。"
 - "如果进入新对话，推荐读取顺序：`SESSION_STATE.md` -> `TASKS.md` -> `HANDOFF_LOG.md` -> 相关设计/代码。"

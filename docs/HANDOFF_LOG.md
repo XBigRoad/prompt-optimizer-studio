@@ -87,3 +87,30 @@ Files changed (high signal):
 
 Next:
 - 进入 `V0.2-03`：UI 原语成熟化（Combobox / Tabs / Accordion / Dialog / Toast）
+
+---
+
+## 2026-03-11 — V0.2-03 完成（UI 原语成熟化：Combobox / Tabs / Accordion / Dialog）
+
+Summary:
+- 引入 `Radix UI + cmdk`，把模型别名输入从 `datalist` 升级为可搜索下拉 Combobox（设置页 / 详情页 / 首页投递台）
+- 首页控制板迁移到 Radix Tabs：`待你处理 / 自动运行中 / 最新结果 / 排队中`，并移除独立的“排队中次级长区块”，首页更短
+- “最新结果”Tab 右侧并排历史任务面板；历史分组展开迁移到 Radix Accordion，并把历史面板改为内部滚动，提升可发现性同时控制页面高度
+- 详情页危险操作加入确认弹窗（Radix Dialog）：`重新开始 / 取消任务 / 清空待生效引导`
+- 修复左侧导航：桌面端 sticky sidebar 支持滚动并收口字号；小屏自动取消 `max-height/overflow` 避免出现双滚动
+
+Verification:
+- 通过门禁：`npm run check`
+
+Files changed (high signal):
+- `src/components/ui/model-alias-combobox.tsx`
+- `src/components/ui/confirm-dialog.tsx`
+- `src/components/dashboard-control-room.tsx`
+- `src/components/dashboard-shell.tsx`
+- `src/components/job-detail-control-room.tsx`
+- `src/components/settings-control-room.tsx`
+- `src/styles/globals.css`
+- `tests/control-room-layout.test.ts`
+
+Next:
+- 进入 `V0.2-04`：手动完成任务并归档（避免只能靠 cancel / 卡最大轮数来结束任务）
