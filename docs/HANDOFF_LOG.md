@@ -114,3 +114,27 @@ Files changed (high signal):
 
 Next:
 - 进入 `V0.2-04`：手动完成任务并归档（避免只能靠 cancel / 卡最大轮数来结束任务）
+
+---
+
+## 2026-03-11 — V0.2-04 完成（手动完成任务并归档）
+
+Summary:
+- 新增“完成并归档”动作：`POST /api/jobs/[id]/complete`
+- 后端新增 `completeJob(jobId)`：仅允许在 `paused / manual_review / failed` 状态触发；必须已有候选稿；完成后清理运行态残留字段并将任务标记为 `completed`
+- 详情页“任务控制”面板加入 `完成并归档` 按钮（ConfirmDialog 防误触）
+- 完成后不清空 pending steering（保留为只读记录），并在详情页用小字明确“不会再生效”
+
+Verification:
+- 通过门禁：`npm run check`
+
+Files changed (high signal):
+- `src/lib/server/jobs.ts`
+- `src/app/api/jobs/[id]/complete/route.ts`
+- `src/components/job-detail-shell.tsx`
+- `src/components/job-detail-control-room.tsx`
+- `tests/task-controls.test.ts`
+- `tests/control-room-layout.test.ts`
+
+Next:
+- 进入 `V0.2-05`：README 与开源发布页二次收口（强化“自动流水线式优化提示词”的定位 + 中英文整页切换）

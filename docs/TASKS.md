@@ -113,7 +113,7 @@ Work files:
 - `src/lib/server/types.ts`
 - `src/lib/server/prompt-pack.ts`
 
-### V0.2-04（WORKER / 手动完成任务并归档）⬜️
+### V0.2-04（WORKER / 手动完成任务并归档）✅
 
 目标：
 - 给用户一个“接受当前结果并完成”的明确动作
@@ -121,9 +121,9 @@ Work files:
 - 完成后自然流入“最新结果 / 历史任务”
 
 验收：
-- [ ] 后端提供显式 complete action
-- [ ] 详情页控制区提供 `完成并归档` 或等价动作
-- [ ] 仅允许在安全状态触发（优先 `paused / manual_review`）
+- [x] 后端提供显式 complete action（`POST /api/jobs/[id]/complete`）
+- [x] 详情页控制区提供 `完成并归档` 动作（ConfirmDialog 防误触）
+- [x] 仅允许在安全状态触发（`paused / manual_review / failed`；拒绝 `running/pending/cancelled`）
 
 建议 work files:
 - `src/lib/server/jobs.ts`
