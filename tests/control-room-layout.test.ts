@@ -348,6 +348,7 @@ test('settings control room groups connection, defaults, and active runtime fiel
     form: {
       cpamcBaseUrl: 'https://api.openai.com/v1',
       cpamcApiKey: 'secret',
+      apiProtocol: 'auto',
       defaultTaskModel: 'gpt-5.2',
       scoreThreshold: 95,
       maxRounds: 8,
@@ -368,7 +369,13 @@ test('settings control room groups connection, defaults, and active runtime fiel
   assert.match(html, /连接/)
   assert.match(html, /默认模型/)
   assert.match(html, /运行策略/)
-  assert.match(html, /OpenAI-compatible、Anthropic 官方和 Gemini 官方接口/)
+  assert.match(html, /接口协议/)
+  assert.match(html, /自动判断/)
+  assert.match(html, /OpenAI-compatible/)
+  assert.match(html, /Anthropic/)
+  assert.match(html, /Gemini/)
+  assert.match(html, /Mistral/)
+  assert.match(html, /Cohere/)
   assert.match(html, /协议识别/)
   assert.match(html, /Base URL/)
   assert.match(html, /API Key/)

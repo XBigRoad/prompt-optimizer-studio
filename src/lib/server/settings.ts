@@ -2,12 +2,29 @@ import { DEFAULT_SETTINGS } from '@/lib/server/constants'
 import { getDb } from '@/lib/server/db'
 import type { AppSettings } from '@/lib/server/types'
 
+export function normalizeApiProtocol(value: unknown): AppSettings['apiProtocol'] {
+  const allowed: AppSettings['apiProtocol'][] = [
+    'auto',
+    'openai-compatible',
+    'anthropic-native',
+    'gemini-native',
+    'mistral-native',
+    'cohere-native',
+  ]
+  const candidate = String(value ?? '').trim()
+  if (allowed.includes(candidate as AppSettings['apiProtocol'])) {
+    return candidate as AppSettings['apiProtocol']
+  }
+  return DEFAULT_SETTINGS.apiProtocol
+}
+
 export function getSettings(): AppSettings {
   const db = getDb()
   const row = db.prepare(`
     SELECT
       cpamc_base_url,
       cpamc_api_key,
+      api_protocol,
       default_optimizer_model,
       default_judge_model,
       score_threshold,
@@ -24,6 +41,7 @@ export function getSettings(): AppSettings {
   return {
     cpamcBaseUrl: String(row.cpamc_base_url ?? ''),
     cpamcApiKey: String(row.cpamc_api_key ?? ''),
+    apiProtocol: normalizeApiProtocol(row.api_protocol),
     defaultOptimizerModel: String(row.default_optimizer_model ?? ''),
     defaultJudgeModel: String(row.default_judge_model ?? ''),
     scoreThreshold: Number(row.score_threshold ?? DEFAULT_SETTINGS.scoreThreshold),
@@ -48,6 +66,7 @@ export function saveSettings(input: Partial<AppSettings>) {
     UPDATE settings
     SET cpamc_base_url = ?,
         cpamc_api_key = ?,
+        api_protocol = ?,
         default_optimizer_model = ?,
         default_judge_model = ?,
         score_threshold = ?,
@@ -61,6 +80,7 @@ export function saveSettings(input: Partial<AppSettings>) {
   `).run(
     next.cpamcBaseUrl,
     next.cpamcApiKey,
+    normalizeApiProtocol(next.apiProtocol),
     next.defaultOptimizerModel,
     next.defaultJudgeModel,
     next.scoreThreshold,

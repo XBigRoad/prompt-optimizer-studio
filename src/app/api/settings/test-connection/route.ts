@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import { fetchCpamcModels } from '@/lib/server/models'
-import { getSettings } from '@/lib/server/settings'
+import { getSettings, normalizeApiProtocol } from '@/lib/server/settings'
 import type { AppSettings } from '@/lib/server/types'
 
 export const runtime = 'nodejs'
@@ -13,6 +13,7 @@ export async function POST(request: Request) {
     const merged = {
       cpamcBaseUrl: body.cpamcBaseUrl?.trim() ?? current.cpamcBaseUrl,
       cpamcApiKey: body.cpamcApiKey?.trim() ?? current.cpamcApiKey,
+      apiProtocol: normalizeApiProtocol(typeof body.apiProtocol === 'string' ? body.apiProtocol : current.apiProtocol),
     }
 
     const models = await fetchCpamcModels(merged)

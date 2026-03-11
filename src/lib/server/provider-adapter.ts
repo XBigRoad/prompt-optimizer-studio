@@ -1,7 +1,7 @@
 import { extractJsonObject } from '@/lib/server/json'
-import type { AppSettings, ModelCatalogItem } from '@/lib/server/types'
+import type { ApiProtocol, AppSettings, ModelCatalogItem } from '@/lib/server/types'
 
-export type ApiProtocol = 'openai-compatible' | 'anthropic-native' | 'gemini-native'
+export type { ApiProtocol } from '@/lib/server/types'
 
 export interface ProviderJsonRequest {
   model: string
@@ -12,10 +12,12 @@ export interface ProviderJsonRequest {
 }
 
 export interface ProviderAdapter {
-  protocol: ApiProtocol
+  protocol: Exclude<ApiProtocol, 'auto'>
   requestJson(input: ProviderJsonRequest): Promise<Record<string, unknown>>
   listModels(): Promise<ModelCatalogItem[]>
 }
+
+type ProviderConnectionSettings = Pick<AppSettings, 'cpamcBaseUrl' | 'cpamcApiKey'> & Partial<Pick<AppSettings, 'apiProtocol'>>
 
 interface OpenAiModelListResponse {
   data?: Array<{
@@ -73,6 +75,24 @@ interface GeminiModelListResponse {
   }>
 }
 
+interface CohereChatResponse {
+  message?: {
+    content?: Array<{
+      type?: string
+      text?: string
+    }>
+  }
+  error?: {
+    message?: string
+  }
+}
+
+interface CohereModelListResponse {
+  models?: Array<{
+    name?: string
+  }>
+}
+
 export function inferApiProtocol(baseUrl: string): ApiProtocol {
   const trimmed = baseUrl.trim()
   if (!trimmed) {
@@ -95,6 +115,14 @@ export function inferApiProtocol(baseUrl: string): ApiProtocol {
     if (host === 'generativelanguage.googleapis.com') {
       return 'gemini-native'
     }
+
+    if (host === 'api.mistral.ai') {
+      return 'mistral-native'
+    }
+
+    if (host === 'api.cohere.com') {
+      return 'cohere-native'
+    }
   } catch {
     return 'openai-compatible'
   }
@@ -103,15 +131,21 @@ export function inferApiProtocol(baseUrl: string): ApiProtocol {
 }
 
 export function createProviderAdapter(
-  settings: Pick<AppSettings, 'cpamcBaseUrl' | 'cpamcApiKey'>,
+  settings: ProviderConnectionSettings,
 ): ProviderAdapter {
-  const protocol = inferApiProtocol(settings.cpamcBaseUrl)
+  const protocol = settings.apiProtocol && settings.apiProtocol !== 'auto'
+    ? settings.apiProtocol
+    : inferApiProtocol(settings.cpamcBaseUrl)
 
   switch (protocol) {
     case 'anthropic-native':
       return new AnthropicNativeProviderAdapter(settings)
     case 'gemini-native':
       return new GeminiNativeProviderAdapter(settings)
+    case 'mistral-native':
+      return new MistralNativeProviderAdapter(settings)
+    case 'cohere-native':
+      return new CohereNativeProviderAdapter(settings)
     case 'openai-compatible':
     default:
       return new OpenAiCompatibleProviderAdapter(settings)
@@ -124,16 +158,25 @@ export function normalizeProviderModelCatalog(protocol: ApiProtocol, payload: un
       return normalizeAnthropicModelCatalog(payload as AnthropicModelListResponse)
     case 'gemini-native':
       return normalizeGeminiModelCatalog(payload as GeminiModelListResponse)
+    case 'mistral-native':
+      return normalizeOpenAiModelCatalog(payload as OpenAiModelListResponse)
+    case 'cohere-native':
+      return normalizeCohereModelCatalog(payload as CohereModelListResponse)
     case 'openai-compatible':
     default:
       return normalizeOpenAiModelCatalog(payload as OpenAiModelListResponse)
   }
 }
 
-class OpenAiCompatibleProviderAdapter implements ProviderAdapter {
-  readonly protocol = 'openai-compatible' as const
+class OpenAiStyleProviderAdapter implements ProviderAdapter {
+  readonly protocol: 'openai-compatible' | 'mistral-native'
 
-  constructor(private readonly settings: Pick<AppSettings, 'cpamcBaseUrl' | 'cpamcApiKey'>) {}
+  constructor(
+    private readonly settings: ProviderConnectionSettings,
+    protocol: 'openai-compatible' | 'mistral-native',
+  ) {
+    this.protocol = protocol
+  }
 
   async requestJson(input: ProviderJsonRequest) {
     const endpoint = appendToBasePath(this.settings.cpamcBaseUrl, 'chat/completions')
@@ -177,10 +220,22 @@ class OpenAiCompatibleProviderAdapter implements ProviderAdapter {
   }
 }
 
+class OpenAiCompatibleProviderAdapter extends OpenAiStyleProviderAdapter {
+  constructor(settings: ProviderConnectionSettings) {
+    super(settings, 'openai-compatible')
+  }
+}
+
+class MistralNativeProviderAdapter extends OpenAiStyleProviderAdapter {
+  constructor(settings: ProviderConnectionSettings) {
+    super(settings, 'mistral-native')
+  }
+}
+
 class AnthropicNativeProviderAdapter implements ProviderAdapter {
   readonly protocol = 'anthropic-native' as const
 
-  constructor(private readonly settings: Pick<AppSettings, 'cpamcBaseUrl' | 'cpamcApiKey'>) {}
+  constructor(private readonly settings: ProviderConnectionSettings) {}
 
   async requestJson(input: ProviderJsonRequest) {
     const endpoint = appendVersionedPath(this.settings.cpamcBaseUrl, 'v1', 'messages')
@@ -238,7 +293,7 @@ class AnthropicNativeProviderAdapter implements ProviderAdapter {
 class GeminiNativeProviderAdapter implements ProviderAdapter {
   readonly protocol = 'gemini-native' as const
 
-  constructor(private readonly settings: Pick<AppSettings, 'cpamcBaseUrl' | 'cpamcApiKey'>) {}
+  constructor(private readonly settings: ProviderConnectionSettings) {}
 
   async requestJson(input: ProviderJsonRequest) {
     const modelPath = normalizeGeminiModelPath(input.model)
@@ -293,6 +348,53 @@ class GeminiNativeProviderAdapter implements ProviderAdapter {
   }
 }
 
+class CohereNativeProviderAdapter implements ProviderAdapter {
+  readonly protocol = 'cohere-native' as const
+
+  constructor(private readonly settings: ProviderConnectionSettings) {}
+
+  async requestJson(input: ProviderJsonRequest) {
+    const endpoint = appendVersionedPath(this.settings.cpamcBaseUrl, 'v2', 'chat')
+    const body = {
+      model: input.model,
+      messages: [
+        { role: 'system', content: input.system },
+        { role: 'user', content: input.user },
+      ],
+      temperature: 0.2,
+    }
+
+    const response = await requestWithRetry(async () => {
+      const result = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${this.settings.cpamcApiKey}`,
+        },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(input.timeoutMs),
+      })
+
+      return parseJsonResponse(result, 'Cohere 请求') as Promise<CohereChatResponse>
+    }, input.maxAttempts ?? 3)
+
+    return extractJsonObject(extractCohereResponseText(response)) as Record<string, unknown>
+  }
+
+  async listModels() {
+    const endpoint = appendVersionedPath(this.settings.cpamcBaseUrl, 'v2', 'models')
+    const response = await fetch(endpoint, {
+      headers: {
+        Authorization: `Bearer ${this.settings.cpamcApiKey}`,
+      },
+      signal: AbortSignal.timeout(30_000),
+    })
+
+    const payload = await parseJsonResponse(response, '拉取模型列表') as CohereModelListResponse
+    return normalizeProviderModelCatalog(this.protocol, payload)
+  }
+}
+
 function normalizeOpenAiModelCatalog(payload: OpenAiModelListResponse): ModelCatalogItem[] {
   return dedupeModelIds((payload.data ?? []).map((item) => item.id))
 }
@@ -310,6 +412,10 @@ function normalizeGeminiModelCatalog(payload: GeminiModelListResponse): ModelCat
     .map((item) => item.name)
 
   return dedupeModelIds(ids)
+}
+
+function normalizeCohereModelCatalog(payload: CohereModelListResponse): ModelCatalogItem[] {
+  return dedupeModelIds((payload.models ?? []).map((item) => item.name))
 }
 
 function dedupeModelIds(ids: Array<string | undefined>): ModelCatalogItem[] {
@@ -399,6 +505,24 @@ function extractGeminiResponseText(response: GeminiGenerateContentResponse) {
   }
 
   throw new Error('Gemini 返回了空响应。')
+}
+
+function extractCohereResponseText(response: CohereChatResponse) {
+  const text = (response.message?.content ?? [])
+    .filter((part) => part.type === 'text' && typeof part.text === 'string')
+    .map((part) => part.text ?? '')
+    .join('\n')
+    .trim()
+
+  if (text) {
+    return text
+  }
+
+  if (response.error?.message) {
+    throw new Error(response.error.message)
+  }
+
+  throw new Error('Cohere 返回了空响应。')
 }
 
 async function parseJsonResponse(response: Response, actionLabel: string) {

@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 
 import type { ConversationPolicy } from '@/lib/engine/conversation-policy'
 import { resolveRuntimeEnv } from '@/lib/server/runtime-env'
+import type { AppSettings } from '@/lib/server/types'
 
 const PROMPT_PACK_DIR_ENV = 'PROMPT_OPTIMIZER_PROMPT_PACK_DIR'
 
@@ -43,9 +44,10 @@ export function resolveDatabasePath() {
   return resolveRuntimeEnv().databasePath
 }
 
-export const DEFAULT_SETTINGS = {
+export const DEFAULT_SETTINGS: Omit<AppSettings, 'updatedAt'> = {
   cpamcBaseUrl: '',
   cpamcApiKey: '',
+  apiProtocol: 'auto',
   defaultOptimizerModel: '',
   defaultJudgeModel: '',
   scoreThreshold: 95,

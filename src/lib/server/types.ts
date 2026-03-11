@@ -3,6 +3,13 @@ import type { RoundJudgment } from '@/lib/engine/optimization-cycle'
 
 export type JobStatus = 'pending' | 'running' | 'paused' | 'completed' | 'failed' | 'manual_review' | 'cancelled'
 export type JobRunMode = 'auto' | 'step'
+export type ApiProtocol =
+  | 'auto'
+  | 'openai-compatible'
+  | 'anthropic-native'
+  | 'gemini-native'
+  | 'mistral-native'
+  | 'cohere-native'
 
 export interface SteeringItem {
   id: string
@@ -24,6 +31,7 @@ export interface GoalAnchorExplanation {
 export interface AppSettings {
   cpamcBaseUrl: string
   cpamcApiKey: string
+  apiProtocol: ApiProtocol
   defaultOptimizerModel: string
   defaultJudgeModel: string
   scoreThreshold: number

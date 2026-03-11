@@ -12,7 +12,9 @@ export function normalizeModelCatalog(payload: OpenAiModelListResponse): string[
   return normalizeProviderModelCatalog('openai-compatible', payload).map((item) => item.id)
 }
 
-export async function fetchCpamcModels(settings: Pick<AppSettings, 'cpamcBaseUrl' | 'cpamcApiKey'>): Promise<ModelCatalogItem[]> {
+export async function fetchCpamcModels(
+  settings: Pick<AppSettings, 'cpamcBaseUrl' | 'cpamcApiKey'> & Partial<Pick<AppSettings, 'apiProtocol'>>,
+): Promise<ModelCatalogItem[]> {
   validateCpamcConnection(settings)
   return createProviderAdapter(settings).listModels()
 }

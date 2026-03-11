@@ -21,6 +21,7 @@ export function getDb() {
       id INTEGER PRIMARY KEY CHECK (id = 1),
       cpamc_base_url TEXT NOT NULL DEFAULT '',
       cpamc_api_key TEXT NOT NULL DEFAULT '',
+      api_protocol TEXT NOT NULL DEFAULT 'auto',
       default_optimizer_model TEXT NOT NULL DEFAULT '',
       default_judge_model TEXT NOT NULL DEFAULT '',
       score_threshold INTEGER NOT NULL DEFAULT 95,
@@ -125,6 +126,7 @@ export function getDb() {
     CREATE INDEX IF NOT EXISTS idx_judge_runs_candidate_idx ON judge_runs(candidate_id, judge_index);
   `)
 
+  ensureColumn(db, 'settings', 'api_protocol', "TEXT NOT NULL DEFAULT 'auto'")
   ensureColumn(db, 'settings', 'default_optimizer_model', "TEXT NOT NULL DEFAULT ''")
   ensureColumn(db, 'settings', 'default_judge_model', "TEXT NOT NULL DEFAULT ''")
   ensureColumn(db, 'jobs', 'optimizer_model', "TEXT NOT NULL DEFAULT ''")
@@ -156,6 +158,7 @@ export function getDb() {
         id,
         cpamc_base_url,
         cpamc_api_key,
+        api_protocol,
         default_optimizer_model,
         default_judge_model,
         score_threshold,
@@ -165,11 +168,12 @@ export function getDb() {
         worker_concurrency,
         conversation_policy,
         updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       1,
       DEFAULT_SETTINGS.cpamcBaseUrl,
       DEFAULT_SETTINGS.cpamcApiKey,
+      DEFAULT_SETTINGS.apiProtocol,
       DEFAULT_SETTINGS.defaultOptimizerModel,
       DEFAULT_SETTINGS.defaultJudgeModel,
       DEFAULT_SETTINGS.scoreThreshold,

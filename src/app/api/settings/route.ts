@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 
-import { getSettings, saveSettings } from '@/lib/server/settings'
+import { getSettings, normalizeApiProtocol, saveSettings } from '@/lib/server/settings'
 import type { AppSettings } from '@/lib/server/types'
 
 export const runtime = 'nodejs'
@@ -15,6 +15,7 @@ export async function POST(request: Request) {
     const settings = saveSettings({
       cpamcBaseUrl: body.cpamcBaseUrl?.trim() ?? '',
       cpamcApiKey: body.cpamcApiKey?.trim() ?? '',
+      ...(typeof body.apiProtocol === 'string' ? { apiProtocol: normalizeApiProtocol(body.apiProtocol) } : {}),
       defaultOptimizerModel: body.defaultOptimizerModel?.trim() ?? '',
       defaultJudgeModel: body.defaultJudgeModel?.trim() ?? '',
       scoreThreshold: clampNumber(body.scoreThreshold, 1, 100, 95),

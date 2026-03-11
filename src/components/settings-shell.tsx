@@ -5,10 +5,12 @@ import { useEffect, useState } from 'react'
 
 import { SettingsControlRoom } from '@/components/settings-control-room'
 import { StudioFrame } from '@/components/studio-frame'
+import type { ApiProtocol } from '@/lib/server/types'
 
 interface SettingsForm {
   cpamcBaseUrl: string
   cpamcApiKey: string
+  apiProtocol: ApiProtocol
   defaultTaskModel: string
   scoreThreshold: number
   maxRounds: number
@@ -22,6 +24,7 @@ interface ModelOption {
 const DEFAULT_FORM: SettingsForm = {
   cpamcBaseUrl: '',
   cpamcApiKey: '',
+  apiProtocol: 'auto',
   defaultTaskModel: '',
   scoreThreshold: 95,
   maxRounds: 8,
@@ -57,6 +60,7 @@ export function SettingsShell() {
           setForm({
             cpamcBaseUrl: settingsPayload.settings.cpamcBaseUrl,
             cpamcApiKey: settingsPayload.settings.cpamcApiKey,
+            apiProtocol: settingsPayload.settings.apiProtocol ?? 'auto',
             defaultTaskModel: settingsPayload.settings.defaultOptimizerModel,
             scoreThreshold: settingsPayload.settings.scoreThreshold,
             maxRounds: settingsPayload.settings.maxRounds,
@@ -90,6 +94,7 @@ export function SettingsShell() {
         body: JSON.stringify({
           cpamcBaseUrl: form.cpamcBaseUrl,
           cpamcApiKey: form.cpamcApiKey,
+          apiProtocol: form.apiProtocol,
           defaultOptimizerModel: form.defaultTaskModel,
           defaultJudgeModel: form.defaultTaskModel,
           scoreThreshold: form.scoreThreshold,
@@ -102,6 +107,7 @@ export function SettingsShell() {
       }
       setForm((current) => ({
         ...current,
+        apiProtocol: payload.settings.apiProtocol ?? current.apiProtocol,
         defaultTaskModel: payload.settings.defaultOptimizerModel,
         scoreThreshold: payload.settings.scoreThreshold,
         maxRounds: payload.settings.maxRounds,
@@ -125,6 +131,7 @@ export function SettingsShell() {
         body: JSON.stringify({
           cpamcBaseUrl: form.cpamcBaseUrl,
           cpamcApiKey: form.cpamcApiKey,
+          apiProtocol: form.apiProtocol,
         }),
       })
       const payload = await response.json()
@@ -151,6 +158,7 @@ export function SettingsShell() {
         body: JSON.stringify({
           cpamcBaseUrl: form.cpamcBaseUrl,
           cpamcApiKey: form.cpamcApiKey,
+          apiProtocol: form.apiProtocol,
         }),
       })
       const payload = await response.json()

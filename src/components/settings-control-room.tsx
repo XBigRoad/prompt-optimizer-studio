@@ -1,5 +1,25 @@
 import { Link2, PlayCircle, ServerCog, Sparkles } from 'lucide-react'
 
+import type { ApiProtocol } from '@/lib/server/types'
+
+function getProtocolLabel(protocol: ApiProtocol) {
+  switch (protocol) {
+    case 'openai-compatible':
+      return 'OpenAI-compatible'
+    case 'anthropic-native':
+      return 'Anthropic'
+    case 'gemini-native':
+      return 'Gemini'
+    case 'mistral-native':
+      return 'Mistral'
+    case 'cohere-native':
+      return 'Cohere'
+    case 'auto':
+    default:
+      return '自动判断'
+  }
+}
+
 export function SettingsControlRoom({
   form,
   models,
@@ -17,6 +37,7 @@ export function SettingsControlRoom({
   form: {
     cpamcBaseUrl: string
     cpamcApiKey: string
+    apiProtocol: ApiProtocol
     defaultTaskModel: string
     scoreThreshold: number
     maxRounds: number
@@ -32,7 +53,7 @@ export function SettingsControlRoom({
   onTestConnection: () => void
   onRefreshModels: () => void
   onFormChange: (
-    field: 'cpamcBaseUrl' | 'cpamcApiKey' | 'defaultTaskModel' | 'scoreThreshold' | 'maxRounds',
+    field: 'cpamcBaseUrl' | 'cpamcApiKey' | 'apiProtocol' | 'defaultTaskModel' | 'scoreThreshold' | 'maxRounds',
     value: string | number,
   ) => void
 }) {
@@ -43,7 +64,9 @@ export function SettingsControlRoom({
           <div>
             <span className="eyebrow"><Sparkles size={16} /> 配置台</span>
             <h1>配置台</h1>
-            <p className="hero-lead">用同一套 Base URL / API Key / 模型别名，接入 OpenAI-compatible、Anthropic 官方和 Gemini 官方接口。</p>
+            <p className="hero-lead">
+              用同一套 Base URL / API Key / 模型别名，覆盖 OpenAI-compatible（Kimi / Qwen / GLM / DeepSeek 等）与 Anthropic / Gemini / Mistral / Cohere 官方接口。
+            </p>
           </div>
           <div className="summary-cluster">
             <div className="summary-card tone-pending">
@@ -52,7 +75,7 @@ export function SettingsControlRoom({
             </div>
             <div className="summary-card tone-running">
               <div className="small">协议识别</div>
-              <div className="summary-value">自动判断</div>
+              <div className="summary-value">{getProtocolLabel(form.apiProtocol)}</div>
             </div>
           </div>
         </div>
@@ -68,7 +91,7 @@ export function SettingsControlRoom({
             <div>
               <span className="eyebrow"><Link2 size={16} /> 连接</span>
               <h2 className="section-title">连接</h2>
-              <p className="small">前台始终只填 Base URL 和 API Key，后端会自动选择兼容接口、Anthropic 原生接口或 Gemini 原生接口。</p>
+              <p className="small">默认自动判断协议；使用反代或企业网关时，可以手动指定接口协议来保证可用性。</p>
             </div>
           </div>
           <div className="form-grid">
@@ -90,6 +113,17 @@ export function SettingsControlRoom({
                 onChange={(event) => onFormChange('cpamcApiKey', event.target.value)}
                 placeholder="sk-... / AIza..."
               />
+            </label>
+            <label className="label">
+              接口协议
+              <select className="input" value={form.apiProtocol} onChange={(event) => onFormChange('apiProtocol', event.target.value)}>
+                <option value="auto">自动判断</option>
+                <option value="openai-compatible">OpenAI-compatible</option>
+                <option value="anthropic-native">Anthropic</option>
+                <option value="gemini-native">Gemini</option>
+                <option value="mistral-native">Mistral</option>
+                <option value="cohere-native">Cohere</option>
+              </select>
             </label>
           </div>
           <div className="button-row">
