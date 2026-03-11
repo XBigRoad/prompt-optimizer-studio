@@ -1,5 +1,6 @@
 import { Link2, PlayCircle, ServerCog, Sparkles } from 'lucide-react'
 
+import { ModelAliasCombobox } from '@/components/ui/model-alias-combobox'
 import type { ApiProtocol } from '@/lib/server/types'
 
 function getProtocolLabel(protocol: ApiProtocol) {
@@ -140,14 +141,16 @@ export function SettingsControlRoom({
               <p className="small">对外只保留单一模型别名。optimizer / reviewer 在任务里共享同一个可见模型名，不暴露 provider 内部路径。</p>
             </div>
           </div>
-          <datalist id="model-aliases">
-            {models.map((model) => <option key={model.id} value={model.id} />)}
-          </datalist>
           <div className="form-grid">
-            <label className="label">
-              默认模型别名
-              <input className="input" list="model-aliases" value={form.defaultTaskModel} onChange={(event) => onFormChange('defaultTaskModel', event.target.value)} placeholder="例如：gpt-5.2 / claude-sonnet-4 / gemini-2.5-pro" />
-            </label>
+            <ModelAliasCombobox
+              inputId="settings-default-task-model"
+              label="默认模型别名"
+              value={form.defaultTaskModel}
+              options={models}
+              placeholder="例如：gpt-5.2 / claude-sonnet-4 / gemini-2.5-pro"
+              disabled={loading || loadingModels}
+              onChange={(next) => onFormChange('defaultTaskModel', next)}
+            />
           </div>
         </section>
 

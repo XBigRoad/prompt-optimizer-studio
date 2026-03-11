@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 
 import { JobRoundCard, type RoundCandidateView } from '@/components/job-round-card'
+import { ModelAliasCombobox } from '@/components/ui/model-alias-combobox'
 import type { SteeringItem } from '@/lib/server/types'
 import { getConversationPolicyLabel, getJobDisplayError, getJobStatusLabel } from '@/lib/presentation'
 
@@ -362,9 +363,6 @@ export function JobDetailControlRoom({
             <p className="small">先决定怎么跑，再补这次的人工纠偏。</p>
           </div>
         </div>
-        <datalist id="job-model-aliases">
-          {models.map((modelOption) => <option key={modelOption.id} value={modelOption.id} />)}
-        </datalist>
         <div className="control-stage-grid">
           <div className="control-subpanel runtime-control-panel">
             <div className="section-head control-subhead">
@@ -374,10 +372,14 @@ export function JobDetailControlRoom({
               </div>
             </div>
             <div className="compact-control-grid runtime-config-grid">
-              <label className="label compact-control-field">
-                任务模型别名
-                <input className="input" list="job-model-aliases" value={form.taskModel} onChange={(event) => handlers.onTaskModelChange(event.target.value)} disabled={!canEdit} />
-              </label>
+              <ModelAliasCombobox
+                inputId="job-task-model"
+                label="任务模型别名"
+                value={form.taskModel}
+                options={models}
+                disabled={!canEdit}
+                onChange={(next) => handlers.onTaskModelChange(next)}
+              />
               <label className="label compact-control-field">
                 任务级最大轮数
                 <input className="input" type="number" min={1} max={99} value={form.maxRoundsOverrideValue} onChange={(event) => handlers.onMaxRoundsOverrideChange(event.target.value)} disabled={!canEdit} />

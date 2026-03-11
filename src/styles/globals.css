@@ -349,6 +349,103 @@ main {
   box-shadow: 0 0 0 4px rgba(231, 90, 99, 0.1);
 }
 
+.combobox-command {
+  width: 100%;
+}
+
+.combobox-anchor {
+  position: relative;
+  width: 100%;
+}
+
+.combobox-input {
+  padding-right: 58px;
+}
+
+.combobox-trigger {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  border: 1px solid transparent;
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--ink);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition:
+    transform var(--motion-fast) var(--ease-smooth),
+    background-color var(--motion-fast) var(--ease-smooth),
+    border-color var(--motion-fast) var(--ease-smooth);
+}
+
+.combobox-trigger:hover {
+  transform: translateY(calc(-50% - 1px));
+  background: rgba(255, 247, 244, 0.92);
+  border-color: rgba(231, 90, 99, 0.22);
+}
+
+.combobox-trigger:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+  transform: translateY(-50%);
+}
+
+.combobox-popover {
+  width: min(560px, calc(100vw - 40px));
+  max-height: min(360px, calc(100vh - 120px));
+  overflow: hidden;
+  border: 1px solid rgba(74, 56, 40, 0.18);
+  border-radius: var(--radius-lg);
+  background: rgba(255, 252, 246, 0.96);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(12px);
+}
+
+.combobox-list {
+  max-height: min(360px, calc(100vh - 140px));
+  overflow: auto;
+  padding: 10px;
+}
+
+.combobox-empty {
+  padding: 12px 14px;
+  color: var(--ink-soft);
+}
+
+.combobox-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  cursor: pointer;
+  user-select: none;
+  color: var(--ink);
+  transition:
+    background-color var(--motion-fast) var(--ease-smooth),
+    transform var(--motion-fast) var(--ease-smooth);
+}
+
+.combobox-item[aria-selected="true"],
+.combobox-item[data-selected="true"] {
+  background: rgba(231, 90, 99, 0.12);
+}
+
+.combobox-item:hover {
+  transform: translateY(-1px);
+  background: rgba(255, 255, 255, 0.76);
+}
+
+.combobox-item-main {
+  font-weight: 700;
+}
+
 .textarea {
   min-height: 180px;
   resize: vertical;

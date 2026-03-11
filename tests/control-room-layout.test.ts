@@ -92,6 +92,8 @@ test('history lane exposes grouped search when history is the active focus', () 
 test('job detail control room keeps result before goal, controls, and diagnostics', () => {
   const html = renderToStaticMarkup(createElement(JobDetailControlRoom, makeDetailProps()))
 
+  assert.doesNotMatch(html, /<datalist/)
+
   const resultIndex = html.indexOf('当前最新完整提示词')
   const goalIndex = html.indexOf('长期规则')
   const controlIndex = html.indexOf('任务控制')
@@ -365,6 +367,8 @@ test('settings control room groups connection, defaults, and active runtime fiel
     onRefreshModels: () => {},
     onFormChange: () => {},
   }))
+
+  assert.doesNotMatch(html, /<datalist/)
 
   assert.match(html, /连接/)
   assert.match(html, /默认模型/)
