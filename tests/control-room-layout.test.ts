@@ -13,6 +13,7 @@ import {
   getDetailNoticeItems,
   type JobDetailViewModel,
 } from '../src/components/job-detail-control-room'
+import type { RoundCandidateView } from '../src/components/job-round-card'
 import { SettingsControlRoom } from '../src/components/settings-control-room'
 
 test('dashboard control room prioritizes attention, running, and latest results', () => {
@@ -107,6 +108,16 @@ test('job detail control room keeps result before goal, controls, and diagnostic
   assert.ok(diagnosticIndex > controlIndex)
 })
 
+test('job detail exposes manual complete action when paused with candidates', () => {
+  const html = renderToStaticMarkup(createElement(JobDetailControlRoom, makeDetailProps({
+    model: {
+      candidates: [makeCandidate('cand-1')],
+    },
+  })))
+
+  assert.match(html, /完成并归档/)
+})
+
 test('job detail result stage can switch into compare mode without changing the primary copy target', () => {
   const defaultHtml = renderToStaticMarkup(createElement(JobDetailControlRoom, makeDetailProps()))
   const compareHtml = renderToStaticMarkup(createElement(JobDetailControlRoom, makeDetailProps({
@@ -138,6 +149,7 @@ test('job detail readonly goal fields use compact scrollable summaries', () => {
       generatingGoalAnchorDraft: false,
       savingGoalAnchor: false,
       retrying: false,
+      completing: false,
       cancelling: false,
       pausing: false,
       resumingStep: false,
@@ -169,6 +181,7 @@ test('job detail readonly goal fields use compact scrollable summaries', () => {
       onResumeStep: () => {},
       onResumeAuto: () => {},
       onCancelTask: () => {},
+      onCompleteTask: () => {},
       onCopyLatestPrompt: () => {},
       onToggleCompareMode: () => {},
       onToggleRound: () => {},
@@ -214,6 +227,7 @@ test('job detail exposes pending steering cards and goal-anchor merge entry when
       generatingGoalAnchorDraft: false,
       savingGoalAnchor: false,
       retrying: false,
+      completing: false,
       cancelling: false,
       pausing: false,
       resumingStep: false,
@@ -245,6 +259,7 @@ test('job detail exposes pending steering cards and goal-anchor merge entry when
       onResumeStep: () => {},
       onResumeAuto: () => {},
       onCancelTask: () => {},
+      onCompleteTask: () => {},
       onCopyLatestPrompt: () => {},
       onToggleCompareMode: () => {},
       onToggleRound: () => {},
@@ -300,6 +315,7 @@ test('goal-anchor draft note explains that saving is still required', () => {
       generatingGoalAnchorDraft: false,
       savingGoalAnchor: false,
       retrying: false,
+      completing: false,
       cancelling: false,
       pausing: false,
       resumingStep: false,
@@ -331,6 +347,7 @@ test('goal-anchor draft note explains that saving is still required', () => {
       onResumeStep: () => {},
       onResumeAuto: () => {},
       onCancelTask: () => {},
+      onCompleteTask: () => {},
       onCopyLatestPrompt: () => {},
       onToggleCompareMode: () => {},
       onToggleRound: () => {},
@@ -456,6 +473,7 @@ function makeDetailProps(overrides: {
       generatingGoalAnchorDraft: false,
       savingGoalAnchor: false,
       retrying: false,
+      completing: false,
       cancelling: false,
       pausing: false,
       resumingStep: false,
@@ -489,6 +507,7 @@ function makeDetailProps(overrides: {
       onResumeStep: () => {},
       onResumeAuto: () => {},
       onCancelTask: () => {},
+      onCompleteTask: () => {},
       onCopyLatestPrompt: () => {},
       onToggleCompareMode: () => {},
       onToggleRound: () => {},
@@ -537,5 +556,34 @@ function makeDetailModel(): JobDetailViewModel {
     modelsLabel: 'gpt-5.2',
     effectiveMaxRounds: 12,
     candidates: [],
+  }
+}
+
+function makeCandidate(id: string): RoundCandidateView {
+  return {
+    id,
+    roundNumber: 4,
+    optimizedPrompt: 'LATEST FULL PROMPT',
+    strategy: 'preserve',
+    scoreBefore: 80,
+    averageScore: 92,
+    majorChanges: ['Keep structure stable'],
+    mve: 'mve',
+    deadEndSignals: [],
+    aggregatedIssues: [],
+    appliedSteeringItems: [],
+    judges: [
+      {
+        id: 'judge-1',
+        judgeIndex: 0,
+        score: 92,
+        hasMaterialIssues: false,
+        summary: 'ok',
+        driftLabels: [],
+        driftExplanation: '',
+        findings: [],
+        suggestedChanges: [],
+      },
+    ],
   }
 }

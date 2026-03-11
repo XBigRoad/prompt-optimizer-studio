@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import {
   ArrowLeft,
   BrainCircuit,
+  CheckCircle2,
   ClipboardList,
   Copy,
   PauseCircle,
@@ -77,6 +78,7 @@ export function JobDetailControlRoom({
     generatingGoalAnchorDraft: boolean
     savingGoalAnchor: boolean
     retrying: boolean
+    completing: boolean
     cancelling: boolean
     pausing: boolean
     resumingStep: boolean
@@ -108,6 +110,7 @@ export function JobDetailControlRoom({
     onResumeStep: () => void
     onResumeAuto: () => void
     onCancelTask: () => void
+    onCompleteTask: () => void
     onCopyLatestPrompt: () => void
     onToggleCompareMode: () => void
     onToggleRound: (candidateId: string) => void
@@ -126,6 +129,7 @@ export function JobDetailControlRoom({
   const canCancel = !['completed', 'cancelled'].includes(model.status)
   const canPause = !['completed', 'cancelled', 'paused'].includes(model.status)
   const canResume = !['completed', 'cancelled', 'running'].includes(model.status)
+  const canComplete = ['paused', 'manual_review', 'failed'].includes(model.status) && model.candidates.length > 0
   const hasPendingSteering = model.pendingSteeringItems.length > 0
   const selectedPendingSteeringIdSet = new Set(form.selectedPendingSteeringIds)
   const hasSelectedPendingSteering = selectedPendingSteeringIdSet.size > 0
@@ -403,6 +407,19 @@ export function JobDetailControlRoom({
                 {canPause ? <button className="button secondary" type="button" onClick={handlers.onPauseTask} disabled={ui.pausing}>{ui.pausing ? '处理中...' : model.status === 'running' ? '暂停（本轮后）' : '暂停'}</button> : null}
               </div>
               <div className="button-row runtime-secondary-actions">
+                {canComplete ? (
+                  <ConfirmDialog
+                    title="完成并归档？"
+                    description="接受当前最新完整提示词作为最终结果，并将任务标记为已完成。完成后不会再继续自动运行。"
+                    confirmText="确认完成并归档"
+                    disabled={ui.completing}
+                    onConfirm={handlers.onCompleteTask}
+                  >
+                    <button className="button ghost" type="button" disabled={ui.completing}>
+                      <CheckCircle2 size={16} /> {ui.completing ? '处理中...' : '完成并归档'}
+                    </button>
+                  </ConfirmDialog>
+                ) : null}
                 {canRestart ? (
                   <ConfirmDialog
                     title="重新开始？"
@@ -439,6 +456,9 @@ export function JobDetailControlRoom({
               <div>
                 <strong>下一轮引导</strong>
                 <p className="small">只写这次想纠偏的点。它会在下一轮生效，不影响当前轮。</p>
+                {model.status === 'completed' && hasPendingSteering ? (
+                  <p className="small">任务已完成：这些待生效引导会作为记录保留，但不会再被应用到后续轮次。</p>
+                ) : null}
               </div>
             </div>
             <label className="label steering-control-field">

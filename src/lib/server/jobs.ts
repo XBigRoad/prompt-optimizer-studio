@@ -579,6 +579,61 @@ export function finalizeCancelledJob(jobId: string) {
   return requireJob(jobId)
 }
 
+export function completeJob(jobId: string) {
+  const job = requireJob(jobId)
+
+  if (job.status === 'completed') {
+    return job
+  }
+
+  if (job.status === 'running') {
+    throw new Error('运行中的任务不能手动完成，请先暂停后再完成。')
+  }
+
+  if (job.status === 'pending') {
+    throw new Error('任务还未开始运行，无法完成。请先跑至少一轮或取消任务。')
+  }
+
+  if (job.status === 'cancelled') {
+    throw new Error('已取消任务不能完成。')
+  }
+
+  if (job.status !== 'paused' && job.status !== 'manual_review' && job.status !== 'failed') {
+    throw new Error('当前状态不支持手动完成任务。')
+  }
+
+  const db = getDb()
+  const latestCandidate = db.prepare(`
+    SELECT id
+    FROM candidates
+    WHERE job_id = ?
+    ORDER BY round_number DESC
+    LIMIT 1
+  `).get(jobId) as { id?: string } | undefined
+
+  if (!latestCandidate?.id) {
+    throw new Error('请先跑至少一轮生成候选稿；如果只是想归档，请直接取消任务。')
+  }
+
+  const now = new Date().toISOString()
+  db.prepare(`
+    UPDATE jobs
+    SET status = 'completed',
+        final_candidate_id = ?,
+        pending_optimizer_model = NULL,
+        pending_judge_model = NULL,
+        active_worker_id = NULL,
+        worker_heartbeat_at = NULL,
+        cancel_requested_at = NULL,
+        pause_requested_at = NULL,
+        error_message = NULL,
+        updated_at = ?
+    WHERE id = ?
+  `).run(String(latestCandidate.id), now, jobId)
+
+  return requireJob(jobId)
+}
+
 export function applyPendingJobModels(jobId: string) {
   const job = requireJob(jobId)
   if (!job.pendingOptimizerModel && !job.pendingJudgeModel) {

@@ -93,6 +93,7 @@ export function JobDetailShell({ jobId }: { jobId: string }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [retrying, setRetrying] = useState(false)
+  const [completing, setCompleting] = useState(false)
   const [savingModels, setSavingModels] = useState(false)
   const [savingMaxRounds, setSavingMaxRounds] = useState(false)
   const [savingSteering, setSavingSteering] = useState(false)
@@ -509,6 +510,27 @@ export function JobDetailShell({ jobId }: { jobId: string }) {
     }
   }
 
+  async function completeTask() {
+    setCompleting(true)
+    try {
+      const response = await fetch(`/api/jobs/${jobId}/complete`, { method: 'POST' })
+      const payload = await response.json()
+      if (!response.ok) throw new Error(payload.error ?? 'Complete failed.')
+      setError(null)
+      setActionMessage('任务已完成并归档。')
+      setModelDirty(false)
+      setMaxRoundsDirty(false)
+      setGoalAnchorDirty(false)
+      resetDraftState()
+      mergeJobUpdate(payload.job)
+    } catch (completeError) {
+      setError(completeError instanceof Error ? completeError.message : 'Complete failed.')
+      setActionMessage(null)
+    } finally {
+      setCompleting(false)
+    }
+  }
+
   async function copyLatestPrompt() {
     if (!model?.latestFullPrompt) return
     setCopyingPrompt(true)
@@ -556,6 +578,7 @@ export function JobDetailShell({ jobId }: { jobId: string }) {
               generatingGoalAnchorDraft,
               savingGoalAnchor,
               retrying,
+              completing,
               cancelling,
               pausing,
               resumingStep,
@@ -587,6 +610,7 @@ export function JobDetailShell({ jobId }: { jobId: string }) {
               onResumeStep: resumeStep,
               onResumeAuto: resumeAuto,
               onCancelTask: cancelTask,
+              onCompleteTask: completeTask,
               onCopyLatestPrompt: copyLatestPrompt,
               onToggleCompareMode: () => setCompareMode((current) => !current),
               onToggleRound: (candidateId) => setExpandedRounds((current) => ({ ...current, [candidateId]: !current[candidateId] })),

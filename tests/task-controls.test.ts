@@ -327,6 +327,288 @@ test('job controls support paused state, resume modes, and max round overrides',
   }
 })
 
+test('manual completion marks job completed and keeps pending steering', async () => {
+  const originalCwd = process.cwd()
+  const originalDbPath = process.env.PROMPT_OPTIMIZER_DB_PATH
+  const originalFetch = global.fetch
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'po-controls-complete-'))
+  process.env.PROMPT_OPTIMIZER_DB_PATH = path.join(tempDir, 'test.db')
+  process.chdir(tempDir)
+
+  try {
+    const { resetDbForTests, getDb } = await import('../src/lib/server/db')
+    resetDbForTests()
+    const { saveSettings } = await import('../src/lib/server/settings')
+    const {
+      addPendingSteeringItem,
+      completeJob,
+      createCandidateWithJudges,
+      createJobs,
+      getJobById,
+      pauseJob,
+    } = await import('../src/lib/server/jobs')
+
+    saveSettings({
+      cpamcBaseUrl: 'http://localhost:8317/v1',
+      cpamcApiKey: 'secret',
+      defaultOptimizerModel: 'gpt-5.2',
+      defaultJudgeModel: 'gpt-5.2',
+      maxRounds: 8,
+    })
+
+    global.fetch = (async () => {
+      throw new Error('simulated goal anchor generation failure')
+    }) as typeof fetch
+
+    const [job] = await createJobs([
+      { title: 'Complete job', rawPrompt: 'Improve this prompt', optimizerModel: 'gpt-5.2', judgeModel: 'gpt-5.2' },
+    ])
+
+    const candidateId = createCandidateWithJudges(job.id, {
+      roundNumber: 1,
+      optimizedPrompt: 'OPTIMIZED PROMPT',
+      strategy: 'preserve',
+      scoreBefore: 80,
+      averageScore: 90,
+      majorChanges: ['Keep structure stable'],
+      mve: 'mve',
+      deadEndSignals: [],
+      aggregatedIssues: [],
+      appliedSteeringItems: [],
+      judgments: [
+        {
+          id: crypto.randomUUID(),
+          jobId: job.id,
+          candidateId: '',
+          judgeIndex: 0,
+          score: 90,
+          hasMaterialIssues: false,
+          summary: 'Looks good',
+          driftLabels: [],
+          driftExplanation: '',
+          findings: [],
+          suggestedChanges: [],
+          createdAt: new Date().toISOString(),
+        },
+      ],
+    })
+
+    addPendingSteeringItem(job.id, 'Steering note that should remain as readonly record.')
+    pauseJob(job.id)
+
+    // Simulate leftovers from previous runtime mutations; completion should clean these.
+    getDb().prepare(`
+      UPDATE jobs
+      SET pending_optimizer_model = 'gpt-5.4',
+          pending_judge_model = 'gpt-5.4',
+          active_worker_id = 'worker-x',
+          worker_heartbeat_at = '2026-03-09T00:00:00.000Z',
+          cancel_requested_at = '2026-03-09T00:00:00.000Z',
+          pause_requested_at = '2026-03-09T00:00:00.000Z',
+          error_message = 'boom'
+      WHERE id = ?
+    `).run(job.id)
+
+    const completed = completeJob(job.id)
+    assert.equal(completed.status, 'completed')
+    assert.equal(completed.finalCandidateId, candidateId)
+    assert.equal(completed.pendingSteeringItems.length, 1)
+    assert.equal(completed.pendingSteeringItems[0]?.text, 'Steering note that should remain as readonly record.')
+    assert.equal(completed.pendingOptimizerModel, null)
+    assert.equal(completed.pendingJudgeModel, null)
+    assert.equal(completed.cancelRequestedAt, null)
+    assert.equal(completed.pauseRequestedAt, null)
+    assert.equal(completed.errorMessage, null)
+    assert.equal(getJobById(job.id)?.status, 'completed')
+  } finally {
+    process.chdir(originalCwd)
+    global.fetch = originalFetch
+    if (originalDbPath === undefined) {
+      delete process.env.PROMPT_OPTIMIZER_DB_PATH
+    } else {
+      process.env.PROMPT_OPTIMIZER_DB_PATH = originalDbPath
+    }
+  }
+})
+
+test('cannot manually complete a running job', async () => {
+  const originalCwd = process.cwd()
+  const originalDbPath = process.env.PROMPT_OPTIMIZER_DB_PATH
+  const originalFetch = global.fetch
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'po-controls-complete-running-'))
+  process.env.PROMPT_OPTIMIZER_DB_PATH = path.join(tempDir, 'test.db')
+  process.chdir(tempDir)
+
+  try {
+    const { resetDbForTests } = await import('../src/lib/server/db')
+    resetDbForTests()
+    const { saveSettings } = await import('../src/lib/server/settings')
+    const { claimNextRunnableJob, completeJob, createJobs } = await import('../src/lib/server/jobs')
+
+    saveSettings({
+      cpamcBaseUrl: 'http://localhost:8317/v1',
+      cpamcApiKey: 'secret',
+      defaultOptimizerModel: 'gpt-5.2',
+      defaultJudgeModel: 'gpt-5.2',
+      maxRounds: 8,
+    })
+
+    global.fetch = (async () => {
+      throw new Error('simulated goal anchor generation failure')
+    }) as typeof fetch
+
+    const [job] = await createJobs([
+      { title: 'Running complete job', rawPrompt: 'Prompt', optimizerModel: 'gpt-5.2', judgeModel: 'gpt-5.2' },
+    ])
+
+    const claimed = claimNextRunnableJob('worker-a')
+    assert.equal(claimed?.id, job.id)
+    assert.equal(claimed?.status, 'running')
+
+    assert.throws(() => completeJob(job.id), /运行中/)
+  } finally {
+    process.chdir(originalCwd)
+    global.fetch = originalFetch
+    if (originalDbPath === undefined) {
+      delete process.env.PROMPT_OPTIMIZER_DB_PATH
+    } else {
+      process.env.PROMPT_OPTIMIZER_DB_PATH = originalDbPath
+    }
+  }
+})
+
+test('job complete route marks a paused job completed and returns updated job', async () => {
+  const originalCwd = process.cwd()
+  const originalDbPath = process.env.PROMPT_OPTIMIZER_DB_PATH
+  const originalFetch = global.fetch
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'po-controls-complete-route-'))
+  process.env.PROMPT_OPTIMIZER_DB_PATH = path.join(tempDir, 'test.db')
+  process.chdir(tempDir)
+
+  try {
+    const { resetDbForTests } = await import('../src/lib/server/db')
+    resetDbForTests()
+    const { saveSettings } = await import('../src/lib/server/settings')
+    const { createCandidateWithJudges, createJobs, pauseJob } = await import('../src/lib/server/jobs')
+    const route = await import('../src/app/api/jobs/[id]/complete/route')
+
+    saveSettings({
+      cpamcBaseUrl: 'http://localhost:8317/v1',
+      cpamcApiKey: 'secret',
+      defaultOptimizerModel: 'gpt-5.2',
+      defaultJudgeModel: 'gpt-5.2',
+    })
+
+    global.fetch = (async () => {
+      throw new Error('simulated goal anchor generation failure')
+    }) as typeof fetch
+
+    const [job] = await createJobs([
+      { title: 'Route complete job', rawPrompt: 'Prompt', optimizerModel: 'gpt-5.2', judgeModel: 'gpt-5.2' },
+    ])
+
+    const candidateId = createCandidateWithJudges(job.id, {
+      roundNumber: 1,
+      optimizedPrompt: 'OPT',
+      strategy: 'preserve',
+      scoreBefore: 80,
+      averageScore: 90,
+      majorChanges: [],
+      mve: 'mve',
+      deadEndSignals: [],
+      aggregatedIssues: [],
+      appliedSteeringItems: [],
+      judgments: [
+        {
+          id: crypto.randomUUID(),
+          jobId: job.id,
+          candidateId: '',
+          judgeIndex: 0,
+          score: 90,
+          hasMaterialIssues: false,
+          summary: 'ok',
+          driftLabels: [],
+          driftExplanation: '',
+          findings: [],
+          suggestedChanges: [],
+          createdAt: new Date().toISOString(),
+        },
+      ],
+    })
+
+    pauseJob(job.id)
+
+    const response = await route.POST(
+      new Request(`http://localhost/api/jobs/${job.id}/complete`, { method: 'POST' }),
+      { params: Promise.resolve({ id: job.id }) },
+    )
+
+    assert.equal(response.status, 200)
+    const payload = await response.json() as { job: { status: string; finalCandidateId: string | null } }
+    assert.equal(payload.job.status, 'completed')
+    assert.equal(payload.job.finalCandidateId, candidateId)
+  } finally {
+    process.chdir(originalCwd)
+    global.fetch = originalFetch
+    if (originalDbPath === undefined) {
+      delete process.env.PROMPT_OPTIMIZER_DB_PATH
+    } else {
+      process.env.PROMPT_OPTIMIZER_DB_PATH = originalDbPath
+    }
+  }
+})
+
+test('job complete route rejects when no candidate exists yet', async () => {
+  const originalCwd = process.cwd()
+  const originalDbPath = process.env.PROMPT_OPTIMIZER_DB_PATH
+  const originalFetch = global.fetch
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'po-controls-complete-route-empty-'))
+  process.env.PROMPT_OPTIMIZER_DB_PATH = path.join(tempDir, 'test.db')
+  process.chdir(tempDir)
+
+  try {
+    const { resetDbForTests } = await import('../src/lib/server/db')
+    resetDbForTests()
+    const { saveSettings } = await import('../src/lib/server/settings')
+    const { createJobs, pauseJob } = await import('../src/lib/server/jobs')
+    const route = await import('../src/app/api/jobs/[id]/complete/route')
+
+    saveSettings({
+      cpamcBaseUrl: 'http://localhost:8317/v1',
+      cpamcApiKey: 'secret',
+      defaultOptimizerModel: 'gpt-5.2',
+      defaultJudgeModel: 'gpt-5.2',
+    })
+
+    global.fetch = (async () => {
+      throw new Error('simulated goal anchor generation failure')
+    }) as typeof fetch
+
+    const [job] = await createJobs([
+      { title: 'Route complete empty job', rawPrompt: 'Prompt', optimizerModel: 'gpt-5.2', judgeModel: 'gpt-5.2' },
+    ])
+
+    pauseJob(job.id)
+
+    const response = await route.POST(
+      new Request(`http://localhost/api/jobs/${job.id}/complete`, { method: 'POST' }),
+      { params: Promise.resolve({ id: job.id }) },
+    )
+
+    assert.equal(response.status, 409)
+    const payload = await response.json() as { error?: string }
+    assert.match(payload.error ?? '', /至少一轮|候选稿|取消任务/)
+  } finally {
+    process.chdir(originalCwd)
+    global.fetch = originalFetch
+    if (originalDbPath === undefined) {
+      delete process.env.PROMPT_OPTIMIZER_DB_PATH
+    } else {
+      process.env.PROMPT_OPTIMIZER_DB_PATH = originalDbPath
+    }
+  }
+})
+
 test('job claim lease prevents double-claiming the same running job', async () => {
   const originalCwd = process.cwd()
   const originalDbPath = process.env.PROMPT_OPTIMIZER_DB_PATH
