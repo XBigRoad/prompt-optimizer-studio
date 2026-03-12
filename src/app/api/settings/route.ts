@@ -24,6 +24,7 @@ export async function POST(request: Request) {
       noImprovementLimit: clampNumber(body.noImprovementLimit, 1, 5, 2),
       workerConcurrency: clampNumber(body.workerConcurrency, 1, 1, 1),
       conversationPolicy: body.conversationPolicy === 'pooled-3x' ? 'pooled-3x' : 'stateless',
+      ...(typeof body.customRubricMd === 'string' ? { customRubricMd: body.customRubricMd } : {}),
     })
 
     return NextResponse.json({ settings })

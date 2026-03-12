@@ -40,6 +40,7 @@ export interface AppSettings {
   noImprovementLimit: number
   workerConcurrency: number
   conversationPolicy: ConversationPolicy
+  customRubricMd: string
   updatedAt: string
 }
 
@@ -78,6 +79,7 @@ export interface JobRecord {
   conversationGroupId: string | null
   cancelRequestedAt: string | null
   pauseRequestedAt: string | null
+  customRubricMd: string | null
   errorMessage: string | null
   createdAt: string
   updatedAt: string
@@ -117,6 +119,7 @@ export interface JobInput {
   rawPrompt: string
   optimizerModel?: string
   judgeModel?: string
+  customRubricMd?: string | null
 }
 
 export interface ModelCatalogItem {

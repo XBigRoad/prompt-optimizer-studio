@@ -33,6 +33,7 @@ export function getSettings(): AppSettings {
       no_improvement_limit,
       worker_concurrency,
       conversation_policy,
+      custom_rubric_md,
       updated_at
     FROM settings
     WHERE id = 1
@@ -50,6 +51,7 @@ export function getSettings(): AppSettings {
     noImprovementLimit: Number(row.no_improvement_limit ?? DEFAULT_SETTINGS.noImprovementLimit),
     workerConcurrency: Number(row.worker_concurrency ?? DEFAULT_SETTINGS.workerConcurrency),
     conversationPolicy: (row.conversation_policy ?? DEFAULT_SETTINGS.conversationPolicy) as AppSettings['conversationPolicy'],
+    customRubricMd: String(row.custom_rubric_md ?? ''),
     updatedAt: String(row.updated_at ?? new Date().toISOString()),
   }
 }
@@ -75,6 +77,7 @@ export function saveSettings(input: Partial<AppSettings>) {
         no_improvement_limit = ?,
         worker_concurrency = ?,
         conversation_policy = ?,
+        custom_rubric_md = ?,
         updated_at = ?
     WHERE id = 1
   `).run(
@@ -89,6 +92,7 @@ export function saveSettings(input: Partial<AppSettings>) {
     next.noImprovementLimit,
     next.workerConcurrency,
     next.conversationPolicy,
+    next.customRubricMd,
     next.updatedAt,
   )
 

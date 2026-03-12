@@ -150,7 +150,8 @@ export function getDb() {
   ensureColumn(db, 'candidates', 'applied_steering_json', "TEXT NOT NULL DEFAULT '[]'")
   ensureColumn(db, 'judge_runs', 'drift_labels_json', "TEXT NOT NULL DEFAULT '[]'")
   ensureColumn(db, 'judge_runs', 'drift_explanation', "TEXT NOT NULL DEFAULT ''")
-
+  ensureColumn(db, 'settings', 'custom_rubric_md', "TEXT NOT NULL DEFAULT ''")
+  ensureColumn(db, 'jobs', 'custom_rubric_md', 'TEXT')
   const existingSettings = db.prepare('SELECT id FROM settings WHERE id = 1').get() as { id?: number } | undefined
   if (!existingSettings) {
     db.prepare(`

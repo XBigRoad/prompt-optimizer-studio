@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="public/logo.png" alt="Prompt Optimizer Studio logo" width="160" />
+</p>
+
 # Prompt Optimizer Studio（提示词优化工作台）
 
 **中文** | [英文](README_EN.md)

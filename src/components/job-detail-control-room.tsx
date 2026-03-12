@@ -48,6 +48,8 @@ export type JobDetailViewModel = {
   passStreak: number
   lastReviewScore: number
   customRubricMd: string | null
+  effectiveRubricMd: string
+  effectiveRubricSource: 'job' | 'settings' | 'default'
   errorMessage: string | null
   latestFullPrompt: string
   initialPrompt: string
@@ -100,7 +102,7 @@ export function JobDetailControlRoom({
     onRetry: () => void
     onSaveModel: () => void
     onSaveMaxRoundsOverride: () => void
-    onSaveCustomRubric: () => void
+    onSaveCustomRubric: (nextValue?: string) => void
     onAddPendingSteering: () => void
     onRemovePendingSteeringItem: (itemId: string) => void
     onClearPendingSteering: () => void
@@ -134,9 +136,22 @@ export function JobDetailControlRoom({
   const canResume = !['completed', 'cancelled', 'running'].includes(model.status)
   const canComplete = ['paused', 'manual_review', 'failed'].includes(model.status) && model.candidates.length > 0
   const hasPendingSteering = model.pendingSteeringItems.length > 0
-  const hasTaskRubricOverride = Boolean((form.customRubricMd || model.customRubricMd || '').trim())
   const selectedPendingSteeringIdSet = new Set(form.selectedPendingSteeringIds)
   const hasSelectedPendingSteering = selectedPendingSteeringIdSet.size > 0
+  const rubricSourceZh =
+    model.effectiveRubricSource === 'job'
+      ? '本任务'
+      : model.effectiveRubricSource === 'settings'
+        ? '配置台'
+        : '内置默认'
+  const rubricSourceEn =
+    model.effectiveRubricSource === 'job'
+      ? 'this job'
+      : model.effectiveRubricSource === 'settings'
+        ? 'settings'
+        : 'built-in default'
+  const rubricSourceLine = text(`当前来源：${rubricSourceZh}`, `Current source: ${rubricSourceEn}`)
+  const hasSavedJobRubricOverride = Boolean((model.customRubricMd ?? '').trim())
 
   return (
     <div className="detail-control-room">
@@ -185,7 +200,12 @@ export function JobDetailControlRoom({
       <section className="result-stage">
         <div className="section-head">
           <div>
-            <h2 className="section-title">{text('当前最新完整提示词', 'Current latest full prompt')}</h2>
+            <h2 className="section-title has-icon">
+              <span className="section-title-icon" data-ui="section-title-icon" aria-hidden="true">
+                <Sparkles size={18} />
+              </span>
+              {text('当前最新完整提示词', 'Current latest full prompt')}
+            </h2>
             <p className="small">{text('这是你现在最应该复制和判断的版本。后续所有诊断都只是为这个结果服务。', 'This is the version you should copy and judge first. Every diagnostic exists only to support this result.')}</p>
           </div>
           <div className="result-stage-actions">
@@ -243,7 +263,12 @@ export function JobDetailControlRoom({
           <div className="panel understanding-panel">
             <div className="section-head">
               <div>
-                <h2 className="section-title">{hasPendingSteering ? text('当前有效目标视图', 'Current active goal view') : text('长期规则', 'Stable rules')}</h2>
+                <h2 className="section-title has-icon">
+                  <span className="section-title-icon" data-ui="section-title-icon" aria-hidden="true">
+                    <CheckCircle2 size={18} />
+                  </span>
+                  {hasPendingSteering ? text('当前有效目标视图', 'Current active goal view') : text('长期规则', 'Stable rules')}
+                </h2>
                 <p className="small">
                   {hasPendingSteering
                     ? text('长期规则保持不变，待生效引导会作为下一轮的一次性补充。', 'Stable rules stay fixed. Pending steering is only a one-time addition for the next round.')
@@ -256,6 +281,51 @@ export function JobDetailControlRoom({
               <ReadonlyGoalField label={text('长期交付物', 'Stable deliverable')} value={model.goalAnchor.deliverable} />
               <ReadonlyGoalField label={text('长期边界', 'Stable guardrails')} value={model.goalAnchor.driftGuard.join('\n')} />
             </div>
+
+            <div className="stable-scoring-block">
+              <div className="section-head compact-head">
+                <div>
+                  <strong>{text('当前评分标准', 'Current scoring standard')}</strong>
+                  <p className="small">{rubricSourceLine}</p>
+                </div>
+              </div>
+              <pre className="pre rubric-pre">{model.effectiveRubricMd}</pre>
+              {canEdit ? (
+                <details className="fold-card rubric-editor-fold">
+                  <summary>{text('编辑任务评分标准', 'Edit task scoring standard')}</summary>
+                  <label className="label">
+                    {text('任务评分标准覆写', 'Task scoring override')}
+                    <textarea
+                      className="textarea"
+                      rows={8}
+                      value={form.customRubricMd}
+                      onChange={(event) => handlers.onCustomRubricChange(event.target.value)}
+                      placeholder={text('留空以跟随配置台。', 'Leave empty to follow settings.')}
+                      disabled={!canEdit}
+                    />
+                  </label>
+                  <div className="inline-actions runtime-save-actions">
+                    <button className="button ghost compact" type="button" onClick={() => handlers.onSaveCustomRubric()} disabled={ui.savingCustomRubric}>
+                      {ui.savingCustomRubric ? text('保存中...', 'Saving...') : text('保存任务评分标准', 'Save task scoring standard')}
+                    </button>
+                    {hasSavedJobRubricOverride ? (
+                      <button
+                        className="button ghost compact"
+                        type="button"
+                        onClick={() => {
+                          handlers.onCustomRubricChange('')
+                          handlers.onSaveCustomRubric('')
+                        }}
+                        disabled={ui.savingCustomRubric}
+                      >
+                        {text('恢复跟随配置台', 'Restore following settings')}
+                      </button>
+                    ) : null}
+                  </div>
+                </details>
+              ) : null}
+            </div>
+
             <p className="small goal-summary-note">{text('长期规则会持续约束后续轮次；临时引导只影响下一轮，除非你明确保存新的长期规则。', 'Stable rules keep constraining later rounds. Temporary steering only affects the next round unless you explicitly save a new stable rule.')}</p>
             {hasPendingSteering ? (
               <div className="pending-steering-stack">
@@ -326,7 +396,12 @@ export function JobDetailControlRoom({
           <div className="panel explanation-panel">
             <div className="section-head">
               <div>
-                <h2 className="section-title">{text('提炼解释', 'Condensed explanation')}</h2>
+                <h2 className="section-title has-icon">
+                  <span className="section-title-icon" data-ui="section-title-icon" aria-hidden="true">
+                    <WandSparkles size={18} />
+                  </span>
+                  {text('提炼解释', 'Condensed explanation')}
+                </h2>
                 <p className="small">{text('先看长期解释，再看这组临时引导会怎样改变下一轮。', 'Read the stable explanation first, then see how the pending steering changes the next round.')}</p>
               </div>
             </div>
@@ -365,7 +440,12 @@ export function JobDetailControlRoom({
       <section className="control-stage">
         <div className="section-head">
           <div>
-            <h2 className="section-title">{text('任务控制', 'Task controls')}</h2>
+            <h2 className="section-title has-icon">
+              <span className="section-title-icon" data-ui="section-title-icon" aria-hidden="true">
+                <Settings2 size={18} />
+              </span>
+              {text('任务控制', 'Task controls')}
+            </h2>
             <p className="small">{text('先决定怎么跑，再补这次的人工纠偏。', 'Decide how to run it first, then add the manual correction for this turn.')}</p>
           </div>
         </div>
@@ -380,7 +460,7 @@ export function JobDetailControlRoom({
             <div className="compact-control-grid runtime-config-grid">
               <ModelAliasCombobox
                 inputId="job-task-model"
-                label={text('任务模型别名', 'Task model alias')}
+                label={text('任务模型', 'Task model')}
                 value={form.taskModel}
                 options={models}
                 placeholder={model.optimizerModel || text('例如：gpt-5.2', 'For example: gpt-5.2')}
@@ -451,31 +531,6 @@ export function JobDetailControlRoom({
                 ) : null}
               </div>
             </div>
-            {canEdit ? (
-              <details className="fold-card compact-rubric-fold">
-                <summary>
-                  {hasTaskRubricOverride
-                    ? text('单任务评分标准 · 已覆写', 'Task scoring standard · Overridden')
-                    : text('单任务评分标准 · 跟随配置台', 'Task scoring standard · Following settings')}
-                </summary>
-                <label className="label compact-control-field">
-                  {text('单任务评分标准覆写', 'Task-level scoring override')}
-                  <textarea
-                    className="textarea"
-                    rows={7}
-                    value={form.customRubricMd}
-                    onChange={(event) => handlers.onCustomRubricChange(event.target.value)}
-                    placeholder={text('留空继续跟随配置台；保存后下一轮生效。', 'Leave empty to keep following settings; saved changes apply next round.')}
-                    disabled={!canEdit}
-                  />
-                </label>
-                <div className="inline-actions runtime-save-actions">
-                  <button className="button ghost compact" type="button" onClick={handlers.onSaveCustomRubric} disabled={ui.savingCustomRubric}>
-                    {ui.savingCustomRubric ? text('保存中...', 'Saving...') : text('保存评分标准', 'Save scoring standard')}
-                  </button>
-                </div>
-              </details>
-            ) : null}
           </div>
 
           <div className="control-subpanel steering-control-panel" id="next-round-steering">
@@ -573,7 +628,12 @@ export function JobDetailControlRoom({
       <section className="diagnostic-stage">
         <div className="section-head">
           <div>
-            <h2 className="section-title">{text('优化过程诊断', 'Optimization diagnostics')}</h2>
+            <h2 className="section-title has-icon">
+              <span className="section-title-icon" data-ui="section-title-icon" aria-hidden="true">
+                <RefreshCcw size={18} />
+              </span>
+              {text('优化过程诊断', 'Optimization diagnostics')}
+            </h2>
             <p className="small">{text('默认只露摘要。需要时再展开每一轮的完整诊断和复核细节。', 'By default you only see the summary. Expand a round when you need the full diagnostic and review details.')}</p>
           </div>
         </div>

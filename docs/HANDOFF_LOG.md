@@ -138,3 +138,95 @@ Files changed (high signal):
 
 Next:
 - 进入 `V0.2-05`：README 与开源发布页二次收口（强化“自动流水线式优化提示词”的定位 + 中英文整页切换）
+
+---
+
+## 2026-03-11 — HOTFIX-2026-03-11-UI-TIGHTENING 完成（侧栏 / 详情页 / 设置页二次收口）
+
+Summary:
+- 侧栏 `How to use` 收成一句极短提示，避免窄侧栏里出现长段说明
+- 详情页移除了“原始任务摘要：”重复标签，并把 `单任务评分标准` 改成动作区之后的紧凑折叠块；默认态明确显示“跟随配置台 / 已覆写”
+- 设置页重排为“顶部连接横条 + 下方默认模型 / 评分标准 / 运行策略”三段结构，去掉 `连接`、`默认模型` 的重复标题
+- 首页 `成果总览 / 历史任务` 维持并排等高方向，历史区域改成更稳定的内部滚动收口
+
+Verification:
+- 先跑红测：`node --import tsx --test tests/control-room-layout.test.ts`
+- 再跑全量门禁：`npm run check`
+
+Files changed (high signal):
+- `src/components/studio-frame.tsx`
+- `src/components/job-detail-control-room.tsx`
+- `src/components/settings-control-room.tsx`
+- `src/styles/globals.css`
+- `tests/control-room-layout.test.ts`
+- `docs/TASKS.md`
+- `docs/SESSION_STATE.md`
+- `docs/HANDOFF_LOG.md`
+
+Next:
+- 继续 `V0.2-05`：README / 开源发布页 / About / Release 文案统一收口
+- 如果要给你亲自试用，优先做一轮浏览器 smoke，确认设置页新布局、详情页折叠块和首页并排高度都符合预期
+
+---
+
+## 2026-03-12 — HOTFIX-2026-03-12-SETTINGS-SELECT-AND-LOCAL-DB 完成（设置页下拉统一 + 首屏动画收口 + 本地库恢复）
+
+Summary:
+- 设置页把 `快速选择服务商 / 接口协议` 从原生 `select` 收口成统一的自定义选择器，打开态和关闭态视觉保持一致
+- 删除了连接区重复的 `协议识别` 摘要卡，只保留真正可操作的 `接口协议` 入口，减少重复信息
+- 首页和页面壳层的首屏入场动画改为不在刷新时滑入，避免空态提示和 lane 内容像 bug 一样“飞进来”
+- 本地开发服务器已通过 `PROMPT_OPTIMIZER_DB_PATH` 指向 canonical repo 的 SQLite 库，历史任务重新可见
+
+Verification:
+- 红测锁住设置页：`node --import tsx --test tests/control-room-layout.test.ts`
+- 全量门禁通过：`npm run check`
+- 浏览器 smoke：已核对设置页统一下拉、首页历史任务重新出现、本地 3002 可读取真实记录
+
+Files changed (high signal):
+- `src/components/ui/select-field.tsx`
+- `src/components/settings-control-room.tsx`
+- `src/components/studio-frame.tsx`
+- `src/components/dashboard-control-room.tsx`
+- `src/components/dashboard-shell.tsx`
+- `src/components/settings-shell.tsx`
+- `src/components/job-detail-shell.tsx`
+- `src/styles/globals.css`
+- `tests/control-room-layout.test.ts`
+- `tests/studio-frame.test.ts`
+
+Next:
+- 继续 `V0.2-05`：README / 开源发布页 / About / Release 文案统一收口
+- 用户可直接访问 `http://127.0.0.1:3002` 继续验证当前本地版本
+
+---
+
+## 2026-03-12 — HOTFIX-2026-03-12-BEGINNER-FRIENDLY-MODEL-PICKER 完成（模型选择器新手友好化）
+
+Summary:
+- 模型选择器从“默认就是搜索输入框”的高门槛交互，收口成了“默认先选、找不到再手输”的按钮式选择器
+- 闭合态现在统一表现为标准选择器按钮；展开后才出现搜索输入与模型建议列表，同时保留手动输入任意模型名的兜底能力
+- 标签同步简化为 `默认任务模型 / 任务模型`，减少“模型别名”这类对新用户不必要的术语负担
+- 首页投递台、详情页、设置页三处模型入口已统一成同一套交互与视觉语言
+
+Verification:
+- 定向测试通过：`node --import tsx --test tests/control-room-layout.test.ts`
+- 全量门禁通过：`npm run check`
+- 浏览器 smoke 通过：
+  - 首页投递台：闭合态像标准选择器，展开后可搜索，也可输入自定义模型名
+  - 设置页：`默认任务模型` 交互一致
+  - 详情页：`任务模型` 交互一致
+
+Notes:
+- 详情页里个别历史失败任务显示的 `Expected ',' or ']' ...` 属于该任务自身记录下来的失败原因，不是当前模型选择器改造引入的新前端错误
+
+Files changed (high signal):
+- `src/components/ui/model-alias-combobox.tsx`
+- `src/components/settings-control-room.tsx`
+- `src/components/job-detail-control-room.tsx`
+- `src/components/dashboard-shell.tsx`
+- `src/styles/globals.css`
+- `tests/control-room-layout.test.ts`
+
+Next:
+- 继续 `V0.2-05`：README / GitHub 发布页 / About / Topics / screenshots 收口
+- 若要继续产品体验收口，优先查首页、详情页、配置台里剩余的重复文案与空白问题

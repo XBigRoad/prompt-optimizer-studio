@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react'
 
 import { SettingsControlRoom } from '@/components/settings-control-room'
 import { StudioFrame } from '@/components/studio-frame'
+import { useLocaleText } from '@/lib/i18n'
 import type { ApiProtocol } from '@/lib/server/types'
 
 interface SettingsForm {
@@ -14,6 +15,7 @@ interface SettingsForm {
   defaultTaskModel: string
   scoreThreshold: number
   maxRounds: number
+  customRubricMd: string
 }
 
 interface ModelOption {
@@ -28,9 +30,11 @@ const DEFAULT_FORM: SettingsForm = {
   defaultTaskModel: '',
   scoreThreshold: 95,
   maxRounds: 8,
+  customRubricMd: '',
 }
 
 export function SettingsShell() {
+  const text = useLocaleText()
   const [form, setForm] = useState<SettingsForm>(DEFAULT_FORM)
   const [models, setModels] = useState<ModelOption[]>([])
   const [message, setMessage] = useState<string | null>(null)
@@ -53,7 +57,7 @@ export function SettingsShell() {
         const modelsPayload = await modelsResponse.json()
 
         if (!settingsResponse.ok) {
-          throw new Error(settingsPayload.error ?? 'Failed to load settings.')
+          throw new Error(settingsPayload.error ?? text('设置加载失败。', 'Failed to load settings.'))
         }
 
         if (!cancelled) {
@@ -64,13 +68,14 @@ export function SettingsShell() {
             defaultTaskModel: settingsPayload.settings.defaultOptimizerModel,
             scoreThreshold: settingsPayload.settings.scoreThreshold,
             maxRounds: settingsPayload.settings.maxRounds,
+            customRubricMd: settingsPayload.settings.customRubricMd ?? '',
           })
           setModels(modelsResponse.ok ? modelsPayload.models : [])
           setError(modelsResponse.ok ? null : modelsPayload.error ?? null)
         }
       } catch (loadError) {
         if (!cancelled) {
-          setError(loadError instanceof Error ? loadError.message : 'Failed to load settings.')
+          setError(loadError instanceof Error ? loadError.message : text('设置加载失败。', 'Failed to load settings.'))
         }
       } finally {
         if (!cancelled) {
@@ -99,11 +104,12 @@ export function SettingsShell() {
           defaultJudgeModel: form.defaultTaskModel,
           scoreThreshold: form.scoreThreshold,
           maxRounds: form.maxRounds,
+          customRubricMd: form.customRubricMd,
         }),
       })
       const payload = await response.json()
       if (!response.ok) {
-        throw new Error(payload.error ?? 'Failed to save settings.')
+        throw new Error(payload.error ?? text('设置保存失败。', 'Failed to save settings.'))
       }
       setForm((current) => ({
         ...current,
@@ -112,10 +118,10 @@ export function SettingsShell() {
         scoreThreshold: payload.settings.scoreThreshold,
         maxRounds: payload.settings.maxRounds,
       }))
-      setMessage('设置已保存。')
+      setMessage(text('设置已保存。', 'Settings saved.'))
       setError(null)
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : 'Failed to save settings.')
+      setError(saveError instanceof Error ? saveError.message : text('设置保存失败。', 'Failed to save settings.'))
       setMessage(null)
     } finally {
       setSaving(false)
@@ -136,13 +142,13 @@ export function SettingsShell() {
       })
       const payload = await response.json()
       if (!response.ok) {
-        throw new Error(payload.error ?? 'Connection test failed.')
+        throw new Error(payload.error ?? text('连接测试失败。', 'Connection test failed.'))
       }
       setModels(payload.models ?? [])
-      setMessage(payload.message ?? '连接测试通过。')
+      setMessage(payload.message ?? text('连接测试通过。', 'Connection test succeeded.'))
       setError(null)
     } catch (testError) {
-      setError(testError instanceof Error ? testError.message : 'Connection test failed.')
+      setError(testError instanceof Error ? testError.message : text('连接测试失败。', 'Connection test failed.'))
       setMessage(null)
     } finally {
       setTesting(false)
@@ -163,13 +169,13 @@ export function SettingsShell() {
       })
       const payload = await response.json()
       if (!response.ok) {
-        throw new Error(payload.error ?? 'Failed to fetch models.')
+        throw new Error(payload.error ?? text('拉取模型列表失败。', 'Failed to fetch models.'))
       }
       setModels(payload.models)
-      setMessage(`已刷新 ${payload.models.length} 个模型别名。`)
+      setMessage(text(`已刷新 ${payload.models.length} 个模型别名。`, `Refreshed ${payload.models.length} model aliases.`))
       setError(null)
     } catch (refreshError) {
-      setError(refreshError instanceof Error ? refreshError.message : 'Failed to fetch models.')
+      setError(refreshError instanceof Error ? refreshError.message : text('拉取模型列表失败。', 'Failed to fetch models.'))
       setMessage(null)
     } finally {
       setLoadingModels(false)
@@ -178,10 +184,10 @@ export function SettingsShell() {
 
   return (
     <main>
-      <StudioFrame title="配置台" currentPath="/settings">
+      <StudioFrame title={text('配置台', 'Settings Desk')} currentPath="/settings">
         <motion.div
           className="shell"
-          initial={{ opacity: 0, y: 12 }}
+          initial={false}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
         >

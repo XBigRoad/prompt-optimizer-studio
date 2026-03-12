@@ -7,6 +7,7 @@ import {
   getJobDetail,
   getJobById,
   removePendingSteeringItem,
+  updateJobCustomRubricMd,
   updateJobGoalAnchor,
   updateJobMaxRoundsOverride,
   updateJobModels,
@@ -52,6 +53,7 @@ export async function PATCH(
       optimizerModel?: string
       judgeModel?: string
       maxRoundsOverride?: number | null
+      customRubricMd?: string | null
       nextRoundInstruction?: string
       steeringAction?: SteeringAction
       goalAnchor?: {
@@ -74,6 +76,9 @@ export async function PATCH(
     }
     if (Object.hasOwn(body, 'maxRoundsOverride')) {
       updatedJob = updateJobMaxRoundsOverride(id, body.maxRoundsOverride ?? null)
+    }
+    if (Object.hasOwn(body, 'customRubricMd')) {
+      updatedJob = updateJobCustomRubricMd(id, body.customRubricMd ?? null)
     }
     if (body.steeringAction) {
       switch (body.steeringAction.type) {

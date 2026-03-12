@@ -96,23 +96,6 @@ Work files:
 - `src/components/dashboard-control-room.tsx`
 - `src/components/job-detail-control-room.tsx`
 
-### V0.2-01（PLANNER / 评测策略配置化设计定稿）⬜️
-
-目标：
-- 允许用户配置 `rubric / eval-set`
-- 默认仍然使用系统内置规则
-- 明确“只影响新任务”的默认语义
-
-验收：
-- [ ] 设置页交互方案定稿：`系统默认 / 自定义`
-- [ ] 确认 settings schema 与 prompt-pack versioning 变更点
-- [ ] 明确 `eval-set` 对 reviewer 生效、对 optimizer 不直接透传的边界
-
-建议 work files:
-- `docs/plans/2026-03-11-evaluation-config-design.md`
-- `src/lib/server/types.ts`
-- `src/lib/server/prompt-pack.ts`
-
 ### V0.2-04（WORKER / 手动完成任务并归档）✅
 
 目标：
@@ -129,6 +112,73 @@ Work files:
 - `src/lib/server/jobs.ts`
 - `src/app/api/jobs/[id]/complete/route.ts`
 - `src/components/job-detail-control-room.tsx`
+
+### HOTFIX-2026-03-11-UI-TIGHTENING（WORKER / UI 统一化二次收口）✅
+
+目标：
+- 收口侧栏、详情页、设置页这三处仍然明显“重复 / 过长 / 失衡”的 UI
+- 保持西瓜配色、单模型别名和现有后端语义不变
+- 用已有轻量 i18n 把中英文文案切换继续做干净，不让中文界面混入英文标题
+
+验收：
+- [x] 左侧 `How to use` 缩成一条极短提示，不再保留旧长句
+- [x] 详情页移除“原始任务摘要：”重复标签，并把 `单任务评分标准` 下沉为动作区后的紧凑折叠块
+- [x] 设置页改成“顶部连接横条 + 下方默认模型 / 评分标准 / 运行策略”三段结构，去掉 `连接 / 默认模型` 重复标题
+- [x] 首页 `成果总览 / 历史任务` 继续按并排等高思路收口，历史区域保持内部滚动
+- [x] 本轮门禁再次通过：`npm run check`
+
+建议 work files:
+- `src/components/studio-frame.tsx`
+- `src/components/job-detail-control-room.tsx`
+- `src/components/settings-control-room.tsx`
+- `src/styles/globals.css`
+- `tests/control-room-layout.test.ts`
+
+### HOTFIX-2026-03-12-SETTINGS-SELECT-AND-LOCAL-DB（WORKER / 设置页下拉统一 + 首屏动画收口 + 本地库恢复）✅
+
+目标：
+- 把设置页里仍然混用的原生下拉收口成统一交互
+- 去掉“协议识别 / 接口协议”的重复表达
+- 修复首页刷新时内容块滑入过强、像 bug 的入场动画
+- 把本地开发环境切回用户真实使用过的 SQLite 库，恢复历史记录可见性
+
+验收：
+- [x] 设置页 `快速选择服务商 / 接口协议` 统一成同一套自定义下拉样式
+- [x] 删除连接区重复的 `协议识别` 摘要卡，仅保留 `接口协议` 这一处可操作入口
+- [x] 页面首屏与首页 lane 内容不再在刷新时做明显上移滑入
+- [x] 本地 `3002` 已通过 `PROMPT_OPTIMIZER_DB_PATH` 指回 canonical repo 的数据库，历史任务重新可见
+- [x] 本轮门禁再次通过：`npm run check`
+
+建议 work files:
+- `src/components/ui/select-field.tsx`
+- `src/components/settings-control-room.tsx`
+- `src/components/studio-frame.tsx`
+- `src/components/dashboard-control-room.tsx`
+- `src/styles/globals.css`
+- `tests/control-room-layout.test.ts`
+- `tests/studio-frame.test.ts`
+
+### HOTFIX-2026-03-12-BEGINNER-FRIENDLY-MODEL-PICKER（WORKER / 模型选择器新手友好化）✅
+
+目标：
+- 把模型选择器从“像输入框的高级控件”收口成“默认先选、找不到再手输”的更直观交互
+- 保持单模型别名 UX，不暴露 provider 内部路径
+- 首页投递台、详情页、设置页三处体验统一
+
+验收：
+- [x] 闭合态改成标准选择器心智：按钮式触发器，不再默认露出搜索输入框
+- [x] 打开后才显示搜索框与模型列表，并保留“可直接输入模型名”的兜底路径
+- [x] 标签同步收口：`默认任务模型` / `任务模型`
+- [x] 首页投递台、详情页、设置页三处浏览器 smoke 已通过
+- [x] 本轮门禁再次通过：`npm run check`
+
+建议 work files:
+- `src/components/ui/model-alias-combobox.tsx`
+- `src/components/settings-control-room.tsx`
+- `src/components/job-detail-control-room.tsx`
+- `src/components/dashboard-shell.tsx`
+- `src/styles/globals.css`
+- `tests/control-room-layout.test.ts`
 
 ### V0.2-05（WORKER / README 与开源发布页二次收口）⬜️
 
@@ -150,6 +200,21 @@ Work files:
 ---
 
 ## 后续候选
+
+### V0.2-01（PLANNER / eval-set 配置化设计定稿）🧊
+
+目标：
+- 保持当前已完成的 `rubric` 配置能力不动
+- 单独为 `eval-set` 设计后续版本的配置路径
+- 明确它只影响 reviewer，不直接透传给 optimizer
+
+触发条件：
+- `V0.2-05` 发布收口完成后再启动
+- 用户确认重新打开评测链路扩展范围
+
+说明：
+- `rubric` 已完成，不再作为当前阻塞项
+- `eval-set` 继续延期到后续版本
 
 ### V0.2-05A（WORKER / Release 资产与历史版本下载收口）🧊
 

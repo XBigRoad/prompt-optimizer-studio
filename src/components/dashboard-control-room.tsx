@@ -14,11 +14,11 @@ import {
   History,
   PlayCircle,
   Search,
-  Sparkles,
 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 
 import {
+  formatRunCount,
   getConversationPolicyLabel,
   getJobDisplayError,
   getJobStatusLabel,
@@ -119,7 +119,7 @@ export function DashboardControlRoom({
       },
       {
         key: 'recent-completed' as const,
-        title: text('成果总览', 'Result overview'),
+        title: text('最新结果', 'Latest results'),
         description: text('最近完成的结果与历史运行记录，方便你直接回到最有价值的产出。', 'Recent results and grouped history, so you can jump back to the most valuable output quickly.'),
         icon: <CheckCircle2 size={18} />,
         jobs: groups.recentCompleted,
@@ -167,7 +167,6 @@ export function DashboardControlRoom({
     <section className="control-room">
       <div className="control-room-hero">
         <div className="hero-copy">
-          <span className="eyebrow"><Sparkles size={16} /> Prompt Optimizer</span>
           <h2 className="control-room-title">{text('任务控制室', 'Job Control Room')}</h2>
           <p className="hero-lead">
             {text('先处理要你决策的任务，再观察自动运行中的任务，然后查看最新结果或翻出同标题历史运行。', 'Handle the jobs that need your decision first, then watch the running jobs, then review results or grouped history.')}
@@ -185,7 +184,7 @@ export function DashboardControlRoom({
         <div className="summary-cluster">
           <SummaryCard icon={<AlertTriangle size={18} />} label={text('待你处理', 'Need your decision')} value={stats.attention} tone="manual_review" />
           <SummaryCard icon={<Activity size={18} />} label={text('自动运行中', 'Running automatically')} value={stats.running} tone="running" />
-          <SummaryCard icon={<CheckCircle2 size={18} />} label={text('成果总览', 'Result overview')} value={stats.recentCompleted} tone="completed" />
+          <SummaryCard icon={<CheckCircle2 size={18} />} label={text('最新结果', 'Latest results')} value={stats.recentCompleted} tone="completed" />
           <SummaryCard icon={<History size={18} />} label={text('历史任务', 'History')} value={stats.history} tone="pending" />
         </div>
       </div>
@@ -214,13 +213,13 @@ export function DashboardControlRoom({
           {lanes.map((lane) => (
             <Tabs.Content key={lane.key} value={lane.key} className="control-tabs-content">
               <motion.div
-                initial={{ opacity: 0, y: 10 }}
+                initial={false}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
                 className="lane-content"
               >
                 {lane.key === 'recent-completed' ? (
-                  <div className="latest-results-grid">
+                  <div className="latest-results-grid" data-ui="latest-results-grid">
                     <DashboardLane
                       title={text('最近完成', 'Recently completed')}
                       description={lane.description}
@@ -231,6 +230,7 @@ export function DashboardControlRoom({
                       onResumeAuto={onResumeAuto}
                       onResumeStep={onResumeStep}
                       compact
+                      dataUi="recent-results-column"
                     />
                     <HistoryLane
                       title={text('历史任务', 'History')}
@@ -242,6 +242,7 @@ export function DashboardControlRoom({
                       onExpandedGroupsChange={setExpandedHistoryGroups}
                       emptyMessage={text('暂无历史任务。', 'No history yet.')}
                       onCopyPrompt={onCopyPrompt}
+                      dataUi="history-results-column"
                     />
                   </div>
                 ) : (
@@ -276,6 +277,7 @@ function DashboardLane({
   onResumeAuto,
   onResumeStep,
   compact = false,
+  dataUi,
 }: {
   title?: string
   description: string
@@ -286,9 +288,10 @@ function DashboardLane({
   onResumeAuto: (job: DashboardJobView) => Promise<void>
   onResumeStep: (job: DashboardJobView) => Promise<void>
   compact?: boolean
+  dataUi?: string
 }) {
   return (
-    <section className={`control-lane${compact ? ' compact' : ''}`}>
+    <section className={`control-lane${compact ? ' compact' : ''}`} data-ui={dataUi}>
       <div className="lane-header">
         <div className="lane-heading">
           {title ? <h3 className="section-title">{title}</h3> : null}
@@ -322,6 +325,7 @@ function HistoryLane({
   onExpandedGroupsChange,
   emptyMessage,
   onCopyPrompt,
+  dataUi,
 }: {
   title: string
   description: string
@@ -332,16 +336,19 @@ function HistoryLane({
   onExpandedGroupsChange: (value: string[]) => void
   emptyMessage: string
   onCopyPrompt: (job: DashboardJobView) => Promise<void>
+  dataUi?: string
 }) {
   const text = useLocaleText()
 
   return (
-    <section className="control-lane history-lane compact">
+    <section className="control-lane history-lane compact" data-ui={dataUi}>
       <div className="lane-header">
         <div className="lane-heading">
           <h3 className="section-title">{title}</h3>
           <p className="small">{description}</p>
         </div>
+      </div>
+      <div className="history-lane-toolbar">
         <label className="history-search" aria-label={text('搜索历史任务', 'Search history jobs')}>
           <Search size={16} />
           <input
@@ -397,7 +404,7 @@ function HistoryGroupCard({
           <div className="history-group-summary">
             <div className="card-topline">
               <span className={`status ${latestJob.status}`}>{getJobStatusLabel(latestJob.status, locale)}</span>
-              <span className="meta">{locale === 'zh-CN' ? `${group.jobs.length} 次运行` : `${group.jobs.length} runs`}</span>
+              <span className="meta">{formatRunCount(group.jobs.length, locale)}</span>
             </div>
             <h3>{group.title}</h3>
             <p className="prompt-preview">{getPromptPreview(latestJob.latestPrompt, 120)}</p>
@@ -463,6 +470,18 @@ function DashboardJobCard({
   const { locale } = useI18n()
   const text = useLocaleText()
   const canAct = job.status === 'manual_review' || job.status === 'paused'
+  const secondaryLink =
+    job.status === 'completed'
+      ? {
+          href: `/jobs/${job.id}`,
+          label: text('详情', 'Details'),
+        }
+      : canAct
+        ? {
+            href: `/jobs/${job.id}#next-round-steering`,
+            label: text('编辑引导', 'Edit steering'),
+          }
+        : null
   const primary:
     | { kind: 'link'; label: string; href: string }
     | { kind: 'action'; label: string; action: () => void; pending: boolean } =
@@ -471,6 +490,7 @@ function DashboardJobCard({
       : job.status === 'completed'
         ? { kind: 'action', label: text('复制最新提示词', 'Copy latest prompt'), action: () => void onCopyPrompt(job), pending: false }
         : { kind: 'link', label: text('打开详情', 'Open details'), href: `/jobs/${job.id}` }
+  const hasFooterSecondaryActions = canAct || (primary.kind === 'action' && job.status !== 'completed')
 
   return (
     <motion.article layout className={`control-card${subdued ? ' subdued' : ''} tone-${job.status}`}>
@@ -478,7 +498,15 @@ function DashboardJobCard({
         <span className={`status ${job.status}`}>{getJobStatusLabel(job.status, locale)}</span>
         <span className="meta">{formatDate(job.createdAt, locale)}</span>
       </div>
-      <h3>{job.title}</h3>
+      <div className="card-heading-row">
+        <h3>{job.title}</h3>
+        {secondaryLink ? (
+          <Link href={secondaryLink.href as Route} className="card-inline-link" data-ui="card-secondary-link">
+            <span>{secondaryLink.label}</span>
+            <ChevronRight size={14} />
+          </Link>
+        ) : null}
+      </div>
       <p className="prompt-preview">{getPromptPreview(job.latestPrompt, subdued ? 96 : 140)}</p>
       <div className="card-metrics compact-metrics">
         <span>{text('轮次', 'Round')} {job.currentRound}</span>
@@ -488,7 +516,7 @@ function DashboardJobCard({
         <span>{text('模型', 'Model')} {job.optimizerModel}</span>
         <span>{getConversationPolicyLabel(job.conversationPolicy, locale)}</span>
       </div>
-      {getJobDisplayError(job.errorMessage) ? <div className="notice error">{getJobDisplayError(job.errorMessage)}</div> : null}
+      {getJobDisplayError(job.errorMessage, locale) ? <div className="notice error">{getJobDisplayError(job.errorMessage, locale)}</div> : null}
       <div className="card-actions">
         {primary.kind === 'link' ? (
           <Link href={primary.href as Route} className="button primary-action">
@@ -499,23 +527,20 @@ function DashboardJobCard({
             {primary.pending ? text('处理中...', 'Working...') : primary.label}
           </button>
         )}
-        <div className="inline-actions secondary-actions">
-          {canAct ? (
-            <button className="button ghost" type="button" onClick={() => void onResumeAuto(job)} disabled={actionInFlight === `${job.id}:auto`}>
-              <PlayCircle size={16} /> {actionInFlight === `${job.id}:auto` ? text('处理中...', 'Working...') : text('自动运行', 'Run automatically')}
-            </button>
-          ) : null}
-          {primary.kind === 'action' && job.status !== 'completed' ? (
-            <button className="button ghost" type="button" onClick={() => void onCopyPrompt(job)}>
-              <Copy size={16} /> {text('复制', 'Copy')}
-            </button>
-          ) : null}
-          {primary.kind === 'action' ? (
-            <Link href={`/jobs/${job.id}${canAct ? '#next-round-steering' : ''}` as Route} className="button ghost">
-              {canAct ? text('编辑引导', 'Edit steering') : text('详情', 'Details')}
-            </Link>
-          ) : null}
-        </div>
+        {hasFooterSecondaryActions ? (
+          <div className="inline-actions secondary-actions">
+            {canAct ? (
+              <button className="button ghost" type="button" onClick={() => void onResumeAuto(job)} disabled={actionInFlight === `${job.id}:auto`}>
+                <PlayCircle size={16} /> {actionInFlight === `${job.id}:auto` ? text('处理中...', 'Working...') : text('自动运行', 'Run automatically')}
+              </button>
+            ) : null}
+            {primary.kind === 'action' && job.status !== 'completed' ? (
+              <button className="button ghost" type="button" onClick={() => void onCopyPrompt(job)}>
+                <Copy size={16} /> {text('复制', 'Copy')}
+              </button>
+            ) : null}
+          </div>
+        ) : null}
       </div>
     </motion.article>
   )

@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { JobDetailControlRoom, type JobDetailViewModel } from '@/components/job-detail-control-room'
 import { type RoundCandidateView } from '@/components/job-round-card'
 import { StudioFrame } from '@/components/studio-frame'
+import { useI18n, useLocaleText } from '@/lib/i18n'
 import { getTaskModelLabel, resolveLatestFullPrompt } from '@/lib/presentation'
 import type { SteeringItem } from '@/lib/server/types'
 
@@ -35,6 +36,13 @@ interface ModelOption {
 
 interface SettingsPayload {
   maxRounds: number
+}
+
+type EffectiveRubricSource = 'job' | 'settings' | 'default'
+
+interface RubricPayload {
+  rubricMd: string
+  source: EffectiveRubricSource
 }
 
 interface GoalAnchorPayload {
@@ -67,6 +75,7 @@ interface JobDetailPayload {
     maxRoundsOverride: number | null
     passStreak: number
     lastReviewScore: number
+    customRubricMd: string | null
     errorMessage: string | null
     conversationPolicy: 'stateless' | 'pooled-3x'
   }
@@ -74,12 +83,17 @@ interface JobDetailPayload {
 }
 
 export function JobDetailShell({ jobId }: { jobId: string }) {
+  const { locale } = useI18n()
+  const text = useLocaleText()
   const [detail, setDetail] = useState<JobDetailPayload | null>(null)
   const [models, setModels] = useState<ModelOption[]>([])
   const [settings, setSettings] = useState<SettingsPayload>({ maxRounds: 8 })
+  const [effectiveRubricMd, setEffectiveRubricMd] = useState('')
+  const [effectiveRubricSource, setEffectiveRubricSource] = useState<EffectiveRubricSource>('default')
   const [taskModel, setTaskModel] = useState('')
   const [maxRoundsOverrideValue, setMaxRoundsOverrideValue] = useState('')
   const [pendingSteeringInput, setPendingSteeringInput] = useState('')
+  const [customRubricMd, setCustomRubricMd] = useState('')
   const [goalAnchorGoal, setGoalAnchorGoal] = useState('')
   const [goalAnchorDeliverable, setGoalAnchorDeliverable] = useState('')
   const [goalAnchorDriftGuardText, setGoalAnchorDriftGuardText] = useState('')
@@ -89,6 +103,7 @@ export function JobDetailShell({ jobId }: { jobId: string }) {
   const knownPendingSteeringIdsRef = useRef<Set<string>>(new Set())
   const [modelDirty, setModelDirty] = useState(false)
   const [maxRoundsDirty, setMaxRoundsDirty] = useState(false)
+  const [customRubricDirty, setCustomRubricDirty] = useState(false)
   const [goalAnchorDirty, setGoalAnchorDirty] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -96,6 +111,7 @@ export function JobDetailShell({ jobId }: { jobId: string }) {
   const [completing, setCompleting] = useState(false)
   const [savingModels, setSavingModels] = useState(false)
   const [savingMaxRounds, setSavingMaxRounds] = useState(false)
+  const [savingCustomRubric, setSavingCustomRubric] = useState(false)
   const [savingSteering, setSavingSteering] = useState(false)
   const [generatingGoalAnchorDraft, setGeneratingGoalAnchorDraft] = useState(false)
   const [savingGoalAnchor, setSavingGoalAnchor] = useState(false)
@@ -114,29 +130,38 @@ export function JobDetailShell({ jobId }: { jobId: string }) {
 
     const load = async () => {
       try {
-        const [detailResponse, modelsResponse, settingsResponse] = await Promise.all([
+        const [detailResponse, modelsResponse, settingsResponse, rubricResponse] = await Promise.all([
           fetch(`/api/jobs/${jobId}`, { cache: 'no-store' }),
           fetch('/api/settings/models', { cache: 'no-store' }),
           fetch('/api/settings', { cache: 'no-store' }),
+          fetch(`/api/jobs/${jobId}/rubric`, { cache: 'no-store' }),
         ])
         const detailPayload = await detailResponse.json()
         const modelsPayload = await modelsResponse.json()
         const settingsPayload = await settingsResponse.json()
+        const rubricPayload = await rubricResponse.json().catch(() => null) as RubricPayload | null
         if (!detailResponse.ok) {
-          throw new Error(detailPayload.error ?? 'Failed to load job detail.')
+          throw new Error(detailPayload.error ?? text('任务详情加载失败。', 'Failed to load job detail.'))
         }
         if (!settingsResponse.ok) {
-          throw new Error(settingsPayload.error ?? 'Failed to load settings.')
+          throw new Error(settingsPayload.error ?? text('设置加载失败。', 'Failed to load settings.'))
         }
         if (!cancelled) {
           setDetail(detailPayload)
           setSettings({ maxRounds: settingsPayload.settings.maxRounds })
           setModels(modelsResponse.ok ? modelsPayload.models : [])
           setError(modelsResponse.ok ? null : modelsPayload.error ?? null)
+          if (rubricResponse.ok && rubricPayload) {
+            setEffectiveRubricMd(typeof rubricPayload.rubricMd === 'string' ? rubricPayload.rubricMd : '')
+            setEffectiveRubricSource(rubricPayload.source ?? 'default')
+          } else {
+            setEffectiveRubricMd('')
+            setEffectiveRubricSource('default')
+          }
         }
       } catch (loadError) {
         if (!cancelled) {
-          setError(loadError instanceof Error ? loadError.message : 'Failed to load job detail.')
+          setError(loadError instanceof Error ? loadError.message : text('任务详情加载失败。', 'Failed to load job detail.'))
         }
       } finally {
         if (!cancelled) {
@@ -152,7 +177,7 @@ export function JobDetailShell({ jobId }: { jobId: string }) {
       cancelled = true
       if (timer) clearInterval(timer)
     }
-  }, [jobId])
+  }, [jobId, text])
 
   useEffect(() => {
     if (!detail || modelDirty) return
@@ -163,6 +188,11 @@ export function JobDetailShell({ jobId }: { jobId: string }) {
     if (!detail || maxRoundsDirty) return
     setMaxRoundsOverrideValue(detail.job.maxRoundsOverride === null ? '' : String(detail.job.maxRoundsOverride))
   }, [detail, maxRoundsDirty])
+
+  useEffect(() => {
+    if (!detail || customRubricDirty) return
+    setCustomRubricMd(detail.job.customRubricMd ?? '')
+  }, [detail, customRubricDirty])
 
   useEffect(() => {
     if (!detail || goalAnchorDirty) return
@@ -225,14 +255,17 @@ export function JobDetailShell({ jobId }: { jobId: string }) {
       maxRoundsOverride: detail.job.maxRoundsOverride,
       passStreak: detail.job.passStreak,
       lastReviewScore: detail.job.lastReviewScore,
+      customRubricMd: detail.job.customRubricMd,
+      effectiveRubricMd,
+      effectiveRubricSource,
       errorMessage: detail.job.errorMessage,
       latestFullPrompt: resolveLatestFullPrompt(detail.job.rawPrompt, detail.candidates),
       initialPrompt: detail.job.rawPrompt,
-      modelsLabel: getTaskModelLabel(detail.job.optimizerModel, detail.job.judgeModel),
+      modelsLabel: getTaskModelLabel(detail.job.optimizerModel, detail.job.judgeModel, locale),
       effectiveMaxRounds: detail.job.maxRoundsOverride ?? settings.maxRounds,
       candidates: detail.candidates,
     }
-  }, [detail, jobId, settings.maxRounds])
+  }, [detail, effectiveRubricMd, effectiveRubricSource, jobId, locale, settings.maxRounds])
 
   function mergeJobUpdate(jobPatch: JobDetailPayload['job']) {
     setDetail((current) => current ? { ...current, job: { ...current.job, ...jobPatch } } : current)
@@ -248,18 +281,19 @@ export function JobDetailShell({ jobId }: { jobId: string }) {
     try {
       const response = await fetch(`/api/jobs/${jobId}/retry`, { method: 'POST' })
       const payload = await response.json()
-      if (!response.ok) throw new Error(payload.error ?? 'Retry failed.')
+      if (!response.ok) throw new Error(payload.error ?? text('重新开始失败。', 'Retry failed.'))
       setError(null)
-      setActionMessage('任务已重新开始。')
+      setActionMessage(text('任务已重新开始。', 'The job restarted from the beginning.'))
       setModelDirty(false)
       setMaxRoundsDirty(false)
+      setCustomRubricDirty(false)
       setGoalAnchorDirty(false)
       resetDraftState()
       setPendingSteeringInput('')
       setExpandedRounds({})
       setDetail((current) => current ? { ...current, job: { ...current.job, ...payload.job }, candidates: [] } : current)
     } catch (retryError) {
-      setError(retryError instanceof Error ? retryError.message : 'Retry failed.')
+      setError(retryError instanceof Error ? retryError.message : text('重新开始失败。', 'Retry failed.'))
       setActionMessage(null)
     } finally {
       setRetrying(false)
@@ -275,13 +309,15 @@ export function JobDetailShell({ jobId }: { jobId: string }) {
         body: JSON.stringify({ optimizerModel: taskModel, judgeModel: taskModel }),
       })
       const payload = await response.json()
-      if (!response.ok) throw new Error(payload.error ?? 'Save failed.')
+      if (!response.ok) throw new Error(payload.error ?? text('保存失败。', 'Save failed.'))
       setError(null)
       setModelDirty(false)
-      setActionMessage(detail?.job.status === 'running' ? '任务模型已保存，将在下一轮生效。' : '任务模型已保存。')
+      setActionMessage(detail?.job.status === 'running'
+        ? text('任务模型已保存，将在下一轮生效。', 'The task model was saved and will take effect next round.')
+        : text('任务模型已保存。', 'The task model was saved.'))
       mergeJobUpdate(payload.job)
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : 'Save failed.')
+      setError(saveError instanceof Error ? saveError.message : text('保存失败。', 'Save failed.'))
       setActionMessage(null)
     } finally {
       setSavingModels(false)
@@ -298,16 +334,43 @@ export function JobDetailShell({ jobId }: { jobId: string }) {
         body: JSON.stringify({ maxRoundsOverride: normalizedValue ? Number(normalizedValue) : null }),
       })
       const payload = await response.json()
-      if (!response.ok) throw new Error(payload.error ?? 'Save failed.')
+      if (!response.ok) throw new Error(payload.error ?? text('保存失败。', 'Save failed.'))
       setError(null)
       setMaxRoundsDirty(false)
-      setActionMessage(detail?.job.status === 'running' ? '任务级最大轮数已保存，将在下一轮检查时生效。' : '任务级最大轮数已保存。')
+      setActionMessage(detail?.job.status === 'running'
+        ? text('任务级最大轮数已保存，将在下一轮检查时生效。', 'The task-level round cap was saved and will take effect at the next round check.')
+        : text('任务级最大轮数已保存。', 'The task-level round cap was saved.'))
       mergeJobUpdate(payload.job)
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : 'Save failed.')
+      setError(saveError instanceof Error ? saveError.message : text('保存失败。', 'Save failed.'))
       setActionMessage(null)
     } finally {
       setSavingMaxRounds(false)
+    }
+  }
+
+  async function saveCustomRubric(nextValue?: string) {
+    setSavingCustomRubric(true)
+    try {
+      const valueToSave = (nextValue ?? customRubricMd).trim()
+      const response = await fetch(`/api/jobs/${jobId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customRubricMd: valueToSave || null }),
+      })
+      const payload = await response.json()
+      if (!response.ok) throw new Error(payload.error ?? text('保存失败。', 'Save failed.'))
+      setError(null)
+      setCustomRubricDirty(false)
+      setActionMessage(detail?.job.status === 'running'
+        ? text('任务级评分标准已保存，将在下一轮生效。', 'The task scoring standard was saved and will take effect next round.')
+        : text('任务级评分标准已保存。', 'The task scoring standard was saved.'))
+      mergeJobUpdate(payload.job)
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : text('保存失败。', 'Save failed.'))
+      setActionMessage(null)
+    } finally {
+      setSavingCustomRubric(false)
     }
   }
 
@@ -320,14 +383,16 @@ export function JobDetailShell({ jobId }: { jobId: string }) {
         body: JSON.stringify({ steeringAction: { type: 'add', text: pendingSteeringInput } }),
       })
       const payload = await response.json()
-      if (!response.ok) throw new Error(payload.error ?? 'Save failed.')
+      if (!response.ok) throw new Error(payload.error ?? text('保存失败。', 'Save failed.'))
       setError(null)
-      setActionMessage(detail?.job.status === 'running' ? '人工引导已加入待生效列表，将在下一轮生效。' : '人工引导已加入待生效列表。')
+      setActionMessage(detail?.job.status === 'running'
+        ? text('人工引导已加入待生效列表，将在下一轮生效。', 'The steering note was added to the pending list and will take effect next round.')
+        : text('人工引导已加入待生效列表。', 'The steering note was added to the pending list.'))
       setPendingSteeringInput('')
       resetDraftState()
       mergeJobUpdate(payload.job)
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : 'Save failed.')
+      setError(saveError instanceof Error ? saveError.message : text('保存失败。', 'Save failed.'))
       setActionMessage(null)
     } finally {
       setSavingSteering(false)
@@ -343,13 +408,13 @@ export function JobDetailShell({ jobId }: { jobId: string }) {
         body: JSON.stringify({ steeringAction: { type: 'remove', itemId } }),
       })
       const payload = await response.json()
-      if (!response.ok) throw new Error(payload.error ?? 'Save failed.')
+      if (!response.ok) throw new Error(payload.error ?? text('保存失败。', 'Save failed.'))
       setError(null)
-      setActionMessage('已删除这条待生效引导。')
+      setActionMessage(text('已删除这条待生效引导。', 'The pending steering item was removed.'))
       resetDraftState()
       mergeJobUpdate(payload.job)
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : 'Save failed.')
+      setError(saveError instanceof Error ? saveError.message : text('保存失败。', 'Save failed.'))
       setActionMessage(null)
     } finally {
       setSavingSteering(false)
@@ -365,13 +430,13 @@ export function JobDetailShell({ jobId }: { jobId: string }) {
         body: JSON.stringify({ steeringAction: { type: 'clear' } }),
       })
       const payload = await response.json()
-      if (!response.ok) throw new Error(payload.error ?? 'Clear failed.')
+      if (!response.ok) throw new Error(payload.error ?? text('清空失败。', 'Clear failed.'))
       setError(null)
-      setActionMessage('待生效引导已清空。')
+      setActionMessage(text('待生效引导已清空。', 'Pending steering was cleared.'))
       resetDraftState()
       mergeJobUpdate(payload.job)
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : 'Clear failed.')
+      setError(saveError instanceof Error ? saveError.message : text('清空失败。', 'Clear failed.'))
       setActionMessage(null)
     } finally {
       setSavingSteering(false)
@@ -387,9 +452,9 @@ export function JobDetailShell({ jobId }: { jobId: string }) {
         body: JSON.stringify({ steeringAction: { type: 'build_goal_anchor_draft', itemIds: selectedPendingSteeringIds } }),
       })
       const payload = await response.json()
-      if (!response.ok) throw new Error(payload.error ?? 'Draft generation failed.')
+      if (!response.ok) throw new Error(payload.error ?? text('草稿生成失败。', 'Draft generation failed.'))
       if (!payload.goalAnchorDraft) {
-        throw new Error('未生成长期规则草稿。')
+        throw new Error(text('未生成长期规则草稿。', 'No stable-rule draft was generated.'))
       }
       setError(null)
       setGoalAnchorGoal(payload.goalAnchorDraft.goal)
@@ -398,9 +463,10 @@ export function JobDetailShell({ jobId }: { jobId: string }) {
       setGoalAnchorDirty(true)
       setGoalAnchorDraftReady(true)
       setGoalAnchorDraftConsumeIds(payload.consumePendingSteeringIds ?? [])
-      setActionMessage(`已把选中的 ${payload.consumePendingSteeringIds?.length ?? 0} 条引导带入长期规则编辑区，请确认后保存。`)
+      const selectedCount = payload.consumePendingSteeringIds?.length ?? 0
+      setActionMessage(text(`已把选中的 ${selectedCount} 条引导带入长期规则编辑区，请确认后保存。`, `Added ${selectedCount} selected steering items to the stable-rule editor. Review and save when ready.`))
     } catch (draftError) {
-      setError(draftError instanceof Error ? draftError.message : 'Draft generation failed.')
+      setError(draftError instanceof Error ? draftError.message : text('草稿生成失败。', 'Draft generation failed.'))
       setActionMessage(null)
     } finally {
       setGeneratingGoalAnchorDraft(false)
@@ -423,15 +489,17 @@ export function JobDetailShell({ jobId }: { jobId: string }) {
         }),
       })
       const payload = await response.json()
-      if (!response.ok) throw new Error(payload.error ?? 'Save failed.')
+      if (!response.ok) throw new Error(payload.error ?? text('保存失败。', 'Save failed.'))
       setError(null)
       setGoalAnchorDirty(false)
       const consumedPending = goalAnchorDraftReady && goalAnchorDraftConsumeIds.length > 0
       resetDraftState()
-      setActionMessage(consumedPending ? '长期规则已保存，并已吸收本次选中的待生效引导。' : '长期规则已保存。后续所有轮次都会受它约束。')
+      setActionMessage(consumedPending
+        ? text('长期规则已保存，并已吸收本次选中的待生效引导。', 'Stable rules were saved and absorbed the selected pending steering.')
+        : text('长期规则已保存。后续所有轮次都会受它约束。', 'Stable rules were saved. All later rounds will stay constrained by them.'))
       mergeJobUpdate(payload.job)
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : 'Save failed.')
+      setError(saveError instanceof Error ? saveError.message : text('保存失败。', 'Save failed.'))
       setActionMessage(null)
     } finally {
       setSavingGoalAnchor(false)
@@ -443,12 +511,14 @@ export function JobDetailShell({ jobId }: { jobId: string }) {
     try {
       const response = await fetch(`/api/jobs/${jobId}/pause`, { method: 'POST' })
       const payload = await response.json()
-      if (!response.ok) throw new Error(payload.error ?? 'Pause failed.')
+      if (!response.ok) throw new Error(payload.error ?? text('暂停失败。', 'Pause failed.'))
       setError(null)
-      setActionMessage(detail?.job.status === 'running' ? '已请求暂停，当前轮结束后会停下。' : '任务已暂停。')
+      setActionMessage(detail?.job.status === 'running'
+        ? text('已请求暂停，当前轮结束后会停下。', 'Pause requested. The job will stop after the current round.')
+        : text('任务已暂停。', 'The job was paused.'))
       mergeJobUpdate(payload.job)
     } catch (pauseError) {
-      setError(pauseError instanceof Error ? pauseError.message : 'Pause failed.')
+      setError(pauseError instanceof Error ? pauseError.message : text('暂停失败。', 'Pause failed.'))
       setActionMessage(null)
     } finally {
       setPausing(false)
@@ -460,12 +530,12 @@ export function JobDetailShell({ jobId }: { jobId: string }) {
     try {
       const response = await fetch(`/api/jobs/${jobId}/resume-step`, { method: 'POST' })
       const payload = await response.json()
-      if (!response.ok) throw new Error(payload.error ?? 'Resume step failed.')
+      if (!response.ok) throw new Error(payload.error ?? text('继续一轮失败。', 'Resume step failed.'))
       setError(null)
-      setActionMessage('任务将继续一轮，完成后会自动回到暂停。')
+      setActionMessage(text('任务将继续一轮，完成后会自动回到暂停。', 'The job will run one more round and pause again afterward.'))
       mergeJobUpdate(payload.job)
     } catch (resumeError) {
-      setError(resumeError instanceof Error ? resumeError.message : 'Resume step failed.')
+      setError(resumeError instanceof Error ? resumeError.message : text('继续一轮失败。', 'Resume step failed.'))
       setActionMessage(null)
     } finally {
       setResumingStep(false)
@@ -477,12 +547,12 @@ export function JobDetailShell({ jobId }: { jobId: string }) {
     try {
       const response = await fetch(`/api/jobs/${jobId}/resume-auto`, { method: 'POST' })
       const payload = await response.json()
-      if (!response.ok) throw new Error(payload.error ?? 'Resume auto failed.')
+      if (!response.ok) throw new Error(payload.error ?? text('恢复自动运行失败。', 'Resume auto failed.'))
       setError(null)
-      setActionMessage('任务已恢复自动运行。')
+      setActionMessage(text('任务已恢复自动运行。', 'The job resumed automatic execution.'))
       mergeJobUpdate(payload.job)
     } catch (resumeError) {
-      setError(resumeError instanceof Error ? resumeError.message : 'Resume auto failed.')
+      setError(resumeError instanceof Error ? resumeError.message : text('恢复自动运行失败。', 'Resume auto failed.'))
       setActionMessage(null)
     } finally {
       setResumingAuto(false)
@@ -494,16 +564,19 @@ export function JobDetailShell({ jobId }: { jobId: string }) {
     try {
       const response = await fetch(`/api/jobs/${jobId}/cancel`, { method: 'POST' })
       const payload = await response.json()
-      if (!response.ok) throw new Error(payload.error ?? 'Cancel failed.')
+      if (!response.ok) throw new Error(payload.error ?? text('取消失败。', 'Cancel failed.'))
       setError(null)
-      setActionMessage(detail?.job.status === 'running' ? '已请求取消，当前轮结束后会停止。' : '任务已取消。')
+      setActionMessage(detail?.job.status === 'running'
+        ? text('已请求取消，当前轮结束后会停止。', 'Cancellation requested. The job will stop after the current round.')
+        : text('任务已取消。', 'The job was cancelled.'))
       setModelDirty(false)
       setMaxRoundsDirty(false)
+      setCustomRubricDirty(false)
       setGoalAnchorDirty(false)
       resetDraftState()
       mergeJobUpdate(payload.job)
     } catch (cancelError) {
-      setError(cancelError instanceof Error ? cancelError.message : 'Cancel failed.')
+      setError(cancelError instanceof Error ? cancelError.message : text('取消失败。', 'Cancel failed.'))
       setActionMessage(null)
     } finally {
       setCancelling(false)
@@ -515,16 +588,17 @@ export function JobDetailShell({ jobId }: { jobId: string }) {
     try {
       const response = await fetch(`/api/jobs/${jobId}/complete`, { method: 'POST' })
       const payload = await response.json()
-      if (!response.ok) throw new Error(payload.error ?? 'Complete failed.')
+      if (!response.ok) throw new Error(payload.error ?? text('完成归档失败。', 'Complete failed.'))
       setError(null)
-      setActionMessage('任务已完成并归档。')
+      setActionMessage(text('任务已完成并归档。', 'The job was completed and archived.'))
       setModelDirty(false)
       setMaxRoundsDirty(false)
+      setCustomRubricDirty(false)
       setGoalAnchorDirty(false)
       resetDraftState()
       mergeJobUpdate(payload.job)
     } catch (completeError) {
-      setError(completeError instanceof Error ? completeError.message : 'Complete failed.')
+      setError(completeError instanceof Error ? completeError.message : text('完成归档失败。', 'Complete failed.'))
       setActionMessage(null)
     } finally {
       setCompleting(false)
@@ -536,10 +610,10 @@ export function JobDetailShell({ jobId }: { jobId: string }) {
     setCopyingPrompt(true)
     try {
       await navigator.clipboard.writeText(model.latestFullPrompt)
-      setActionMessage('最新完整提示词已复制。')
+      setActionMessage(text('最新完整提示词已复制。', 'The latest full prompt was copied.'))
       setError(null)
     } catch (copyError) {
-      setError(copyError instanceof Error ? copyError.message : 'Copy failed.')
+      setError(copyError instanceof Error ? copyError.message : text('复制失败。', 'Copy failed.'))
       setActionMessage(null)
     } finally {
       setCopyingPrompt(false)
@@ -550,7 +624,7 @@ export function JobDetailShell({ jobId }: { jobId: string }) {
     return (
       <main>
         <div className="shell">
-          <div className="notice">正在读取任务详情...</div>
+          <div className="notice">{text('正在读取任务详情...', 'Loading job detail...')}</div>
         </div>
       </main>
     )
@@ -558,10 +632,10 @@ export function JobDetailShell({ jobId }: { jobId: string }) {
 
   return (
     <main>
-      <StudioFrame title="结果台" currentPath={`/jobs/${jobId}`}>
+      <StudioFrame title={text('结果台', 'Result Desk')} currentPath={`/jobs/${jobId}`}>
         <motion.div
           className="shell"
-          initial={{ opacity: 0, y: 12 }}
+          initial={false}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
         >
@@ -574,6 +648,7 @@ export function JobDetailShell({ jobId }: { jobId: string }) {
               actionMessage,
               savingModels,
               savingMaxRounds,
+              savingCustomRubric,
               savingSteering,
               generatingGoalAnchorDraft,
               savingGoalAnchor,
@@ -591,6 +666,7 @@ export function JobDetailShell({ jobId }: { jobId: string }) {
               taskModel,
               maxRoundsOverrideValue,
               pendingSteeringInput,
+              customRubricMd,
               goalAnchorGoal,
               goalAnchorDeliverable,
               goalAnchorDriftGuardText,
@@ -601,6 +677,7 @@ export function JobDetailShell({ jobId }: { jobId: string }) {
               onRetry: retry,
               onSaveModel: saveModel,
               onSaveMaxRoundsOverride: saveMaxRoundsOverride,
+              onSaveCustomRubric: saveCustomRubric,
               onAddPendingSteering: addPendingSteering,
               onRemovePendingSteeringItem: removePendingSteeringItem,
               onClearPendingSteering: clearPendingSteering,
@@ -624,6 +701,10 @@ export function JobDetailShell({ jobId }: { jobId: string }) {
               },
               onPendingSteeringInputChange: (value) => {
                 setPendingSteeringInput(value)
+              },
+              onCustomRubricChange: (value) => {
+                setCustomRubricDirty(true)
+                setCustomRubricMd(value)
               },
               onGoalAnchorGoalChange: (value) => {
                 setGoalAnchorDirty(true)

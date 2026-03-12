@@ -1,13 +1,16 @@
-import * as Dialog from '@radix-ui/react-dialog'
-import { AlertTriangle, X } from 'lucide-react'
-import { useRef, useState } from 'react'
+import * as Dialog from "@radix-ui/react-dialog"
+import { AlertTriangle, X } from "lucide-react"
+import { cloneElement, isValidElement, useRef, useState } from "react"
+
+import { useHydrated } from "@/components/ui/use-hydrated"
+import { useLocaleText } from "@/lib/i18n"
 
 export function ConfirmDialog({
   title,
   description,
   confirmText,
-  cancelText = '返回',
-  tone = 'neutral',
+  cancelText,
+  tone = "neutral",
   disabled,
   onConfirm,
   children,
@@ -16,14 +19,29 @@ export function ConfirmDialog({
   description: string
   confirmText: string
   cancelText?: string
-  tone?: 'danger' | 'neutral'
+  tone?: "danger" | "neutral"
   disabled?: boolean
   onConfirm: () => void | Promise<void>
   children: React.ReactNode
 }) {
+  const text = useLocaleText()
+  const hydrated = useHydrated()
   const [open, setOpen] = useState(false)
   const [confirming, setConfirming] = useState(false)
   const cancelButtonRef = useRef<HTMLButtonElement | null>(null)
+
+  if (!hydrated) {
+    // SSR-safe: avoid Radix ids to prevent hydration mismatch warnings.
+    if (isValidElement(children)) {
+      const elementType = children.type
+      const isButton = typeof elementType === "string" && elementType === "button"
+      return cloneElement(children, {
+        ...(isButton ? { disabled: true } : { "aria-disabled": true }),
+      })
+    }
+
+    return <>{children}</>
+  }
 
   async function handleConfirm() {
     setConfirming(true)
@@ -35,7 +53,7 @@ export function ConfirmDialog({
     }
   }
 
-  const confirmClass = tone === 'danger' ? 'button danger' : 'button secondary'
+  const confirmClass = tone === "danger" ? "button danger" : "button secondary"
 
   return (
     <Dialog.Root open={open} onOpenChange={setOpen}>
@@ -52,7 +70,7 @@ export function ConfirmDialog({
           }}
         >
           <div className="dialog-head">
-            <span className={`dialog-icon${tone === 'danger' ? ' danger' : ''}`}>
+            <span className={`dialog-icon${tone === "danger" ? " danger" : ""}`}>
               <AlertTriangle size={18} />
             </span>
             <div className="dialog-copy">
@@ -60,7 +78,7 @@ export function ConfirmDialog({
               <Dialog.Description className="dialog-description">{description}</Dialog.Description>
             </div>
             <Dialog.Close asChild>
-              <button type="button" className="icon-button dialog-close" aria-label="关闭确认窗口">
+              <button type="button" className="icon-button dialog-close" aria-label={text("关闭确认窗口", "Close confirmation dialog")}>
                 <X size={16} />
               </button>
             </Dialog.Close>
@@ -74,7 +92,7 @@ export function ConfirmDialog({
                 className="button ghost"
                 disabled={confirming}
               >
-                {cancelText}
+                {cancelText ?? text("返回", "Back")}
               </button>
             </Dialog.Close>
             <button
@@ -83,7 +101,7 @@ export function ConfirmDialog({
               onClick={() => void handleConfirm()}
               disabled={confirming}
             >
-              {confirming ? '处理中...' : confirmText}
+              {confirming ? text("处理中...", "Working...") : confirmText}
             </button>
           </div>
         </Dialog.Content>
@@ -91,4 +109,3 @@ export function ConfirmDialog({
     </Dialog.Root>
   )
 }
-

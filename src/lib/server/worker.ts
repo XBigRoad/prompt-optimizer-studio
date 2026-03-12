@@ -4,7 +4,7 @@ import {
   applyPendingJobModels,
   claimNextRunnableJob,
   consumePendingSteeringItems,
-  createCandidateWithJudges,
+  createCandidateWithJudgesForActiveWorker,
   finalizeCancelledJob,
   getJobById,
   getOptimizerSeed,
@@ -134,10 +134,19 @@ async function runJob(jobId: string) {
       }
 
       const maxRounds = activeJob.maxRoundsOverride ?? settings.maxRounds
-      if (activeJob.currentRound >= maxRounds) {
+
+      const {
+        currentPrompt,
+        latestRoundNumber,
+        previousFeedback,
+        goalAnchor,
+        pendingSteeringItems,
+      } = getOptimizerSeed(jobId)
+      const effectiveCurrentRound = Math.max(activeJob.currentRound, latestRoundNumber)
+      if (effectiveCurrentRound >= maxRounds) {
         updateJobProgress(jobId, {
           status: 'manual_review',
-          currentRound: activeJob.currentRound,
+          currentRound: effectiveCurrentRound,
           bestAverageScore: activeJob.bestAverageScore,
           finalCandidateId: activeJob.finalCandidateId,
           errorMessage: '达到最大轮数，已停止自动优化。',
@@ -146,17 +155,14 @@ async function runJob(jobId: string) {
       }
 
       const pack = getPromptPackVersion(activeJob.packVersionId)
-      const adapter = new CpamcModelAdapter(settings, pack, {
+      const effectiveRubric = activeJob.customRubricMd || settings.customRubricMd
+      const effectivePack = effectiveRubric
+        ? { ...pack, rubricMd: effectiveRubric }
+        : pack
+      const adapter = new CpamcModelAdapter(settings, effectivePack, {
         optimizerModel: activeJob.optimizerModel,
         judgeModel: activeJob.judgeModel,
       })
-      const {
-        currentPrompt,
-        previousFeedback,
-        goalAnchor,
-        pendingSteeringItems,
-      } = getOptimizerSeed(jobId)
-      const roundNumber = activeJob.currentRound + 1
       const result = await runOptimizationCycle({
         adapter,
         currentPrompt,
@@ -185,8 +191,7 @@ async function runJob(jobId: string) {
         },
       ]
 
-      const candidateId = createCandidateWithJudges(jobId, {
-        roundNumber,
+      const committedCandidate = createCandidateWithJudgesForActiveWorker(jobId, WORKER_OWNER_ID, {
         optimizedPrompt: result.optimizedPrompt,
         strategy: result.strategy,
         scoreBefore: result.scoreBefore,
@@ -198,7 +203,11 @@ async function runJob(jobId: string) {
         appliedSteeringItems: pendingSteeringItems,
         judgments,
       })
+      if (!committedCandidate) {
+        return
+      }
 
+      const { candidateId, roundNumber } = committedCandidate
       const latestJob = getJobById(jobId)
       if (latestJob?.cancelRequestedAt) {
         finalizeCancelledJob(jobId)

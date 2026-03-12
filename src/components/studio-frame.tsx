@@ -31,11 +31,11 @@ export function StudioFrame({
   return (
     <div className="studio-shell">
       <aside className="studio-sidebar">
-        <div className="sidebar-brand">
-          <strong>Prompt Optimizer</strong>
-        </div>
+        <div className="sidebar-toolbox" data-ui="sidebar-toolbox">
+          <div className="sidebar-brand">
+            <strong className="sidebar-brand-text">Prompt Optimizer Studio</strong>
+          </div>
 
-        <div className="sidebar-section">
           <nav className="sidebar-nav">
             {nav.map((item) => (
               <Link
@@ -48,34 +48,34 @@ export function StudioFrame({
               </Link>
             ))}
           </nav>
-        </div>
 
-        <div className="sidebar-section sidebar-language">
-          <div className="sidebar-title"><Globe size={16} /> {text("语言", "Language")}</div>
-          <div className="language-toggle" role="group" aria-label={text("切换界面语言", "Switch interface language")}>
-            <button
-              type="button"
-              className={`language-button${locale === "zh-CN" ? " active" : ""}`}
-              onClick={() => setLocale("zh-CN")}
-              aria-pressed={locale === "zh-CN"}
-            >
-              中文
-            </button>
-            <button
-              type="button"
-              className={`language-button${locale === "en" ? " active" : ""}`}
-              onClick={() => setLocale("en")}
-              aria-pressed={locale === "en"}
-            >
-              EN
-            </button>
+          <div className="sidebar-language">
+            <div className="sidebar-title"><Globe size={16} /> {text("语言", "Language")}</div>
+            <div className="language-toggle" role="group" aria-label={text("切换界面语言", "Switch interface language")}>
+              <button
+                type="button"
+                className={`language-button${locale === "zh-CN" ? " active" : ""}`}
+                onClick={() => setLocale("zh-CN")}
+                aria-pressed={locale === "zh-CN"}
+              >
+                中文
+              </button>
+              <button
+                type="button"
+                className={`language-button${locale === "en" ? " active" : ""}`}
+                onClick={() => setLocale("en")}
+                aria-pressed={locale === "en"}
+              >
+                EN
+              </button>
+            </div>
           </div>
         </div>
       </aside>
 
       <motion.div
         className="studio-main"
-        initial={{ opacity: 0, y: 10 }}
+        initial={false}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
       >

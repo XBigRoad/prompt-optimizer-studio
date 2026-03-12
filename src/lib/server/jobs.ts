@@ -47,6 +47,7 @@ export async function createJobs(inputs: JobInput[]) {
     }
 
     const models = resolveJobModels(input, settings)
+    const normalizedCustomRubric = typeof input.customRubricMd === 'string' ? input.customRubricMd.trim() : ''
     const assignment = assignConversationGroup(settings.conversationPolicy, groups)
     if (assignment.group) {
       upsertConversationGroup(db, assignment.group)
@@ -88,10 +89,11 @@ export async function createJobs(inputs: JobInput[]) {
         conversation_group_id,
         cancel_requested_at,
         pause_requested_at,
+        custom_rubric_md,
         error_message,
         created_at,
         updated_at
-      ) VALUES (?, ?, ?, ?, ?, NULL, NULL, 'pending', 'auto', ?, 0, 0, ?, ?, NULL, NULL, NULL, '[]', 0, 0, '[]', NULL, ?, ?, NULL, NULL, NULL, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, NULL, NULL, 'pending', 'auto', ?, 0, 0, ?, ?, NULL, NULL, NULL, '[]', 0, 0, '[]', NULL, ?, ?, NULL, NULL, ?, NULL, ?, ?)
     `).run(
       id,
       normalizeTitle(input.title, normalizedPrompt),
@@ -103,6 +105,7 @@ export async function createJobs(inputs: JobInput[]) {
       serializeGoalAnchorExplanation(goalAnchor.explanation),
       settings.conversationPolicy,
       assignment.group?.id ?? null,
+      normalizedCustomRubric || null,
       now,
       now,
     )
@@ -144,6 +147,7 @@ export function listJobs() {
       jobs.conversation_group_id,
       jobs.cancel_requested_at,
       jobs.pause_requested_at,
+      jobs.custom_rubric_md,
       jobs.error_message,
       jobs.created_at,
       jobs.updated_at
@@ -153,7 +157,7 @@ export function listJobs() {
         SELECT candidates.id
         FROM candidates
         WHERE candidates.job_id = jobs.id
-        ORDER BY candidates.round_number DESC
+        ORDER BY candidates.round_number DESC, datetime(candidates.created_at) DESC
         LIMIT 1
       )
     ORDER BY datetime(jobs.created_at) DESC
@@ -193,6 +197,7 @@ export function getJobById(id: string) {
       jobs.conversation_group_id,
       jobs.cancel_requested_at,
       jobs.pause_requested_at,
+      jobs.custom_rubric_md,
       jobs.error_message,
       jobs.created_at,
       jobs.updated_at
@@ -202,7 +207,7 @@ export function getJobById(id: string) {
         SELECT candidates.id
         FROM candidates
         WHERE candidates.job_id = jobs.id
-        ORDER BY candidates.round_number DESC
+        ORDER BY candidates.round_number DESC, datetime(candidates.created_at) DESC
         LIMIT 1
       )
     WHERE jobs.id = ?
@@ -235,7 +240,7 @@ export function getJobDetail(id: string): JobDetail | null {
       created_at
     FROM candidates
     WHERE job_id = ?
-    ORDER BY round_number DESC
+    ORDER BY round_number DESC, datetime(created_at) DESC
   `).all(id) as Record<string, unknown>[]
 
   const judgeRows = db.prepare(`
@@ -265,9 +270,11 @@ export function getJobDetail(id: string): JobDetail | null {
     judgesByCandidate.set(judge.candidateId, list)
   }
 
+  const collapsedCandidateRows = collapseCandidateRowsByRound(candidateRows)
+
   return {
     job,
-    candidates: candidateRows.map((row) => {
+    candidates: collapsedCandidateRows.map((row) => {
       const candidate = mapCandidateRow(row)
       return {
         ...candidate,
@@ -330,6 +337,28 @@ export function updateJobMaxRoundsOverride(jobId: string, maxRoundsOverride: num
         updated_at = ?
     WHERE id = ?
   `).run(normalizeMaxRoundsOverride(maxRoundsOverride), new Date().toISOString(), jobId)
+
+  return requireJob(jobId)
+}
+
+export function updateJobCustomRubricMd(jobId: string, customRubricMd: string | null) {
+  const job = requireJob(jobId)
+  if (job.status === 'completed') {
+    throw new Error('已完成任务不能修改任务级评分标准。')
+  }
+
+  if (job.status === 'cancelled') {
+    throw new Error('已取消任务不能修改任务级评分标准。')
+  }
+
+  const normalizedRubric = typeof customRubricMd === 'string' ? customRubricMd.trim() : ''
+  const db = getDb()
+  db.prepare(`
+    UPDATE jobs
+    SET custom_rubric_md = ?,
+        updated_at = ?
+    WHERE id = ?
+  `).run(normalizedRubric || null, new Date().toISOString(), jobId)
 
   return requireJob(jobId)
 }
@@ -607,7 +636,7 @@ export function completeJob(jobId: string) {
     SELECT id
     FROM candidates
     WHERE job_id = ?
-    ORDER BY round_number DESC
+    ORDER BY round_number DESC, datetime(created_at) DESC
     LIMIT 1
   `).get(jobId) as { id?: string } | undefined
 
@@ -739,10 +768,10 @@ export function getOptimizerSeed(jobId: string) {
   const job = requireJob(jobId)
   const db = getDb()
   const candidate = db.prepare(`
-    SELECT optimized_prompt
+    SELECT round_number, optimized_prompt
     FROM candidates
     WHERE job_id = ?
-    ORDER BY round_number DESC
+    ORDER BY round_number DESC, datetime(created_at) DESC
     LIMIT 1
   `).get(jobId) as Record<string, unknown> | undefined
 
@@ -750,6 +779,7 @@ export function getOptimizerSeed(jobId: string) {
 
   return {
     currentPrompt: candidate ? String(candidate.optimized_prompt) : job.rawPrompt,
+    latestRoundNumber: candidate ? Number(candidate.round_number ?? 0) : 0,
     previousFeedback: job.lastReviewPatch,
     goalAnchor: job.goalAnchor,
     pendingSteeringItems: job.pendingSteeringItems,
@@ -771,16 +801,104 @@ export function createCandidateWithJudges(jobId: string, input: {
   appliedSteeringItems?: SteeringItem[]
   judgments: JudgeRunRecord[]
 }) {
+  validateCandidateWriteInput(input)
+
+  const db = getDb()
+  const candidateId = crypto.randomUUID()
+  const createdAt = new Date().toISOString()
+  insertCandidateAndJudgments(db, jobId, candidateId, input.roundNumber, input, createdAt)
+  return candidateId
+}
+
+export function createCandidateWithJudgesForActiveWorker(jobId: string, workerOwnerId: string, input: {
+  optimizedPrompt: string
+  strategy: 'preserve' | 'rebuild'
+  scoreBefore: number
+  averageScore: number
+  majorChanges: string[]
+  mve: string
+  deadEndSignals: string[]
+  aggregatedIssues: string[]
+  appliedSteeringItems?: SteeringItem[]
+  judgments: JudgeRunRecord[]
+}) {
+  validateCandidateWriteInput(input)
+
+  const db = getDb()
+  const candidateId = crypto.randomUUID()
+  const createdAt = new Date().toISOString()
+  let transactionOpen = false
+
+  try {
+    db.exec('BEGIN IMMEDIATE')
+    transactionOpen = true
+
+    const jobRow = db.prepare(`
+      SELECT status, active_worker_id, current_round
+      FROM jobs
+      WHERE id = ?
+    `).get(jobId) as { status?: string; active_worker_id?: string | null; current_round?: number } | undefined
+
+    if (!jobRow || String(jobRow.status ?? '') !== 'running' || String(jobRow.active_worker_id ?? '') !== workerOwnerId) {
+      db.exec('ROLLBACK')
+      transactionOpen = false
+      return null
+    }
+
+    const maxRoundRow = db.prepare(`
+      SELECT COALESCE(MAX(round_number), 0) AS max_round
+      FROM candidates
+      WHERE job_id = ?
+    `).get(jobId) as { max_round?: number } | undefined
+
+    const nextRound = Math.max(Number(jobRow.current_round ?? 0), Number(maxRoundRow?.max_round ?? 0)) + 1
+    insertCandidateAndJudgments(db, jobId, candidateId, nextRound, input, createdAt)
+
+    db.exec('COMMIT')
+    transactionOpen = false
+    return { candidateId, roundNumber: nextRound }
+  } catch (error) {
+    if (transactionOpen) {
+      try {
+        db.exec('ROLLBACK')
+      } catch {
+      }
+    }
+    throw error
+  }
+}
+
+function validateCandidateWriteInput(input: {
+  scoreBefore: number
+  averageScore: number
+  judgments: JudgeRunRecord[]
+}) {
   assertFiniteScore(input.scoreBefore, 'scoreBefore')
   assertFiniteScore(input.averageScore, 'averageScore')
   for (const judgment of input.judgments) {
     assertFiniteScore(judgment.score, `judgments[${judgment.judgeIndex}].score`)
   }
+}
 
-  const db = getDb()
-  const candidateId = crypto.randomUUID()
-  const createdAt = new Date().toISOString()
-
+function insertCandidateAndJudgments(
+  db: DatabaseSync,
+  jobId: string,
+  candidateId: string,
+  roundNumber: number,
+  input: {
+    optimizedPrompt: string
+    strategy: 'preserve' | 'rebuild'
+    scoreBefore: number
+    averageScore: number
+    majorChanges: string[]
+    mve: string
+    deadEndSignals: string[]
+    aggregatedIssues: string[]
+    appliedSteeringItems?: SteeringItem[]
+    judgments: JudgeRunRecord[]
+  },
+  createdAt: string,
+) {
   db.prepare(`
     INSERT INTO candidates (
       id,
@@ -800,7 +918,7 @@ export function createCandidateWithJudges(jobId: string, input: {
   `).run(
     candidateId,
     jobId,
-    input.roundNumber,
+    roundNumber,
     input.optimizedPrompt,
     input.strategy,
     input.scoreBefore,
@@ -844,8 +962,6 @@ export function createCandidateWithJudges(jobId: string, input: {
       judgment.createdAt,
     )
   }
-
-  return candidateId
 }
 
 export function updateJobProgress(jobId: string, input: {
@@ -1270,10 +1386,28 @@ function mapJobRow(row: Record<string, unknown>): JobRecord {
     conversationGroupId: row.conversation_group_id ? String(row.conversation_group_id) : null,
     cancelRequestedAt: row.cancel_requested_at ? String(row.cancel_requested_at) : null,
     pauseRequestedAt: row.pause_requested_at ? String(row.pause_requested_at) : null,
+    customRubricMd: row.custom_rubric_md ? String(row.custom_rubric_md) : null,
     errorMessage: row.error_message ? String(row.error_message) : null,
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at),
   }
+}
+
+function collapseCandidateRowsByRound(rows: Record<string, unknown>[]) {
+  const seenRounds = new Set<number>()
+  const result: Record<string, unknown>[] = []
+
+  for (const row of rows) {
+    const roundNumber = Number(row.round_number)
+    if (seenRounds.has(roundNumber)) {
+      continue
+    }
+
+    seenRounds.add(roundNumber)
+    result.push(row)
+  }
+
+  return result
 }
 
 function mapCandidateRow(row: Record<string, unknown>): CandidateRecord {

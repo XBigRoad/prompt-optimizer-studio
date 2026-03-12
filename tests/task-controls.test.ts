@@ -91,6 +91,14 @@ test('job controls support cancel, next-round model updates, and legacy error ma
     assert.equal(scheduled.pendingOptimizerModel, 'gpt-5.4')
     assert.equal(getJobDisplayError(scheduled.errorMessage), '这是旧版本遗留失败记录。现在可以直接修改模型后重新开始。')
     assert.equal(getJobDisplayError('候选稿分数字段无效：scoreBefore'), '模型本轮返回了无效分数，系统已拦截这次结果写入。请直接重试；若反复出现，建议更换模型或稍后再试。')
+    assert.equal(
+      getJobDisplayError("Expected ',' or ']' after array element in JSON at position 14184 (line 31 column 1)"),
+      '模型返回了格式不完整的结构化结果，系统没法继续解析这一轮。请直接重试；若反复出现，建议补充更明确的格式要求，或切换模型后再试。',
+    )
+    assert.equal(
+      getJobDisplayError("Expected ',' or ']' after array element in JSON at position 14184 (line 31 column 1)", 'en'),
+      'The model returned an incomplete structured result, so this round could not be parsed. Retry directly; if it keeps happening, tighten the format requirement or switch models.',
+    )
 
     const cancelled = cancelJob(runningJob.id)
     assert.equal(cancelled.status, 'running')
@@ -116,6 +124,55 @@ test('job controls support cancel, next-round model updates, and legacy error ma
 
     const listedPending = listJobs().find((job) => job.id === pendingJob.id)
     assert.equal(listedPending?.latestPrompt, 'A')
+  } finally {
+    process.chdir(originalCwd)
+    global.fetch = originalFetch
+    if (originalDbPath === undefined) {
+      delete process.env.PROMPT_OPTIMIZER_DB_PATH
+    } else {
+      process.env.PROMPT_OPTIMIZER_DB_PATH = originalDbPath
+    }
+  }
+})
+
+
+test('createJobs persists a task-level rubric override from job input', async () => {
+  const originalCwd = process.cwd()
+  const originalDbPath = process.env.PROMPT_OPTIMIZER_DB_PATH
+  const originalFetch = global.fetch
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'po-create-job-rubric-'))
+  process.env.PROMPT_OPTIMIZER_DB_PATH = path.join(tempDir, 'test.db')
+  process.chdir(tempDir)
+
+  try {
+    const { resetDbForTests } = await import('../src/lib/server/db')
+    resetDbForTests()
+    const { saveSettings } = await import('../src/lib/server/settings')
+    const { createJobs, getJobById } = await import('../src/lib/server/jobs')
+
+    saveSettings({
+      cpamcBaseUrl: 'http://localhost:8317/v1',
+      cpamcApiKey: 'secret',
+      defaultOptimizerModel: 'gpt-5.2',
+      defaultJudgeModel: 'gpt-5.2',
+    })
+
+    global.fetch = (async () => {
+      throw new Error('simulated goal anchor generation failure')
+    }) as typeof fetch
+
+    const [job] = await createJobs([
+      {
+        title: 'Create job rubric',
+        rawPrompt: 'Prompt',
+        optimizerModel: 'gpt-5.2',
+        judgeModel: 'gpt-5.2',
+        customRubricMd: '# 任务级评分标准\n\n1. 保持原意 (50)',
+      },
+    ])
+
+    assert.equal(job.customRubricMd, '# 任务级评分标准\n\n1. 保持原意 (50)')
+    assert.equal(getJobById(job.id)?.customRubricMd, '# 任务级评分标准\n\n1. 保持原意 (50)')
   } finally {
     process.chdir(originalCwd)
     global.fetch = originalFetch
@@ -776,6 +833,382 @@ test('job detail route builds a goal-anchor draft from selected steering ids onl
     assert.deepEqual(payload.consumePendingSteeringIds, [selectedId])
     assert.equal(payload.goalAnchorDraft.driftGuard.some((item) => item.includes('不要丢掉原始结论。')), true)
     assert.equal(payload.goalAnchorDraft.driftGuard.some((item) => item.includes('语气更直接。')), false)
+  } finally {
+    process.chdir(originalCwd)
+    global.fetch = originalFetch
+    if (originalDbPath === undefined) {
+      delete process.env.PROMPT_OPTIMIZER_DB_PATH
+    } else {
+      process.env.PROMPT_OPTIMIZER_DB_PATH = originalDbPath
+    }
+  }
+})
+
+test('job detail route persists a single-task rubric override', async () => {
+  const originalCwd = process.cwd()
+  const originalDbPath = process.env.PROMPT_OPTIMIZER_DB_PATH
+  const originalFetch = global.fetch
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'po-controls-job-rubric-'))
+  process.env.PROMPT_OPTIMIZER_DB_PATH = path.join(tempDir, 'test.db')
+  process.chdir(tempDir)
+
+  try {
+    const { resetDbForTests } = await import('../src/lib/server/db')
+    resetDbForTests()
+    const { saveSettings } = await import('../src/lib/server/settings')
+    const { createJobs, getJobById } = await import('../src/lib/server/jobs')
+    const route = await import('../src/app/api/jobs/[id]/route')
+
+    saveSettings({
+      cpamcBaseUrl: 'http://localhost:8317/v1',
+      cpamcApiKey: 'secret',
+      defaultOptimizerModel: 'gpt-5.2',
+      defaultJudgeModel: 'gpt-5.2',
+      customRubricMd: '# 全局评分标准',
+    })
+
+    global.fetch = (async () => {
+      throw new Error('simulated goal anchor generation failure')
+    }) as typeof fetch
+
+    const [job] = await createJobs([
+      { title: 'Job rubric override', rawPrompt: 'Prompt', optimizerModel: 'gpt-5.2', judgeModel: 'gpt-5.2' },
+    ])
+
+    const response = await route.PATCH(
+      new Request(`http://localhost/api/jobs/${job.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customRubricMd: '# 单任务评分标准\n\n1. 输出契约明确度 (20)',
+        }),
+      }),
+      { params: Promise.resolve({ id: job.id }) },
+    )
+
+    assert.equal(response.status, 200)
+    const payload = await response.json() as { job: { customRubricMd: string | null } }
+    assert.equal(payload.job.customRubricMd, '# 单任务评分标准\n\n1. 输出契约明确度 (20)')
+    assert.equal(getJobById(job.id)?.customRubricMd, '# 单任务评分标准\n\n1. 输出契约明确度 (20)')
+  } finally {
+    process.chdir(originalCwd)
+    global.fetch = originalFetch
+    if (originalDbPath === undefined) {
+      delete process.env.PROMPT_OPTIMIZER_DB_PATH
+    } else {
+      process.env.PROMPT_OPTIMIZER_DB_PATH = originalDbPath
+    }
+  }
+})
+
+test('job rubric route resolves job override before settings and default', async () => {
+  const originalCwd = process.cwd()
+  const originalDbPath = process.env.PROMPT_OPTIMIZER_DB_PATH
+  const originalFetch = global.fetch
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'po-job-rubric-route-'))
+  process.env.PROMPT_OPTIMIZER_DB_PATH = path.join(tempDir, 'test.db')
+  process.chdir(tempDir)
+
+  try {
+    const { resetDbForTests } = await import('../src/lib/server/db')
+    resetDbForTests()
+    const { saveSettings } = await import('../src/lib/server/settings')
+    const { createJobs } = await import('../src/lib/server/jobs')
+    const route = await import('../src/app/api/jobs/[id]/rubric/route')
+
+    saveSettings({
+      cpamcBaseUrl: 'http://localhost:8317/v1',
+      cpamcApiKey: 'secret',
+      defaultOptimizerModel: 'gpt-5.2',
+      defaultJudgeModel: 'gpt-5.2',
+      customRubricMd: '# 全局评分标准',
+    })
+
+    global.fetch = (async () => {
+      throw new Error('simulated goal anchor generation failure')
+    }) as typeof fetch
+
+    const [job] = await createJobs([
+      {
+        title: 'Job rubric route',
+        rawPrompt: 'Prompt',
+        optimizerModel: 'gpt-5.2',
+        judgeModel: 'gpt-5.2',
+      },
+    ])
+
+    const updateRoute = await import('../src/app/api/jobs/[id]/route')
+    await updateRoute.PATCH(
+      new Request(`http://localhost/api/jobs/${job.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customRubricMd: '# 单任务评分标准' }),
+      }),
+      { params: Promise.resolve({ id: job.id }) },
+    )
+
+    const response = await route.GET(
+      new Request(`http://localhost/api/jobs/${job.id}/rubric`),
+      { params: Promise.resolve({ id: job.id }) },
+    )
+    const payload = await response.json() as { rubricMd: string; source: string }
+    assert.equal(response.status, 200)
+    assert.equal(payload.source, 'job')
+    assert.equal(payload.rubricMd, '# 单任务评分标准')
+  } finally {
+    process.chdir(originalCwd)
+    global.fetch = originalFetch
+    if (originalDbPath === undefined) {
+      delete process.env.PROMPT_OPTIMIZER_DB_PATH
+    } else {
+      process.env.PROMPT_OPTIMIZER_DB_PATH = originalDbPath
+    }
+  }
+})
+
+
+test('getJobDetail collapses duplicate round numbers and keeps the latest candidate for each round', async () => {
+  const originalCwd = process.cwd()
+  const originalDbPath = process.env.PROMPT_OPTIMIZER_DB_PATH
+  const originalFetch = global.fetch
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'po-controls-round-dedupe-'))
+  process.env.PROMPT_OPTIMIZER_DB_PATH = path.join(tempDir, 'test.db')
+  process.chdir(tempDir)
+
+  try {
+    const { resetDbForTests, getDb } = await import('../src/lib/server/db')
+    resetDbForTests()
+    const { saveSettings } = await import('../src/lib/server/settings')
+    const { createJobs, getJobDetail, getJobById } = await import('../src/lib/server/jobs')
+
+    saveSettings({
+      cpamcBaseUrl: 'http://localhost:8317/v1',
+      cpamcApiKey: 'secret',
+      defaultOptimizerModel: 'gpt-5.2',
+      defaultJudgeModel: 'gpt-5.2',
+    })
+
+    global.fetch = (async () => {
+      throw new Error('simulated goal anchor generation failure')
+    }) as typeof fetch
+
+    const [job] = await createJobs([
+      { title: 'Round dedupe job', rawPrompt: 'Prompt', optimizerModel: 'gpt-5.2', judgeModel: 'gpt-5.2' },
+    ])
+
+    const db = getDb()
+    const earlyId = crypto.randomUUID()
+    const lateId = crypto.randomUUID()
+
+    db.prepare(`
+      INSERT INTO candidates (
+        id,
+        job_id,
+        round_number,
+        optimized_prompt,
+        strategy,
+        score_before,
+        average_score,
+        major_changes_json,
+        mve,
+        dead_end_signals_json,
+        aggregated_issues_json,
+        created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      earlyId,
+      job.id,
+      1,
+      'OLDER ROUND 1 PROMPT',
+      'preserve',
+      80,
+      88,
+      '[]',
+      'mve',
+      '[]',
+      '[]',
+      '2026-03-09T10:00:00.000Z',
+    )
+
+    db.prepare(`
+      INSERT INTO candidates (
+        id,
+        job_id,
+        round_number,
+        optimized_prompt,
+        strategy,
+        score_before,
+        average_score,
+        major_changes_json,
+        mve,
+        dead_end_signals_json,
+        aggregated_issues_json,
+        created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      lateId,
+      job.id,
+      1,
+      'NEWER ROUND 1 PROMPT',
+      'preserve',
+      81,
+      90,
+      '[]',
+      'mve',
+      '[]',
+      '[]',
+      '2026-03-09T10:05:00.000Z',
+    )
+
+    const detail = getJobDetail(job.id)
+    assert.equal(detail?.candidates.length, 1)
+    assert.equal(detail?.candidates[0]?.roundNumber, 1)
+    assert.equal(detail?.candidates[0]?.optimizedPrompt, 'NEWER ROUND 1 PROMPT')
+    assert.equal(getJobById(job.id)?.latestPrompt, 'NEWER ROUND 1 PROMPT')
+  } finally {
+    process.chdir(originalCwd)
+    global.fetch = originalFetch
+    if (originalDbPath === undefined) {
+      delete process.env.PROMPT_OPTIMIZER_DB_PATH
+    } else {
+      process.env.PROMPT_OPTIMIZER_DB_PATH = originalDbPath
+    }
+  }
+})
+
+
+test('worker round writer derives the next round from the highest stored candidate and active lease', async () => {
+  const originalCwd = process.cwd()
+  const originalDbPath = process.env.PROMPT_OPTIMIZER_DB_PATH
+  const originalFetch = global.fetch
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'po-worker-round-write-'))
+  process.env.PROMPT_OPTIMIZER_DB_PATH = path.join(tempDir, 'test.db')
+  process.chdir(tempDir)
+
+  try {
+    const { resetDbForTests, getDb } = await import('../src/lib/server/db')
+    resetDbForTests()
+    const { saveSettings } = await import('../src/lib/server/settings')
+    const { createJobs, createCandidateWithJudgesForActiveWorker } = await import('../src/lib/server/jobs')
+
+    saveSettings({
+      cpamcBaseUrl: 'http://localhost:8317/v1',
+      cpamcApiKey: 'secret',
+      defaultOptimizerModel: 'gpt-5.2',
+      defaultJudgeModel: 'gpt-5.2',
+    })
+
+    global.fetch = (async () => {
+      throw new Error('simulated goal anchor generation failure')
+    }) as typeof fetch
+
+    const [job] = await createJobs([
+      { title: 'Worker round writer', rawPrompt: 'Prompt', optimizerModel: 'gpt-5.2', judgeModel: 'gpt-5.2' },
+    ])
+
+    const db = getDb()
+    db.prepare(`
+      UPDATE jobs
+      SET status = 'running',
+          active_worker_id = 'worker-a',
+          current_round = 1,
+          updated_at = ?
+      WHERE id = ?
+    `).run(new Date().toISOString(), job.id)
+
+    db.prepare(`
+      INSERT INTO candidates (
+        id,
+        job_id,
+        round_number,
+        optimized_prompt,
+        strategy,
+        score_before,
+        average_score,
+        major_changes_json,
+        mve,
+        dead_end_signals_json,
+        aggregated_issues_json,
+        applied_steering_json,
+        created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      crypto.randomUUID(),
+      job.id,
+      2,
+      'EXISTING ROUND 2',
+      'preserve',
+      80,
+      88,
+      '[]',
+      'mve',
+      '[]',
+      '[]',
+      '[]',
+      '2026-03-09T10:00:00.000Z',
+    )
+
+    const committed = createCandidateWithJudgesForActiveWorker(job.id, 'worker-a', {
+      optimizedPrompt: 'NEW ROUND 3',
+      strategy: 'preserve',
+      scoreBefore: 88,
+      averageScore: 91,
+      majorChanges: ['keep structure'],
+      mve: 'mve',
+      deadEndSignals: [],
+      aggregatedIssues: [],
+      appliedSteeringItems: [],
+      judgments: [
+        {
+          id: crypto.randomUUID(),
+          jobId: job.id,
+          candidateId: '',
+          judgeIndex: 0,
+          score: 91,
+          hasMaterialIssues: false,
+          summary: 'ok',
+          driftLabels: [],
+          driftExplanation: '',
+          findings: [],
+          suggestedChanges: [],
+          createdAt: new Date().toISOString(),
+        },
+      ],
+    })
+
+    assert.equal(committed?.roundNumber, 3)
+
+    const blocked = createCandidateWithJudgesForActiveWorker(job.id, 'worker-b', {
+      optimizedPrompt: 'SHOULD NOT WRITE',
+      strategy: 'preserve',
+      scoreBefore: 90,
+      averageScore: 92,
+      majorChanges: [],
+      mve: 'mve',
+      deadEndSignals: [],
+      aggregatedIssues: [],
+      appliedSteeringItems: [],
+      judgments: [
+        {
+          id: crypto.randomUUID(),
+          jobId: job.id,
+          candidateId: '',
+          judgeIndex: 0,
+          score: 92,
+          hasMaterialIssues: false,
+          summary: 'blocked',
+          driftLabels: [],
+          driftExplanation: '',
+          findings: [],
+          suggestedChanges: [],
+          createdAt: new Date().toISOString(),
+        },
+      ],
+    })
+
+    assert.equal(blocked, null)
+    const maxRound = db.prepare(`SELECT MAX(round_number) AS max_round FROM candidates WHERE job_id = ?`).get(job.id) as { max_round?: number }
+    assert.equal(maxRound.max_round, 3)
   } finally {
     process.chdir(originalCwd)
     global.fetch = originalFetch

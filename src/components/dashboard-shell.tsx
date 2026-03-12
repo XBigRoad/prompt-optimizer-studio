@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { DashboardControlRoom } from '@/components/dashboard-control-room'
 import { ModelAliasCombobox } from '@/components/ui/model-alias-combobox'
 import { StudioFrame } from '@/components/studio-frame'
+import { useI18n, useLocaleText } from '@/lib/i18n'
 import { focusDashboardJobs, getJobDisplayError, partitionDashboardJobs } from '@/lib/presentation'
 
 type JobStatus = 'pending' | 'running' | 'paused' | 'completed' | 'failed' | 'manual_review' | 'cancelled'
@@ -35,6 +36,7 @@ interface DraftJob {
   title: string
   rawPrompt: string
   taskModel: string
+  customRubricMd: string
 }
 
 interface SettingsPayload {
@@ -50,10 +52,13 @@ function createEmptyDraft(defaults?: SettingsPayload): DraftJob {
     title: '',
     rawPrompt: '',
     taskModel: defaultTaskModel,
+    customRubricMd: '',
   }
 }
 
 export function DashboardShell() {
+  const text = useLocaleText()
+  const { locale } = useI18n()
   const [jobs, setJobs] = useState<JobRecord[]>([])
   const [models, setModels] = useState<ModelOption[]>([])
   const [settings, setSettings] = useState<SettingsPayload>({
@@ -85,10 +90,10 @@ export function DashboardShell() {
         const modelsPayload = await modelsResponse.json()
 
         if (!jobsResponse.ok) {
-          throw new Error(jobsPayload.error ?? 'Failed to load jobs.')
+          throw new Error(jobsPayload.error ?? text('任务列表加载失败。', 'Failed to load jobs.'))
         }
         if (!settingsResponse.ok) {
-          throw new Error(settingsPayload.error ?? 'Failed to load settings.')
+          throw new Error(settingsPayload.error ?? text('设置加载失败。', 'Failed to load settings.'))
         }
 
         if (!cancelled) {
@@ -109,7 +114,7 @@ export function DashboardShell() {
         }
       } catch (loadError) {
         if (!cancelled) {
-          setError(loadError instanceof Error ? loadError.message : 'Failed to load dashboard.')
+          setError(loadError instanceof Error ? loadError.message : text('控制室加载失败。', 'Failed to load dashboard.'))
         }
       } finally {
         if (!cancelled) {
@@ -127,7 +132,7 @@ export function DashboardShell() {
       cancelled = true
       clearInterval(timer)
     }
-  }, [])
+  }, [text])
 
   const groupedJobs = useMemo(() => partitionDashboardJobs(jobs), [jobs])
   const visibleGroups = useMemo(() => focusDashboardJobs(groupedJobs, actionableOnly), [groupedJobs, actionableOnly])
@@ -153,11 +158,12 @@ export function DashboardShell() {
         rawPrompt: draft.rawPrompt.trim(),
         optimizerModel: draft.taskModel.trim(),
         judgeModel: draft.taskModel.trim(),
+        customRubricMd: draft.customRubricMd.trim() || undefined,
       }))
       .filter((draft) => draft.rawPrompt)
 
     if (payload.length === 0) {
-      setError('至少填写一个初版提示词。')
+      setError(text('至少填写一个初版提示词。', 'Add at least one initial prompt.'))
       return
     }
 
@@ -170,15 +176,15 @@ export function DashboardShell() {
       })
       const result = await response.json()
       if (!response.ok) {
-        throw new Error(result.error ?? 'Failed to create jobs.')
+        throw new Error(result.error ?? text('创建任务失败。', 'Failed to create jobs.'))
       }
       setDrafts([createEmptyDraft(settings)])
       setJobs((current) => [...result.jobs, ...current])
       setError(null)
-      setActionMessage('新任务已送入控制室。')
+      setActionMessage(text('新任务已送入控制室。', 'New jobs were sent to the control room.'))
       setSubmissionExpanded(false)
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : 'Failed to create jobs.')
+      setError(submitError instanceof Error ? submitError.message : text('创建任务失败。', 'Failed to create jobs.'))
       setActionMessage(null)
     } finally {
       setSubmitting(false)
@@ -188,10 +194,10 @@ export function DashboardShell() {
   async function copyLatestPrompt(job: JobRecord) {
     try {
       await navigator.clipboard.writeText(job.latestPrompt)
-      setActionMessage(`已复制「${job.title}」的最新提示词。`)
+      setActionMessage(text(`已复制「${job.title}」的最新提示词。`, `Copied the latest prompt from "${job.title}".`))
       setError(null)
     } catch (copyError) {
-      setError(copyError instanceof Error ? copyError.message : '复制失败。')
+      setError(copyError instanceof Error ? copyError.message : text('复制失败。', 'Copy failed.'))
       setActionMessage(null)
     }
   }
@@ -202,13 +208,13 @@ export function DashboardShell() {
       const response = await fetch(`/api/jobs/${job.id}/resume-step`, { method: 'POST' })
       const payload = await response.json()
       if (!response.ok) {
-        throw new Error(payload.error ?? 'Resume step failed.')
+        throw new Error(payload.error ?? text('继续一轮失败。', 'Resume step failed.'))
       }
       setJobs((current) => current.map((item) => (item.id === job.id ? payload.job : item)))
-      setActionMessage(`「${job.title}」将继续一轮，完成后自动回到暂停。`)
+      setActionMessage(text(`「${job.title}」将继续一轮，完成后自动回到暂停。`, `"${job.title}" will run one more round and pause again after it finishes.`))
       setError(null)
     } catch (resumeError) {
-      setError(resumeError instanceof Error ? resumeError.message : 'Resume step failed.')
+      setError(resumeError instanceof Error ? resumeError.message : text('继续一轮失败。', 'Resume step failed.'))
       setActionMessage(null)
     } finally {
       setActionInFlight(null)
@@ -221,68 +227,52 @@ export function DashboardShell() {
       const response = await fetch(`/api/jobs/${job.id}/resume-auto`, { method: 'POST' })
       const payload = await response.json()
       if (!response.ok) {
-        throw new Error(payload.error ?? 'Resume auto failed.')
+        throw new Error(payload.error ?? text('恢复自动运行失败。', 'Resume auto failed.'))
       }
       setJobs((current) => current.map((item) => (item.id === job.id ? payload.job : item)))
-      setActionMessage(`「${job.title}」已恢复自动运行。`)
+      setActionMessage(text(`「${job.title}」已恢复自动运行。`, `"${job.title}" resumed automatic execution.`))
       setError(null)
     } catch (resumeError) {
-      setError(resumeError instanceof Error ? resumeError.message : 'Resume auto failed.')
+      setError(resumeError instanceof Error ? resumeError.message : text('恢复自动运行失败。', 'Resume auto failed.'))
       setActionMessage(null)
     } finally {
       setActionInFlight(null)
     }
   }
 
-  return (
-    <main>
-      <StudioFrame title="任务控制室" currentPath="/">
-        <motion.div
-          className="shell"
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-        >
-          <DashboardControlRoom
-            actionableOnly={actionableOnly}
-            loading={loading}
-            groups={controlRoomGroups}
-            stats={controlRoomStats}
-            actionInFlight={actionInFlight}
-            onToggleActionableOnly={() => setActionableOnly((current) => !current)}
-            onCopyPrompt={copyLatestPrompt}
-            onResumeStep={resumeStep}
-            onResumeAuto={resumeAuto}
-          />
-
-          <section className={`panel submission-station${submissionExpanded ? ' expanded' : ' collapsed'}`}>
-            <div className="section-head">
-              <div>
-                <span className="eyebrow"><Plus size={16} /> 投递台</span>
-                <h2 className="section-title">批量投递新任务</h2>
-                <p className="small">先处理控制室，再按需展开录入新任务。</p>
-              </div>
-              <div className="button-row">
-                <button className="button ghost" type="button" onClick={() => setSubmissionExpanded((current) => !current)}>
-                  <ChevronDown size={16} className={submissionExpanded ? 'rotate-180' : ''} />
-                  {submissionExpanded ? '收起投递台' : '展开投递台'}
-                </button>
-                {submissionExpanded ? (
-                  <>
-                    <button className="button ghost" type="button" onClick={() => setDrafts((current) => [...current, createEmptyDraft(settings)])}>
-                      新增一条
-                    </button>
-                    <button className="button primary-action" type="button" onClick={submitJobs} disabled={submitting}>
-                      <SendHorizontal size={16} /> {submitting ? '提交中...' : '提交到队列'}
-                    </button>
-                  </>
-                ) : (
-                  <button className="button primary-action" type="button" onClick={() => setSubmissionExpanded(true)}>
-                    <Plus size={16} /> 新增任务
-                  </button>
-                )}
-              </div>
-            </div>
+  const submissionStation = (
+	      <section className={`panel submission-station${submissionExpanded ? ' expanded' : ' collapsed'}`}>
+	            <div className="section-head">
+	              <div>
+	                <span className="eyebrow"><Plus size={16} /> {text('投递台', 'Submission station')}</span>
+	                <h2 className="section-title">
+	                  {submissionExpanded ? text('批量投递新任务', 'Submit new jobs') : text('投递新任务', 'Submit a new job')}
+	                </h2>
+	                {submissionExpanded ? (
+	                  <p className="small">{text('需要时再展开即可，不必占满首屏。', 'Expand only when you need to submit new work.')}</p>
+	                ) : null}
+	              </div>
+	              <div className="button-row">
+	                {submissionExpanded ? (
+	                  <>
+	                    <button className="button ghost" type="button" onClick={() => setSubmissionExpanded(false)}>
+	                      <ChevronDown size={16} className="rotate-180" />
+	                      {text('收起投递台', 'Collapse submission')}
+	                    </button>
+	                    <button className="button ghost" type="button" onClick={() => setDrafts((current) => [...current, createEmptyDraft(settings)])}>
+	                      {text('新增一条', 'Add another')}
+	                    </button>
+	                    <button className="button primary-action" type="button" onClick={submitJobs} disabled={submitting}>
+	                      <SendHorizontal size={16} /> {submitting ? text('提交中...', 'Submitting...') : text('提交到队列', 'Send to queue')}
+	                    </button>
+	                  </>
+	                ) : (
+	                  <button className="button primary-action" type="button" onClick={() => setSubmissionExpanded(true)}>
+	                    <Plus size={16} /> {text('新增任务', 'New job')}
+	                  </button>
+	                )}
+	              </div>
+	            </div>
 
             <AnimatePresence initial={false}>
               {submissionExpanded ? (
@@ -297,25 +287,39 @@ export function DashboardShell() {
                     {drafts.map((draft, index) => (
                       <div className="draft-card control-card subdued" key={draft.id}>
                         <div className="card-topline">
-                          <span className="status pending">草稿 {index + 1}</span>
+                          <span className="status pending">{text('草稿', 'Draft')} {index + 1}</span>
                         </div>
                         <label className="label">
-                          标题
-                          <input className="input" value={draft.title} onChange={(event) => updateDraft(setDrafts, draft.id, 'title', event.target.value)} placeholder="例如：医疗分诊控制台" />
+                          {text('标题', 'Title')}
+                          <input className="input" value={draft.title} onChange={(event) => updateDraft(setDrafts, draft.id, 'title', event.target.value)} placeholder={text('例如：医疗分诊控制台', 'For example: medical triage console')} />
                         </label>
                         <ModelAliasCombobox
                           inputId={`draft-${draft.id}-task-model`}
-                          label="任务模型别名（optimizer/reviewer 共用）"
+                          label={text('任务模型', 'Task model')}
                           value={draft.taskModel}
                           options={models}
-                          placeholder={settings.defaultOptimizerModel || settings.defaultJudgeModel || '例如：gpt-5.2'}
+                          placeholder={settings.defaultOptimizerModel || settings.defaultJudgeModel || text('例如：gpt-5.2', 'For example: gpt-5.2')}
                           disabled={submitting}
                           onChange={(next) => updateDraft(setDrafts, draft.id, 'taskModel', next)}
                         />
                         <label className="label">
-                          初版提示词
-                          <textarea className="textarea" value={draft.rawPrompt} onChange={(event) => updateDraft(setDrafts, draft.id, 'rawPrompt', event.target.value)} placeholder="贴入一句话需求、初版 prompt，或待优化长提示词。" />
+                          {text('初版提示词', 'Initial prompt')}
+                          <textarea className="textarea" value={draft.rawPrompt} onChange={(event) => updateDraft(setDrafts, draft.id, 'rawPrompt', event.target.value)} placeholder={text('贴入一句话需求、初版 prompt，或待优化长提示词。', 'Paste a one-line need, an initial prompt, or a longer prompt that needs optimization.')} />
                         </label>
+                        <details className="fold-card">
+                          <summary>{text('这条任务的评分标准', 'Scoring standard for this job')}</summary>
+                          <p className="small">{text('留空则跟随配置台里的全局评分标准。只会影响这条新任务。', 'Leave empty to follow the global scoring standard from settings. It only affects this new job.')}</p>
+                          <label className="label">
+                            {text('任务级评分标准覆写', 'Task-level scoring override')}
+                            <textarea
+                              className="textarea"
+                              rows={6}
+                              value={draft.customRubricMd}
+                              onChange={(event) => updateDraft(setDrafts, draft.id, 'customRubricMd', event.target.value)}
+                              placeholder={text('可选：为这条任务单独写一份评分标准。', 'Optional: write a separate scoring standard for this job.')}
+                            />
+                          </label>
+                        </details>
                       </div>
                     ))}
                   </div>
@@ -324,8 +328,31 @@ export function DashboardShell() {
             </AnimatePresence>
 
             {actionMessage ? <div className="notice success">{actionMessage}</div> : null}
-            {error ? <div className="notice error">{getJobDisplayError(error) ?? error}</div> : null}
-          </section>
+            {error ? <div className="notice error">{getJobDisplayError(error, locale) ?? error}</div> : null}
+    </section>
+  )
+
+  return (
+    <main>
+      <StudioFrame title={text('任务控制室', 'Job Control Room')} currentPath="/">
+        <motion.div
+          className="shell"
+          initial={false}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+        >
+          <DashboardControlRoom
+            actionableOnly={actionableOnly}
+            loading={loading}
+            middleSlot={submissionStation}
+            groups={controlRoomGroups}
+            stats={controlRoomStats}
+            actionInFlight={actionInFlight}
+            onToggleActionableOnly={() => setActionableOnly((current) => !current)}
+            onCopyPrompt={copyLatestPrompt}
+            onResumeStep={resumeStep}
+            onResumeAuto={resumeAuto}
+          />
         </motion.div>
       </StudioFrame>
     </main>

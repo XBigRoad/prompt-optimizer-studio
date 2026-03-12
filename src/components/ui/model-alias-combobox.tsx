@@ -1,7 +1,12 @@
-import * as Popover from '@radix-ui/react-popover'
-import { Command } from 'cmdk'
-import { ChevronDown } from 'lucide-react'
-import { useMemo, useState } from 'react'
+"use client"
+
+import * as Popover from "@radix-ui/react-popover"
+import { Command } from "cmdk"
+import { ChevronDown, Search } from "lucide-react"
+import { useEffect, useMemo, useRef, useState } from "react"
+
+import { useHydrated } from "@/components/ui/use-hydrated"
+import { useLocaleText } from "@/lib/i18n"
 
 export type ModelOption = { id: string; label: string }
 
@@ -22,7 +27,11 @@ export function ModelAliasCombobox({
   disabled?: boolean
   onChange: (value: string) => void
 }) {
+  const text = useLocaleText()
+  const hydrated = useHydrated()
   const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState("")
+  const searchInputRef = useRef<HTMLInputElement | null>(null)
 
   const normalizedOptions = useMemo(() => {
     const seen = new Set<string>()
@@ -34,41 +43,68 @@ export function ModelAliasCombobox({
     })
   }, [options])
 
+  const trimmedQuery = query.trim()
+  const hasExactMatch = normalizedOptions.some((option) => option.id === trimmedQuery)
+  const canUseTypedValue = trimmedQuery.length > 0 && !hasExactMatch
+  const triggerValue = value.trim() || placeholder || text("选择任务模型", "Choose a task model")
+
+  useEffect(() => {
+    if (!open) {
+      return
+    }
+
+    setQuery("")
+    const timer = window.setTimeout(() => searchInputRef.current?.focus(), 0)
+    return () => window.clearTimeout(timer)
+  }, [open])
+
+  if (!hydrated) {
+    return (
+      <label className="label">
+        {label}
+        <div className="combobox-shell" data-ui="model-alias-combobox">
+          <button
+            type="button"
+            className="combobox-trigger-surface"
+            data-ui="model-alias-trigger"
+            aria-label={label}
+            aria-expanded="false"
+            disabled={disabled}
+          >
+            <span className={`combobox-trigger-value${value.trim() ? "" : " is-placeholder"}`}>
+              {triggerValue}
+            </span>
+            <span className="combobox-trigger-icon" aria-hidden="true">
+              <ChevronDown size={18} />
+            </span>
+          </button>
+        </div>
+      </label>
+    )
+  }
+
   return (
     <label className="label">
       {label}
       <Popover.Root open={open} onOpenChange={setOpen}>
-        <Command className="combobox-command" shouldFilter>
-          <div className="combobox-anchor" data-ui="model-alias-combobox">
-            <Command.Input
-              id={inputId}
-              className="input combobox-input"
-              value={value}
-              disabled={disabled}
-              placeholder={placeholder}
-              onFocus={() => {
-                if (!disabled) setOpen(true)
-              }}
-              onValueChange={(next) => onChange(next)}
+        <div className="combobox-shell" data-ui="model-alias-combobox">
+          <Popover.Trigger asChild>
+            <button
+              type="button"
+              className="combobox-trigger-surface"
+              data-ui="model-alias-trigger"
+              aria-label={label}
               aria-expanded={open}
-              aria-controls={`${inputId}-listbox`}
-              role="combobox"
-              aria-autocomplete="list"
-              spellCheck={false}
-              autoCapitalize="none"
-              autoCorrect="off"
-            />
-            <Popover.Trigger asChild>
-              <button
-                type="button"
-                className="combobox-trigger"
-                aria-label="打开模型列表"
-                disabled={disabled}
-              >
+              disabled={disabled}
+            >
+              <span className={`combobox-trigger-value${value.trim() ? "" : " is-placeholder"}`}>
+                {triggerValue}
+              </span>
+              <span className="combobox-trigger-icon" aria-hidden="true">
                 <ChevronDown size={18} />
-              </button>
-            </Popover.Trigger>
-          </div>
+              </span>
+            </button>
+          </Popover.Trigger>
 
           <Popover.Portal>
             <Popover.Content
@@ -78,27 +114,76 @@ export function ModelAliasCombobox({
               sideOffset={8}
               onOpenAutoFocus={(event) => event.preventDefault()}
             >
-              <Command.List id={`${inputId}-listbox`} className="combobox-list">
-                <Command.Empty className="combobox-empty">无匹配模型，继续输入即可。</Command.Empty>
-                {normalizedOptions.map((option) => (
-                  <Command.Item
-                    key={option.id}
-                    value={option.id}
-                    className="combobox-item"
-                    onSelect={() => {
-                      onChange(option.id)
-                      setOpen(false)
-                    }}
-                  >
-                    <span className="combobox-item-main">{option.id}</span>
-                  </Command.Item>
-                ))}
-              </Command.List>
+              <div className="combobox-popover-copy">
+                <strong>{text("先从已拉取模型里选", "Pick from fetched models first")}</strong>
+                <p className="small">
+                  {text(
+                    "找不到时，也可以直接输入模型名。",
+                    "If you cannot find one, you can still enter a model name directly.",
+                  )}
+                </p>
+              </div>
+
+              <Command className="combobox-command" shouldFilter>
+                <div className="combobox-search-row">
+                  <span className="combobox-search-icon" aria-hidden="true">
+                    <Search size={16} />
+                  </span>
+                  <Command.Input
+                    ref={searchInputRef}
+                    id={inputId}
+                    className="combobox-search-input"
+                    value={query}
+                    placeholder={text("搜索或输入模型名", "Search or enter a model name")}
+                    onValueChange={setQuery}
+                    aria-controls={`${inputId}-listbox`}
+                    role="combobox"
+                    aria-autocomplete="list"
+                    spellCheck={false}
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                  />
+                </div>
+
+                <Command.List id={`${inputId}-listbox`} className="combobox-list">
+                  {canUseTypedValue ? (
+                    <Command.Item
+                      value={`manual:${trimmedQuery}`}
+                      className="combobox-item combobox-item-create"
+                      onSelect={() => {
+                        onChange(trimmedQuery)
+                        setOpen(false)
+                      }}
+                    >
+                      <span className="combobox-item-main">{text("使用当前输入", "Use current input")}</span>
+                      <span className="combobox-item-sub">{trimmedQuery}</span>
+                    </Command.Item>
+                  ) : null}
+
+                  <Command.Empty className="combobox-empty">
+                    {text("没有匹配项。可以直接使用当前输入。", "No match found. You can use the current input directly.")}
+                  </Command.Empty>
+
+                  {normalizedOptions.map((option) => (
+                    <Command.Item
+                      key={option.id}
+                      value={option.id}
+                      className="combobox-item"
+                      data-selected={value === option.id ? "true" : "false"}
+                      onSelect={() => {
+                        onChange(option.id)
+                        setOpen(false)
+                      }}
+                    >
+                      <span className="combobox-item-main">{option.id}</span>
+                    </Command.Item>
+                  ))}
+                </Command.List>
+              </Command>
             </Popover.Content>
           </Popover.Portal>
-        </Command>
+        </div>
       </Popover.Root>
     </label>
   )
 }
-

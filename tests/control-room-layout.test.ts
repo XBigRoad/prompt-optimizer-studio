@@ -16,6 +16,7 @@ import {
 import type { RoundCandidateView } from '../src/components/job-round-card'
 import { SettingsControlRoom } from '../src/components/settings-control-room'
 import { StudioFrame } from '../src/components/studio-frame'
+import { ModelAliasCombobox } from '../src/components/ui/model-alias-combobox'
 import { I18nProvider } from '../src/lib/i18n'
 
 test('studio frame and control room can render fully in English', () => {
@@ -45,7 +46,7 @@ test('studio frame and control room can render fully in English', () => {
   }))
 
   assert.match(html, /Job Control Room/)
-  assert.match(html, /Prompt Optimizer/)
+  assert.match(html, /Prompt Optimizer Studio/)
   assert.match(html, /Language/)
   assert.match(html, /Need your decision/)
   assert.doesNotMatch(html, /How to use/)
@@ -71,7 +72,8 @@ test('studio frame keeps only the product name in the sidebar brand block', () =
     children: createElement('div', null, 'body'),
   }))
 
-  assert.match(html, /Prompt Optimizer/)
+  assert.match(html, /Prompt Optimizer Studio/)
+  assert.doesNotMatch(html, />Prompt Optimizer</)
   assert.doesNotMatch(html, /当前页标题唯一标记/)
   assert.doesNotMatch(html, /控制室导航/)
 })
@@ -106,6 +108,7 @@ test('dashboard control room prioritizes attention, running, and latest results'
   }))
 
   assert.match(html, /任务控制室/)
+  assert.doesNotMatch(html, /Prompt Optimizer Studio/)
   assert.match(html, /待你处理/)
   assert.match(html, /自动运行中/)
   assert.match(html, /最新结果/)
@@ -194,6 +197,56 @@ test('dashboard defaults to latest results when only history exists', () => {
   assert.match(html, /1 次运行/)
 })
 
+test('dashboard history uses singular run copy in English', () => {
+  const html = renderToStaticMarkup(createElement(I18nProvider, {
+    initialLocale: 'en',
+    children: createElement(DashboardControlRoom, {
+      actionableOnly: false,
+      loading: false,
+      groups: {
+        attention: [],
+        running: [],
+        queued: [],
+        recentCompleted: [],
+        history: [makeJob('history-en', 'failed')],
+      },
+      stats: { attention: 0, running: 0, queued: 0, recentCompleted: 0, history: 1 },
+      actionInFlight: null,
+      onToggleActionableOnly: () => {},
+      onCopyPrompt: async () => {},
+      onResumeStep: async () => {},
+      onResumeAuto: async () => {},
+    }),
+  }))
+
+  assert.match(html, />1 run</)
+  assert.doesNotMatch(html, />1 runs</)
+})
+
+test('dashboard recent results tab exposes balanced result and history columns', () => {
+  const html = renderToStaticMarkup(createElement(DashboardControlRoom, {
+    actionableOnly: false,
+    loading: false,
+    groups: {
+      attention: [],
+      running: [],
+      queued: [],
+      recentCompleted: [makeJob('completed-rhythm', 'completed')],
+      history: [makeJob('history-rhythm', 'failed')],
+    },
+    stats: { attention: 0, running: 0, queued: 0, recentCompleted: 1, history: 1 },
+    actionInFlight: null,
+    onToggleActionableOnly: () => {},
+    onCopyPrompt: async () => {},
+    onResumeStep: async () => {},
+    onResumeAuto: async () => {},
+  }))
+
+  assert.match(html, /data-ui="latest-results-grid"/)
+  assert.match(html, /data-ui="recent-results-column"/)
+  assert.match(html, /data-ui="history-results-column"/)
+})
+
 test('completed dashboard cards keep a single copy action and retain detail entry', () => {
   const html = renderToStaticMarkup(createElement(DashboardControlRoom, {
     actionableOnly: false,
@@ -214,8 +267,45 @@ test('completed dashboard cards keep a single copy action and retain detail entr
   }))
 
   assert.match(html, /复制最新提示词/)
-  assert.match(html, />详情</)
+  assert.match(html, /data-ui="card-secondary-link"/)
+  assert.equal(html.split('/jobs/completed-copy').length - 1, 1)
+  assert.doesNotMatch(html, /class="button ghost"[^>]*>详情</)
   assert.doesNotMatch(html, />复制</)
+})
+
+test('settings control room moves save action into one shared bar below the compact grid', () => {
+  const html = renderToStaticMarkup(createElement(SettingsControlRoom, {
+    form: {
+      cpamcBaseUrl: '',
+      cpamcApiKey: '',
+      apiProtocol: 'auto',
+      defaultTaskModel: '',
+      scoreThreshold: 95,
+      maxRounds: 8,
+      customRubricMd: '',
+    },
+    models: [],
+    loading: false,
+    saving: false,
+    testing: false,
+    loadingModels: false,
+    message: null,
+    error: null,
+    onSave: () => {},
+    onTestConnection: () => {},
+    onRefreshModels: () => {},
+    onFormChange: () => {},
+  }))
+
+  const compactGridIndex = html.indexOf('class="settings-grid settings-grid-compact"')
+  const saveBarIndex = html.indexOf('data-ui="settings-save-bar"')
+  const runtimeIndex = html.indexOf('运行策略')
+  const saveIndex = html.indexOf('保存设置')
+
+  assert.ok(compactGridIndex >= 0)
+  assert.ok(saveBarIndex > compactGridIndex)
+  assert.ok(saveIndex > runtimeIndex)
+  assert.equal((html.match(/>保存设置</g) ?? []).length, 1)
 })
 
 test('settings control room keeps Chinese-only rubric label by default', () => {
@@ -288,7 +378,25 @@ test('job detail keeps the task model editor as a searchable combobox', () => {
   const html = renderToStaticMarkup(createElement(JobDetailControlRoom, makeDetailProps()))
 
   assert.match(html, /data-ui="model-alias-combobox"/)
+  assert.match(html, /任务模型/)
+  assert.doesNotMatch(html, /任务模型别名/)
+  assert.doesNotMatch(html, /combobox-input/)
   assert.doesNotMatch(html, /<select[^>]+id="job-task-model"/)
+})
+
+test('model alias combobox starts as a select-like trigger instead of an inline input', () => {
+  const html = renderToStaticMarkup(createElement(ModelAliasCombobox, {
+    inputId: 'model-picker',
+    label: '任务模型',
+    value: 'gpt-5.2',
+    options: [{ id: 'gpt-5.2', label: 'gpt-5.2' }],
+    placeholder: '搜索或输入模型名',
+    onChange: () => {},
+  }))
+
+  assert.match(html, /data-ui="model-alias-trigger"/)
+  assert.match(html, />gpt-5\.2</)
+  assert.doesNotMatch(html, /combobox-input/)
 })
 
 test('job detail exposes manual complete action when paused with candidates', () => {
@@ -486,6 +594,8 @@ test('job detail explanation removes duplicated source labels and keeps task sco
     model: {
       candidates: [makeCandidate('cand-1')],
       customRubricMd: null,
+      effectiveRubricMd: '# 默认评分标准\n\n1. 目标一致性 (20)',
+      effectiveRubricSource: 'settings',
     },
     form: {
       customRubricMd: '',
@@ -493,9 +603,31 @@ test('job detail explanation removes duplicated source labels and keeps task sco
   })))
 
   assert.doesNotMatch(html, /原始任务摘要：/)
-  assert.match(html, /单任务评分标准 · 跟随配置台/)
+  assert.match(html, /当前评分标准/)
+  assert.match(html, /当前来源：配置台/)
+  assert.match(html, /# 默认评分标准/)
   assert.doesNotMatch(html, /只影响当前任务；留空则跟随配置台里的全局评分标准。支持 Markdown。/)
-  assert.ok(html.indexOf('完成并归档') < html.indexOf('单任务评分标准 · 跟随配置台'))
+  assert.doesNotMatch(html, /单任务评分标准 · 跟随配置台/)
+  assert.ok(html.indexOf('长期规则') < html.indexOf('当前评分标准'))
+})
+
+test('job detail stable rules preview shows job-level scoring override when present', () => {
+  const html = renderToStaticMarkup(createElement(JobDetailControlRoom, makeDetailProps({
+    model: {
+      customRubricMd: '# 单任务评分标准\n\n1. 保真 (50)',
+      effectiveRubricMd: '# 单任务评分标准\n\n1. 保真 (50)',
+      effectiveRubricSource: 'job',
+    },
+    form: {
+      customRubricMd: '# 单任务评分标准\n\n1. 保真 (50)',
+    },
+  })))
+
+  assert.match(html, /当前评分标准/)
+  assert.match(html, /当前来源：本任务/)
+  assert.match(html, /# 单任务评分标准/)
+  assert.match(html, /保存任务评分标准/)
+  assert.match(html, /恢复跟随配置台/)
 })
 
 test('goal-anchor draft note explains that saving is still required', () => {
@@ -600,22 +732,23 @@ test('settings control room groups connection, defaults, and active runtime fiel
   }))
 
   assert.doesNotMatch(html, /<datalist/)
+  assert.doesNotMatch(html, /<select class="input"/)
+  assert.doesNotMatch(html, /aria-controls="radix-/)
 
+  assert.match(html, /data-ui="settings-page-header"/)
+  assert.match(html, /data-ui="settings-connection-form"/)
   assert.match(html, /连接/)
   assert.match(html, /默认模型/)
+  assert.match(html, /默认任务模型/)
   assert.match(html, /运行策略/)
   assert.match(html, /评分标准/)
   assert.match(html, /接口协议/)
   assert.match(html, /自动判断/)
-  assert.match(html, /OpenAI-compatible/)
-  assert.match(html, /Anthropic/)
-  assert.match(html, /Gemini/)
-  assert.match(html, /Mistral/)
-  assert.match(html, /Cohere/)
-  assert.match(html, /协议识别/)
+  assert.match(html, /快速选择服务商/)
   assert.match(html, /Base URL/)
   assert.match(html, /API Key/)
-  assert.match(html, /连接与策略/)
+  assert.match(html, /data-ui="select-field"/)
+  assert.ok(countOccurrences(html, 'data-ui="select-field"') >= 2)
   assert.equal(countOccurrences(html, '>配置台<'), 1)
   assert.equal(countOccurrences(html, '>连接<'), 1)
   assert.equal(countOccurrences(html, '>默认模型<'), 1)
@@ -631,6 +764,13 @@ test('settings control room groups connection, defaults, and active runtime fiel
   assert.doesNotMatch(html, /并发数/)
   assert.doesNotMatch(html, /会话策略/)
   assert.doesNotMatch(html, /CPAMC/)
+  assert.doesNotMatch(html, /协议识别/)
+  assert.doesNotMatch(html, /默认模型别名/)
+  assert.doesNotMatch(html, /连接与策略/)
+  assert.doesNotMatch(html, /把连接、默认模型、评分标准和运行策略收进同一张工作台里/)
+  assert.doesNotMatch(html, /默认保持自动判断。只有在你使用反代、企业网关或兼容层时/)
+  assert.doesNotMatch(html, /combobox-input/)
+  assert.ok(countOccurrences(html, 'data-ui="section-title-icon"') >= 4)
 })
 
 test('settings control room keeps rubric copy Chinese-only in zh view', () => {
@@ -659,6 +799,13 @@ test('settings control room keeps rubric copy Chinese-only in zh view', () => {
 
   assert.match(html, /评分标准/)
   assert.doesNotMatch(html, /Rubric/)
+})
+
+test('job detail SSR render avoids unstable radix ids and keeps section icons', () => {
+  const html = renderToStaticMarkup(createElement(JobDetailControlRoom, makeDetailProps()))
+
+  assert.doesNotMatch(html, /aria-controls="radix-/)
+  assert.ok(countOccurrences(html, 'data-ui="section-title-icon"') >= 4)
 })
 
 test('job detail notices produce stable unique keys for AnimatePresence', () => {
@@ -804,6 +951,8 @@ function makeDetailModel(): JobDetailViewModel {
     passStreak: 1,
     lastReviewScore: 94,
     customRubricMd: null,
+    effectiveRubricMd: '# 默认评分标准\n\n1. 目标一致性 (20)',
+    effectiveRubricSource: 'default',
     errorMessage: null,
     latestFullPrompt: 'LATEST FULL PROMPT',
     initialPrompt: 'INITIAL RAW PROMPT',

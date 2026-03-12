@@ -111,3 +111,79 @@ test('settings routes persist apiProtocol and use it for model discovery plus co
     }
   }
 })
+
+test('settings rubric route returns the effective global rubric', async () => {
+  const originalCwd = process.cwd()
+  const originalDbPath = process.env.PROMPT_OPTIMIZER_DB_PATH
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'po-settings-rubric-route-'))
+  process.env.PROMPT_OPTIMIZER_DB_PATH = path.join(tempDir, 'test.db')
+  process.chdir(tempDir)
+
+  try {
+    const { resetDbForTests } = await import('../src/lib/server/db')
+    resetDbForTests()
+    const { saveSettings } = await import('../src/lib/server/settings')
+    const route = await import('../src/app/api/settings/rubric/route')
+
+    saveSettings({
+      customRubricMd: '# 全局评分标准\n\n1. 目标一致性 (20)',
+    })
+
+    const response = await route.GET()
+    const payload = await response.json() as { rubricMd: string; source: string }
+    assert.equal(response.status, 200)
+    assert.equal(payload.source, 'settings')
+    assert.equal(payload.rubricMd, '# 全局评分标准\n\n1. 目标一致性 (20)')
+  } finally {
+    process.chdir(originalCwd)
+    if (originalDbPath === undefined) {
+      delete process.env.PROMPT_OPTIMIZER_DB_PATH
+    } else {
+      process.env.PROMPT_OPTIMIZER_DB_PATH = originalDbPath
+    }
+  }
+})
+
+
+test('settings route persists custom rubric markdown', async () => {
+  const originalCwd = process.cwd()
+  const originalDbPath = process.env.PROMPT_OPTIMIZER_DB_PATH
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'po-settings-rubric-'))
+  process.env.PROMPT_OPTIMIZER_DB_PATH = path.join(tempDir, 'test.db')
+  process.chdir(tempDir)
+
+  try {
+    const { resetDbForTests } = await import('../src/lib/server/db')
+    resetDbForTests()
+    const settingsRoute = await import('../src/app/api/settings/route')
+
+    const saveResponse = await settingsRoute.POST(new Request('http://localhost/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        cpamcBaseUrl: 'https://api.openai.com/v1',
+        cpamcApiKey: 'secret',
+        apiProtocol: 'openai-compatible',
+        defaultOptimizerModel: 'gpt-5.2',
+        defaultJudgeModel: 'gpt-5.2',
+        customRubricMd: '# 自定义评分标准\n\n1. 目标清晰度 (20)',
+      }),
+    }))
+
+    assert.equal(saveResponse.status, 200)
+    const savePayload = (await saveResponse.json()) as { settings: { customRubricMd: string } }
+    assert.equal(savePayload.settings.customRubricMd, '# 自定义评分标准\n\n1. 目标清晰度 (20)')
+
+    const getResponse = await settingsRoute.GET()
+    assert.equal(getResponse.status, 200)
+    const getPayload = (await getResponse.json()) as { settings: { customRubricMd: string } }
+    assert.equal(getPayload.settings.customRubricMd, '# 自定义评分标准\n\n1. 目标清晰度 (20)')
+  } finally {
+    process.chdir(originalCwd)
+    if (originalDbPath === undefined) {
+      delete process.env.PROMPT_OPTIMIZER_DB_PATH
+    } else {
+      process.env.PROMPT_OPTIMIZER_DB_PATH = originalDbPath
+    }
+  }
+})

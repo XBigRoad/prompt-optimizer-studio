@@ -56,6 +56,7 @@ export const DEFAULT_SETTINGS: Omit<AppSettings, 'updatedAt'> = {
   noImprovementLimit: 2,
   workerConcurrency: 1,
   conversationPolicy: 'stateless' as ConversationPolicy,
+  customRubricMd: '',
 }
 
 export const TERMINAL_JOB_STATUSES = new Set(['completed', 'failed', 'manual_review', 'cancelled'])
