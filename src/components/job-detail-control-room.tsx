@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import {
   ArrowLeft,
   CheckCircle2,
+  Copy,
   PauseCircle,
   PlayCircle,
   Plus,
@@ -202,7 +203,7 @@ export function JobDetailControlRoom({
           <div>
             <h2 className="section-title has-icon">
               <span className="section-title-icon" data-ui="section-title-icon" aria-hidden="true">
-                <Sparkles size={18} />
+                <Copy size={18} />
               </span>
               {text('当前最新完整提示词', 'Current latest full prompt')}
             </h2>

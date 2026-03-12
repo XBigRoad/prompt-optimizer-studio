@@ -164,6 +164,16 @@ main {
   color: var(--accent);
 }
 
+html[data-locale="zh-CN"] .detail-hero .eyebrow {
+  font-size: 0.92rem;
+  letter-spacing: 0.04em;
+  text-transform: none;
+}
+
+html[data-locale="en"] .detail-hero .eyebrow {
+  font-size: 0.84rem;
+}
+
 .sidebar-nav {
   display: grid;
   gap: 6px;
@@ -359,6 +369,10 @@ main {
 .detail-hero-grid {
   grid-template-columns: minmax(420px, 1.28fr) minmax(320px, 0.72fr);
   align-items: start;
+}
+
+.control-room-hero {
+  align-items: center;
 }
 
 .control-room-grid {
