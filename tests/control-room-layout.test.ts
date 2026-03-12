@@ -429,7 +429,7 @@ test('job detail result stage can switch into compare mode without changing the 
   assert.match(compareHtml, /class="result-compare-grid"/)
 })
 
-test('job detail readonly goal fields use compact scrollable summaries', () => {
+test('job detail readonly goal fields avoid nested scroll in the primary stable-rules view', () => {
   const html = renderToStaticMarkup(createElement(JobDetailControlRoom, {
     model: makeDetailModel(),
     models: [],
@@ -492,8 +492,30 @@ test('job detail readonly goal fields use compact scrollable summaries', () => {
     },
   }))
 
-  assert.equal((html.match(/class="active-goal-value active-goal-scroll"/g) ?? []).length, 3)
-  assert.equal((html.match(/class="active-goal-card compact-goal-card compact-scroll-card"/g) ?? []).length, 3)
+  assert.doesNotMatch(html, /active-goal-scroll/)
+  assert.equal((html.match(/class="active-goal-card compact-goal-card"/g) ?? []).length, 3)
+})
+
+test('job detail uses disclosure for long stable-rule content instead of a nested scrollbar', () => {
+  const longGuardModel = makeDetailModel()
+  longGuardModel.goalAnchor = {
+    ...longGuardModel.goalAnchor,
+    driftGuard: [
+      '不要改写用户的原始任务意图；任何补充都必须服务于原目标，而不是把任务扩展成泛泛的提示词教程。',
+      '输出必须保持为可一键复制的完整提示词，不能退化成检查清单、点评摘要或纯建议列表。',
+      '如果需要加入约束、评分或示例，必须明确它们如何帮助用户得到更稳定的最终提示词，而不是增加阅读负担。',
+    ],
+  }
+
+  const html = renderToStaticMarkup(createElement(JobDetailControlRoom, {
+    ...makeDetailProps(),
+    model: longGuardModel,
+  }))
+
+  assert.match(html, /data-ui="goal-value-fold"/)
+  assert.match(html, /展开全部/)
+  assert.match(html, /收起/)
+  assert.doesNotMatch(html, /active-goal-scroll/)
 })
 
 test('job detail moves rationale into stable rules above the stable goal cards', () => {
@@ -625,6 +647,15 @@ test('job detail explanation removes duplicated source labels and keeps task sco
   assert.doesNotMatch(html, /单任务评分标准 · 跟随配置台/)
   assert.doesNotMatch(html, />展开评分标准</)
   assert.ok(html.indexOf('长期规则') < html.indexOf('当前评分标准'))
+})
+
+test('job detail demotes stable-rule editing into an adjustment action instead of a second stable-rule view', () => {
+  const html = renderToStaticMarkup(createElement(JobDetailControlRoom, makeDetailProps()))
+
+  assert.match(html, /调整长期规则/)
+  assert.match(html, /编辑草稿/)
+  assert.doesNotMatch(html, /查看长期规则/)
+  assert.doesNotMatch(html, /长期规则内容/)
 })
 
 test('job detail stable rules preview shows job-level scoring override when present', () => {

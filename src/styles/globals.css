@@ -831,10 +831,6 @@ html[data-locale="en"] .detail-hero .eyebrow {
   background: rgba(255, 253, 248, 0.9);
 }
 
-.compact-scroll-card {
-  align-content: start;
-}
-
 .active-steering-callout {
   margin-bottom: 16px;
   border-color: rgba(231, 90, 99, 0.18);
@@ -855,9 +851,6 @@ html[data-locale="en"] .detail-hero .eyebrow {
 
 .active-goal-value {
   min-height: 86px;
-  max-height: 12.5rem;
-  overflow: auto;
-  scrollbar-gutter: stable;
   overflow-wrap: anywhere;
   padding: 14px 16px;
   border: 1px solid rgba(72, 50, 27, 0.12);
@@ -865,8 +858,50 @@ html[data-locale="en"] .detail-hero .eyebrow {
   background: rgba(255, 252, 246, 0.78);
 }
 
-.active-goal-scroll {
+.goal-value-fold {
+  display: grid;
+  gap: 0;
+  border: 1px solid rgba(72, 50, 27, 0.12);
+  border-radius: var(--radius-md);
+  background: rgba(255, 252, 246, 0.78);
+  overflow: hidden;
+}
+
+.goal-value-fold summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 12px 14px;
+}
+
+.goal-value-fold summary::-webkit-details-marker {
+  display: none;
+}
+
+.goal-value-fold .fold-card-summary-row {
+  align-items: flex-start;
+}
+
+.goal-value-fold .fold-card-title {
+  display: -webkit-box;
+  overflow: hidden;
   font-size: 0.95rem;
+  line-height: 1.55;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  text-align: left;
+}
+
+.goal-value-fold .fold-card-summary-meta {
+  flex-shrink: 0;
+  padding-top: 1px;
+}
+
+.goal-value-fold .active-goal-value {
+  min-height: 0;
+  padding-top: 0;
+  border: 0;
+  border-top: 1px solid rgba(72, 50, 27, 0.1);
+  border-radius: 0;
 }
 
 .compact-goal-card {
@@ -1268,11 +1303,15 @@ html[data-locale="en"] .detail-hero .eyebrow {
   cursor: pointer;
   list-style: none;
   padding: 16px 18px;
-  font-weight: 700;
 }
 
 .anchor-editor-drawer summary::-webkit-details-marker {
   display: none;
+}
+
+.anchor-editor-drawer[open] {
+  border-color: rgba(231, 90, 99, 0.22);
+  background: rgba(255, 248, 244, 0.82);
 }
 
 .anchor-editor-body {

@@ -294,9 +294,24 @@ export function JobDetailControlRoom({
 
             <div className="stable-rules-grid">
               <div className="active-goal-grid compact-goal-grid">
-                <ReadonlyGoalField label={text('长期目标', 'Stable goal')} value={model.goalAnchor.goal} />
-                <ReadonlyGoalField label={text('长期交付物', 'Stable deliverable')} value={model.goalAnchor.deliverable} />
-                <ReadonlyGoalField label={text('长期边界', 'Stable guardrails')} value={model.goalAnchor.driftGuard.join('\n')} />
+                <ReadonlyGoalField
+                  label={text('长期目标', 'Stable goal')}
+                  value={model.goalAnchor.goal}
+                  expandLabel={text('展开全部', 'Expand all')}
+                  collapseLabel={text('收起', 'Collapse')}
+                />
+                <ReadonlyGoalField
+                  label={text('长期交付物', 'Stable deliverable')}
+                  value={model.goalAnchor.deliverable}
+                  expandLabel={text('展开全部', 'Expand all')}
+                  collapseLabel={text('收起', 'Collapse')}
+                />
+                <ReadonlyGoalField
+                  label={text('长期边界', 'Stable guardrails')}
+                  value={model.goalAnchor.driftGuard.join('\n')}
+                  expandLabel={text('展开全部', 'Expand all')}
+                  collapseLabel={text('收起', 'Collapse')}
+                />
               </div>
 
               <div className="stable-scoring-block">
@@ -391,12 +406,18 @@ export function JobDetailControlRoom({
             ) : null}
 
             <details className="anchor-editor-drawer">
-              <summary>{canEdit ? text('编辑长期规则', 'Edit stable rules') : text('查看长期规则', 'View stable rules')}</summary>
+              <summary className="fold-card-summary">
+                <FoldCardSummary
+                  title={canEdit ? text('调整长期规则', 'Adjust stable rules') : text('查看调整草稿', 'View adjustment draft')}
+                  closedLabel={text('按需打开', 'Open when needed')}
+                  openLabel={text('收起', 'Collapse')}
+                />
+              </summary>
               <div className="anchor-editor-body">
                 <div className="section-head compact-head">
                   <div>
-                    <strong>{text('长期规则内容', 'Stable rule contents')}</strong>
-                    <p className="small">{text('这里只有在你确认保存后才会生效。未选中的临时引导不会自动写进这里。', 'Nothing here takes effect until you save. Unselected temporary steering will not be written here automatically.')}</p>
+                    <strong>{text('编辑草稿', 'Edit draft')}</strong>
+                    <p className="small">{text('这里只是修改草稿。点击保存后，长期规则才会真正更新。未选中的临时引导不会自动写进这里。', 'This is only a working draft. Stable rules update only after you save. Unselected temporary steering will not be written here automatically.')}</p>
                   </div>
                   {canEdit ? (
                     <button className="button ghost" type="button" onClick={handlers.onSaveGoalAnchor} disabled={ui.savingGoalAnchor}>
@@ -705,16 +726,44 @@ function SummaryBadge({
 function ReadonlyGoalField({
   label,
   value,
+  expandLabel,
+  collapseLabel,
 }: {
   label: string
   value: string
+  expandLabel: string
+  collapseLabel: string
 }) {
+  const shouldCollapse = shouldCollapseGoalValue(value)
+
   return (
-    <div className="active-goal-card compact-goal-card compact-scroll-card">
+    <div className="active-goal-card compact-goal-card">
       <div className="label">{label}</div>
-      <div className="active-goal-value active-goal-scroll">{value}</div>
+      {shouldCollapse ? (
+        <details className="goal-value-fold" data-ui="goal-value-fold">
+          <summary className="fold-card-summary">
+            <FoldCardSummary title={previewGoalValue(value)} closedLabel={expandLabel} openLabel={collapseLabel} />
+          </summary>
+          <div className="active-goal-value">{value}</div>
+        </details>
+      ) : (
+        <div className="active-goal-value">{value}</div>
+      )}
     </div>
   )
+}
+
+function shouldCollapseGoalValue(value: string) {
+  const normalized = value.trim()
+  if (!normalized) return false
+  const lineCount = normalized.split('\n').filter(Boolean).length
+  return lineCount > 2 || normalized.length > 110
+}
+
+function previewGoalValue(value: string) {
+  const singleLine = value.replace(/\s+/g, ' ').trim()
+  if (singleLine.length <= 88) return singleLine
+  return `${singleLine.slice(0, 88).trimEnd()}…`
 }
 
 function FoldCardSummary({
