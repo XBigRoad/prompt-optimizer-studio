@@ -2,7 +2,7 @@
 
 import * as Popover from "@radix-ui/react-popover"
 import { Command } from "cmdk"
-import { ChevronDown, Search } from "lucide-react"
+import { Check, ChevronDown, Search } from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react"
 
 import { useHydrated } from "@/components/ui/use-hydrated"
@@ -169,13 +169,16 @@ export function ModelAliasCombobox({
                       key={option.id}
                       value={option.id}
                       className="combobox-item"
-                      data-selected={value === option.id ? "true" : "false"}
+                      data-current={value === option.id ? "true" : undefined}
                       onSelect={() => {
                         onChange(option.id)
                         setOpen(false)
                       }}
                     >
                       <span className="combobox-item-main">{option.id}</span>
+                      <span className="combobox-item-indicator" aria-hidden="true">
+                        {value === option.id ? <Check size={16} /> : null}
+                      </span>
                     </Command.Item>
                   ))}
                 </Command.List>
