@@ -559,11 +559,11 @@ function SummaryCard({
 }) {
   return (
     <div className={`summary-card tone-${tone}`}>
-      <div className="summary-icon">{icon}</div>
-      <div>
-        <div className="small">{label}</div>
-        <div className="summary-value">{value}</div>
+      <div className="summary-top">
+        <div className="summary-icon">{icon}</div>
+        <div className="summary-label">{label}</div>
       </div>
+      <div className="summary-value">{value}</div>
     </div>
   )
 }

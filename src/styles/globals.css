@@ -1451,11 +1451,23 @@ html[data-locale="en"] .detail-hero .eyebrow {
 
 .summary-card {
   display: grid;
-  gap: 6px;
+  gap: 10px;
   padding: 16px;
   border-radius: var(--radius-lg);
   border: 1px solid var(--line);
   background: rgba(255, 252, 246, 0.78);
+}
+
+.summary-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.summary-label {
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--ink-soft);
 }
 
 .detail-hero .summary-card {
@@ -1465,6 +1477,13 @@ html[data-locale="en"] .detail-hero .eyebrow {
 .summary-card .summary-value {
   font-size: 1.28rem;
   line-height: 1;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+.control-room-hero .summary-card .summary-value {
+  font-size: 1.55rem;
 }
 
 .summary-card.tone-manual_review {
