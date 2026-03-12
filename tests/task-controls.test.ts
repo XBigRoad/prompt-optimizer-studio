@@ -184,6 +184,167 @@ test('createJobs persists a task-level rubric override from job input', async ()
   }
 })
 
+test('createJobs fallback keeps goal anchors prompt-specific when model generation fails', async () => {
+  const originalCwd = process.cwd()
+  const originalDbPath = process.env.PROMPT_OPTIMIZER_DB_PATH
+  const originalFetch = global.fetch
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'po-goal-anchor-fallback-'))
+  process.env.PROMPT_OPTIMIZER_DB_PATH = path.join(tempDir, 'test.db')
+  process.chdir(tempDir)
+
+  try {
+    const { resetDbForTests } = await import('../src/lib/server/db')
+    resetDbForTests()
+    const { saveSettings } = await import('../src/lib/server/settings')
+    const { createJobs } = await import('../src/lib/server/jobs')
+
+    saveSettings({
+      cpamcBaseUrl: 'http://localhost:8317/v1',
+      cpamcApiKey: 'secret',
+      defaultOptimizerModel: 'gpt-5.2',
+      defaultJudgeModel: 'gpt-5.2',
+    })
+
+    global.fetch = (async () => {
+      throw new Error('network down')
+    }) as typeof fetch
+
+    const [job] = await createJobs([
+      { title: '寿喜烧大师', rawPrompt: '帮助用户做美味的寿喜烧', optimizerModel: 'gpt-5.2', judgeModel: 'gpt-5.2' },
+    ])
+
+    assert.match(job.goalAnchor.goal, /寿喜烧/)
+    assert.match(job.goalAnchor.deliverable, /寿喜烧/)
+    assert.doesNotMatch(job.goalAnchor.deliverable, /主要输出产物与完成目标/)
+    assert.equal(job.goalAnchor.driftGuard.some((item) => /寿喜烧|步骤|做法|食材/.test(item)), true)
+    assert.match(job.goalAnchorExplanation.sourceSummary, /寿喜烧/)
+  } finally {
+    process.chdir(originalCwd)
+    global.fetch = originalFetch
+    if (originalDbPath === undefined) {
+      delete process.env.PROMPT_OPTIMIZER_DB_PATH
+    } else {
+      process.env.PROMPT_OPTIMIZER_DB_PATH = originalDbPath
+    }
+  }
+})
+
+test('job reads repair legacy generic goal anchors without touching specific anchors', async () => {
+  const originalCwd = process.cwd()
+  const originalDbPath = process.env.PROMPT_OPTIMIZER_DB_PATH
+  const originalFetch = global.fetch
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'po-goal-anchor-repair-'))
+  process.env.PROMPT_OPTIMIZER_DB_PATH = path.join(tempDir, 'test.db')
+  process.chdir(tempDir)
+
+  try {
+    const { getDb, resetDbForTests } = await import('../src/lib/server/db')
+    resetDbForTests()
+    const { saveSettings } = await import('../src/lib/server/settings')
+    const { createJobs, getJobById, listJobs } = await import('../src/lib/server/jobs')
+
+    saveSettings({
+      cpamcBaseUrl: 'http://localhost:8317/v1',
+      cpamcApiKey: 'secret',
+      defaultOptimizerModel: 'gpt-5.2',
+      defaultJudgeModel: 'gpt-5.2',
+    })
+
+    global.fetch = (async () => new Response(JSON.stringify({
+      choices: [
+        {
+          message: {
+            content: JSON.stringify({
+              goal: '初始目标',
+              deliverable: '初始交付物',
+              driftGuard: ['初始边界'],
+              sourceSummary: '初始说明',
+              rationale: ['初始理由'],
+            }),
+          },
+        },
+      ],
+    }), { status: 200 })) as typeof fetch
+
+    const [genericJob, specificJob] = await createJobs([
+      { title: '寿喜烧大师', rawPrompt: '帮助用户做美味的寿喜烧', optimizerModel: 'gpt-5.2', judgeModel: 'gpt-5.2' },
+      { title: '冷笑话生成器', rawPrompt: '生成优质冷笑话', optimizerModel: 'gpt-5.2', judgeModel: 'gpt-5.2' },
+    ])
+
+    const db = getDb()
+    db.prepare(`
+      UPDATE jobs
+      SET goal_anchor_json = ?,
+          goal_anchor_explanation_json = ?
+      WHERE id = ?
+    `).run(
+      JSON.stringify({
+        goal: '帮助用户做美味的寿喜烧',
+        deliverable: '保持原任务要求的主要输出产物与完成目标。',
+        driftGuard: [
+          '不要把原任务改写成更安全但更泛化的任务。',
+          '不要删除原任务要求的关键输出或核心判断。',
+          '不要退化成泛泛说明、免责声明或合规套话。',
+        ],
+      }),
+      JSON.stringify({
+        sourceSummary: '帮助用户做美味的寿喜烧',
+        rationale: [
+          '系统把任务理解为：帮助用户做美味的寿喜烧',
+          '关键交付物被提炼为：保持原任务要求的主要输出产物与完成目标。',
+          '防漂移条款用于防止优化过程把任务改写成更泛化、更安全但不再忠实原始意图的版本。',
+        ],
+      }),
+      genericJob.id,
+    )
+
+    const preservedAnchor = {
+      goal: '生成优质冷笑话',
+      deliverable: '一组优质冷笑话文本（可直接阅读/使用）',
+      driftGuard: [
+        '不输出冷笑话以外的内容（如长篇解释、教程或无关写作）',
+        '不把任务改写为泛化的“讲笑话”或其他类型幽默而非冷笑话',
+        '不将产出替换为笑话创作建议、框架或评价标准而不是具体笑话',
+      ],
+    }
+    db.prepare(`
+      UPDATE jobs
+      SET goal_anchor_json = ?,
+          goal_anchor_explanation_json = ?
+      WHERE id = ?
+    `).run(
+      JSON.stringify(preservedAnchor),
+      JSON.stringify({
+        sourceSummary: '用户要求：生成优质冷笑话。',
+        rationale: [
+          '原始提示唯一目标是产出“冷笑话”，无需扩展到其他写作任务',
+          'deliverable 明确为可直接使用的笑话文本，符合“生成”这一产出导向',
+          'driftGuard 约束内容范围与类型，防止偏离冷笑话生成的核心目标',
+        ],
+      }),
+      specificJob.id,
+    )
+
+    const repaired = getJobById(genericJob.id)
+    const untouched = listJobs().find((job) => job.id === specificJob.id)
+
+    assert.match(repaired?.goalAnchor.deliverable ?? '', /寿喜烧/)
+    assert.doesNotMatch(repaired?.goalAnchor.deliverable ?? '', /主要输出产物与完成目标/)
+    assert.equal(repaired?.goalAnchor.driftGuard.some((item) => /寿喜烧|步骤|做法/.test(item)), true)
+    assert.equal(untouched?.goalAnchor.goal, preservedAnchor.goal)
+    assert.equal(untouched?.goalAnchor.deliverable, preservedAnchor.deliverable)
+    assert.deepEqual(untouched?.goalAnchor.driftGuard, preservedAnchor.driftGuard)
+  } finally {
+    process.chdir(originalCwd)
+    global.fetch = originalFetch
+    if (originalDbPath === undefined) {
+      delete process.env.PROMPT_OPTIMIZER_DB_PATH
+    } else {
+      process.env.PROMPT_OPTIMIZER_DB_PATH = originalDbPath
+    }
+  }
+})
+
 test('job controls support paused state, resume modes, and max round overrides', async () => {
   const originalCwd = process.cwd()
   const originalDbPath = process.env.PROMPT_OPTIMIZER_DB_PATH

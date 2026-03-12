@@ -1,27 +1,73 @@
 import type { GoalAnchor } from '@/lib/server/types'
 
-const DEFAULT_DRIFT_GUARD = [
+export const LEGACY_GENERIC_DELIVERABLE = '保持原任务要求的主要输出产物与完成目标。'
+export const LEGACY_GENERIC_DRIFT_GUARD = [
   '不要把原任务改写成更安全但更泛化的任务。',
   '不要删除原任务要求的关键输出或核心判断。',
   '不要退化成泛泛说明、免责声明或合规套话。',
 ]
 
+export type GoalAnchorPromptKind = 'optimize_prompt' | 'cooking_help' | 'generate' | 'role' | 'analysis' | 'general'
+
+export type GoalAnchorPromptAnalysis = {
+  prompt: string
+  strippedPrompt: string
+  kind: GoalAnchorPromptKind
+  focus: string
+  role: string | null
+  topic: string | null
+}
+
 export function deriveGoalAnchor(rawPrompt: string): GoalAnchor {
-  const normalizedPrompt = normalizeText(rawPrompt)
-  const sentences = splitSentences(normalizedPrompt)
-  const goal = sentences[0] ?? normalizedPrompt.slice(0, 220)
-  const deliverable = findDeliverableSentence(sentences) ?? '保持原任务要求的主要输出产物与完成目标。'
+  const analysis = analyzeGoalAnchorPrompt(rawPrompt)
+  const goal = deriveGoalText(analysis)
+  const deliverable = deriveDeliverableText(analysis)
+  const driftGuard = deriveDriftGuard(analysis, deliverable)
 
   return normalizeGoalAnchor({
     goal,
     deliverable,
-    driftGuard: DEFAULT_DRIFT_GUARD,
+    driftGuard,
   })
+}
+
+export function analyzeGoalAnchorPrompt(rawPrompt: string): GoalAnchorPromptAnalysis {
+  const prompt = normalizeText(rawPrompt)
+  const strippedPrompt = stripLeadIn(prompt) || prompt
+  const role = extractRoleSubject(strippedPrompt)
+  const optimizeTopic = extractOptimizeTopic(strippedPrompt)
+  const cookingTopic = extractCookingTopic(strippedPrompt)
+  const generatedTopic = extractGeneratedTopic(strippedPrompt)
+  const fallbackTopic = extractFallbackTopic(strippedPrompt)
+  const topic = optimizeTopic ?? cookingTopic ?? generatedTopic ?? fallbackTopic
+
+  const kind: GoalAnchorPromptKind = optimizeTopic
+    ? 'optimize_prompt'
+    : cookingTopic && /(帮助|帮|请帮|做|制作|烹饪|cook|make)/iu.test(strippedPrompt)
+      ? 'cooking_help'
+      : generatedTopic
+        ? 'generate'
+        : role
+          ? 'role'
+          : /(分析|诊断|评估|review|analy[sz]e|triag|judge|评分|复核)/iu.test(strippedPrompt)
+            ? 'analysis'
+            : 'general'
+
+  const focus = topic ?? role ?? compactTopic(strippedPrompt)
+
+  return {
+    prompt,
+    strippedPrompt,
+    kind,
+    focus,
+    role,
+    topic,
+  }
 }
 
 export function normalizeGoalAnchor(input: Partial<GoalAnchor>): GoalAnchor {
   const goal = normalizeText(input.goal ?? '') || '保持原始任务目标不变。'
-  const deliverable = normalizeText(input.deliverable ?? '') || '保持原任务要求的主要输出产物与完成目标。'
+  const deliverable = normalizeText(input.deliverable ?? '') || LEGACY_GENERIC_DELIVERABLE
   const driftGuard = Array.isArray(input.driftGuard)
     ? input.driftGuard.map((item) => normalizeText(item)).filter(Boolean)
     : []
@@ -29,7 +75,7 @@ export function normalizeGoalAnchor(input: Partial<GoalAnchor>): GoalAnchor {
   return {
     goal,
     deliverable,
-    driftGuard: driftGuard.length > 0 ? driftGuard : DEFAULT_DRIFT_GUARD,
+    driftGuard: driftGuard.length > 0 ? driftGuard : LEGACY_GENERIC_DRIFT_GUARD,
   }
 }
 
@@ -59,8 +105,114 @@ export function formatGoalAnchorForPrompt(anchor: GoalAnchor) {
   ].join('\n')
 }
 
-function normalizeText(value: string) {
-  return value.replace(/\s+/g, ' ').trim()
+function deriveGoalText(analysis: GoalAnchorPromptAnalysis) {
+  if (analysis.strippedPrompt.length <= 120) {
+    return restoreSentencePunctuation(analysis.strippedPrompt)
+  }
+
+  const firstSentence = splitSentences(analysis.strippedPrompt)[0] ?? analysis.strippedPrompt
+  if (firstSentence.length <= 140) {
+    return restoreSentencePunctuation(firstSentence)
+  }
+
+  const firstClause = firstSentence.split(/[，,；;]/u)[0]?.trim()
+  if (firstClause && firstClause.length >= 18) {
+    return restoreSentencePunctuation(firstClause)
+  }
+
+  return `${analysis.strippedPrompt.slice(0, 136).trimEnd()}…`
+}
+
+function deriveDeliverableText(analysis: GoalAnchorPromptAnalysis) {
+  switch (analysis.kind) {
+    case 'optimize_prompt': {
+      const topic = analysis.topic ? `用于${analysis.topic.replace(/的$/u, '')}的` : ''
+      const outputRequirement = extractOutputRequirement(analysis.strippedPrompt)
+      return restoreSentencePunctuation(
+        `一版${topic}完整提示词${outputRequirement ? `，${outputRequirement}` : '，可直接复制使用'}`,
+      )
+    }
+    case 'cooking_help': {
+      const topic = analysis.topic ?? analysis.focus
+      return restoreSentencePunctuation(
+        `一份${topic}的做法指导，包含关键步骤、所需食材与注意事项`,
+      )
+    }
+    case 'generate': {
+      const topic = analysis.topic ?? analysis.focus
+      return restoreSentencePunctuation(`可直接使用的${topic}内容`)
+    }
+    case 'role': {
+      if (/中医|问诊|症状|诊断|图片/iu.test(analysis.strippedPrompt)) {
+        return '一个能够结合问诊与图片分析症状、给出诊断建议并主动追问的中医助手设定。'
+      }
+      const role = analysis.role ?? analysis.focus
+      return restoreSentencePunctuation(`一个围绕${role}角色与原任务要求的可执行助手设定`)
+    }
+    case 'analysis': {
+      const outputRequirement = extractOutputRequirement(analysis.strippedPrompt)
+      return restoreSentencePunctuation(
+        outputRequirement ? outputRequirement : `围绕${analysis.focus}给出结构清晰、可执行的分析结果`,
+      )
+    }
+    case 'general':
+    default:
+      return restoreSentencePunctuation(`围绕${analysis.focus}给出与原任务一致的完整结果`)
+  }
+}
+
+function deriveDriftGuard(analysis: GoalAnchorPromptAnalysis, deliverable: string) {
+  switch (analysis.kind) {
+    case 'optimize_prompt':
+      return [
+        '不要把任务改写成泛泛的提示词建议或方法论说明。',
+        '必须输出一版完整、可直接复制的提示词，而不是只给点评。',
+        analysis.topic
+          ? `不要丢掉原提示词要解决的核心任务：${analysis.topic.replace(/的$/u, '')}。`
+          : '不要丢掉原提示词要解决的核心任务。',
+      ]
+    case 'cooking_help': {
+      const topic = analysis.topic ?? analysis.focus
+      return [
+        `不要改成泛泛的做菜建议，必须继续聚焦${topic}。`,
+        '不要只给概述或食材清单，必须保留可执行步骤与关键要点。',
+        '不要偏离到无关的背景科普或其他料理。',
+      ]
+    }
+    case 'generate': {
+      const topic = analysis.topic ?? analysis.focus
+      return [
+        `不要改成其他主题或类型的内容，必须继续产出${topic}。`,
+        '不要只给创作建议、解释或评价标准，必须直接给出成品。',
+        '不要把任务泛化成空泛说明。',
+      ]
+    }
+    case 'role':
+      return [
+        '不要把角色弱化成泛化助手、顾问或说明文。',
+        '不要删掉原任务中明确要求的输入依据、判断动作或交互方式。',
+        '不要把最终结果改成空泛建议，必须保留角色型任务的实际输出。',
+      ]
+    case 'analysis':
+      return [
+        `不要把${analysis.focus}改写成别的主题或更泛化的问题。`,
+        `不要丢掉原任务要求的关键分析产出：${compactTopic(deliverable, 26)}。`,
+        '不要退化成空泛结论、免责声明或没有可执行性的概述。',
+      ]
+    case 'general':
+    default:
+      return [
+        `不要把“${compactTopic(analysis.focus, 24)}”改写成别的主题或更泛化的任务。`,
+        `不要丢掉原任务要求的关键产出：${compactTopic(deliverable, 26)}。`,
+        '不要退化成空泛说明、方法论或免责声明。',
+      ]
+  }
+}
+
+function stripLeadIn(value: string) {
+  return value
+    .replace(/^(请(?:你)?|请帮我|请帮助我|请帮用户|帮我|请先|please)\s*/iu, '')
+    .trim()
 }
 
 function splitSentences(value: string) {
@@ -70,7 +222,88 @@ function splitSentences(value: string) {
     .filter(Boolean)
 }
 
-function findDeliverableSentence(sentences: string[]) {
-  const pattern = /(输出|返回|生成|给出|产出|deliver|output|return)/iu
-  return sentences.find((sentence) => pattern.test(sentence)) ?? null
+function extractOptimizeTopic(value: string) {
+  return extractTopic(value, [
+    /(?:用于|面向)([^，。！？.!?\n]{1,28})的提示词/iu,
+    /(?:优化|改进|完善)(?:一个|一版|这个|这段)?(?:用于)?([^，。！？.!?\n]{1,24})提示词/iu,
+    /(?:prompt for|prompt to)([^,.!?\n]{1,28})/iu,
+  ])
+}
+
+function extractCookingTopic(value: string) {
+  return extractTopic(value, [
+    /(?:帮助(?:用户)?|帮(?:用户|我)?|请帮(?:用户|我)?)(?:做|制作|烹饪|煮|烧)(?:出)?([^，。！？.!?\n]{1,22})/iu,
+    /(?:做|制作|烹饪|煮|烧)(?:出)?([^，。！？.!?\n]{1,22})/iu,
+    /(?:make|cook)\s+([^,.!?\n]{1,22})/iu,
+  ])
+}
+
+function extractGeneratedTopic(value: string) {
+  return extractTopic(value, [
+    /(?:生成|写|撰写|创作|产出|输出)([^，。！？.!?\n]{1,24})/iu,
+    /(?:generate|write|create|draft)\s+([^,.!?\n]{1,28})/iu,
+  ])
+}
+
+function extractRoleSubject(value: string) {
+  return extractTopic(value, [
+    /(?:作为|扮演|你是)([^，。！？.!?\n]{1,28})/iu,
+    /(?:act as|you are)\s+([^,.!?\n]{1,28})/iu,
+  ])
+}
+
+function extractFallbackTopic(value: string) {
+  return extractTopic(value, [
+    /([^，。！？.!?\n]{2,28})(?:任务|方案|流程|指南|提示词|助手|角色|结果)/u,
+  ])
+}
+
+function extractTopic(value: string, patterns: RegExp[]) {
+  for (const pattern of patterns) {
+    const match = value.match(pattern)
+    const raw = match?.[1]
+    const normalized = raw ? cleanTopic(raw) : null
+    if (normalized) {
+      return normalized
+    }
+  }
+  return null
+}
+
+function extractOutputRequirement(value: string) {
+  const match = value.match(/(?:要求|需要|并|最终)?(输出[^，。！？.!?\n]{2,48})/u)
+  const normalized = match?.[1] ? cleanTopic(match[1]) : null
+  return normalized ? restoreSentencePunctuation(normalized, '') : null
+}
+
+function cleanTopic(value: string) {
+  return value
+    .replace(/^[“"'`【\[]+/u, '')
+    .replace(/[”"'`】\]]+$/u, '')
+    .replace(/[。！？.!?]+$/u, '')
+    .replace(/^(一个|一份|一种|一些)/u, '')
+    .trim()
+}
+
+function compactTopic(value: string, maxLength = 20) {
+  const normalized = normalizeText(value)
+  if (!normalized) {
+    return '原任务'
+  }
+  if (normalized.length <= maxLength) {
+    return normalized
+  }
+  return `${normalized.slice(0, maxLength).trimEnd()}…`
+}
+
+function restoreSentencePunctuation(value: string, punctuation = '。') {
+  const normalized = normalizeText(value)
+  if (!normalized) {
+    return ''
+  }
+  return /[。！？.!?]$/u.test(normalized) ? normalized : `${normalized}${punctuation}`
+}
+
+function normalizeText(value: string) {
+  return value.replace(/\s+/g, ' ').trim()
 }

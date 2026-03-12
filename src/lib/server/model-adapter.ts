@@ -83,8 +83,8 @@ export async function generateGoalAnchorWithModel(
     model,
     system,
     user,
-    timeoutMs: 12_000,
-    maxAttempts: 1,
+    timeoutMs: 20_000,
+    maxAttempts: 2,
   })
   return {
     goalAnchor: normalizeGoalAnchor(payload as Partial<GoalAnchor>),

@@ -4,9 +4,17 @@ import type { DatabaseSync } from 'node:sqlite'
 import { assignConversationGroup } from '@/lib/engine/conversation-policy'
 import { getJobDisplayError } from '@/lib/presentation'
 import { getDb } from '@/lib/server/db'
-import { deriveGoalAnchor, normalizeGoalAnchor, parseGoalAnchor, serializeGoalAnchor } from '@/lib/server/goal-anchor'
+import {
+  deriveGoalAnchor,
+  LEGACY_GENERIC_DELIVERABLE,
+  LEGACY_GENERIC_DRIFT_GUARD,
+  normalizeGoalAnchor,
+  parseGoalAnchor,
+  serializeGoalAnchor,
+} from '@/lib/server/goal-anchor'
 import {
   deriveGoalAnchorExplanation,
+  LEGACY_GENERIC_SOURCE_SUMMARIES,
   parseGoalAnchorExplanation,
   serializeGoalAnchorExplanation,
 } from '@/lib/server/goal-anchor-explanation'
@@ -163,7 +171,9 @@ export function listJobs() {
     ORDER BY datetime(jobs.created_at) DESC
   `).all() as Record<string, unknown>[]
 
-  return rows.map(mapJobRow)
+  return rows
+    .map((row) => maybeRepairLegacyGoalAnchorRow(db, row))
+    .map(mapJobRow)
 }
 
 export function getJobById(id: string) {
@@ -213,7 +223,7 @@ export function getJobById(id: string) {
     WHERE jobs.id = ?
   `).get(id) as Record<string, unknown> | undefined
 
-  return row ? mapJobRow(row) : null
+  return row ? mapJobRow(maybeRepairLegacyGoalAnchorRow(db, row)) : null
 }
 
 export function getJobDetail(id: string): JobDetail | null {
@@ -1130,6 +1140,62 @@ async function resolveInitialGoalAnchor(
   }
 }
 
+function maybeRepairLegacyGoalAnchorRow(db: DatabaseSync, row: Record<string, unknown>) {
+  const rawPrompt = String(row.raw_prompt ?? '')
+  const goalAnchor = parseGoalAnchor(row.goal_anchor_json)
+  const explanation = parseGoalAnchorExplanation(row.goal_anchor_explanation_json)
+
+  if (!shouldRepairLegacyGoalAnchor(rawPrompt, goalAnchor, explanation)) {
+    return row
+  }
+
+  const repairedGoalAnchor = deriveGoalAnchor(rawPrompt)
+  const repairedExplanation = deriveGoalAnchorExplanation(rawPrompt, repairedGoalAnchor)
+  const goalAnchorJson = serializeGoalAnchor(repairedGoalAnchor)
+  const explanationJson = serializeGoalAnchorExplanation(repairedExplanation)
+  const updatedAt = new Date().toISOString()
+
+  db.prepare(`
+    UPDATE jobs
+    SET goal_anchor_json = ?,
+        goal_anchor_explanation_json = ?,
+        updated_at = ?
+    WHERE id = ?
+  `).run(goalAnchorJson, explanationJson, updatedAt, String(row.id))
+
+  return {
+    ...row,
+    goal_anchor_json: goalAnchorJson,
+    goal_anchor_explanation_json: explanationJson,
+    updated_at: updatedAt,
+  }
+}
+
+function shouldRepairLegacyGoalAnchor(
+  rawPrompt: string,
+  goalAnchor: GoalAnchor,
+  explanation: GoalAnchorExplanation,
+) {
+  const hasLegacyDeliverable = normalizeForCompare(goalAnchor.deliverable) === normalizeForCompare(LEGACY_GENERIC_DELIVERABLE)
+  if (!hasLegacyDeliverable) {
+    return false
+  }
+
+  const hasLegacyGuards = sameNormalizedSet(goalAnchor.driftGuard, LEGACY_GENERIC_DRIFT_GUARD)
+  if (!hasLegacyGuards) {
+    return false
+  }
+
+  const normalizedSource = normalizeForCompare(explanation.sourceSummary)
+  const normalizedPrompt = normalizeForCompare(rawPrompt)
+  const sourceLooksLegacy = normalizedSource === normalizedPrompt
+    || LEGACY_GENERIC_SOURCE_SUMMARIES.some((item) => normalizeForCompare(item) === normalizedSource)
+  const rationaleLooksLegacy = explanation.rationale.some((item) => item.includes('防漂移条款用于防止优化过程'))
+    || explanation.rationale.some((item) => item.includes('系统把任务理解为：'))
+
+  return sourceLooksLegacy || rationaleLooksLegacy
+}
+
 function listConversationGroups(db: DatabaseSync) {
   const rows = db.prepare(`
     SELECT id, jobs_assigned, max_jobs, retired, created_at, retired_at
@@ -1347,6 +1413,24 @@ function uniqueOrderedStrings(values: string[]) {
   }
 
   return result
+}
+
+function sameNormalizedSet(left: string[], right: string[]) {
+  if (left.length !== right.length) {
+    return false
+  }
+
+  const leftSet = new Set(left.map(normalizeForCompare))
+  const rightSet = new Set(right.map(normalizeForCompare))
+  if (leftSet.size !== rightSet.size) {
+    return false
+  }
+
+  return [...leftSet].every((item) => rightSet.has(item))
+}
+
+function normalizeForCompare(value: string) {
+  return value.replace(/\s+/g, ' ').trim()
 }
 
 function resolveEffectiveMaxRounds(job: Pick<JobRecord, 'maxRoundsOverride'>, defaultMaxRounds: number) {

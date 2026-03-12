@@ -16,6 +16,25 @@ test('deriveGoalAnchor creates a stable initial anchor from raw prompt', () => {
   assert.equal(anchor.driftGuard.length >= 2, true)
 })
 
+test('deriveGoalAnchor infers a prompt-specific deliverable and guardrails for a cooking help prompt', () => {
+  const anchor = deriveGoalAnchor('帮助用户做美味的寿喜烧')
+
+  assert.match(anchor.goal, /寿喜烧/)
+  assert.match(anchor.deliverable, /寿喜烧/)
+  assert.doesNotMatch(anchor.deliverable, /主要输出产物与完成目标/)
+  assert.equal(anchor.driftGuard.some((item) => /寿喜烧/.test(item)), true)
+  assert.equal(anchor.driftGuard.some((item) => /步骤|做法|食材|火候/.test(item)), true)
+})
+
+test('deriveGoalAnchor keeps role prompts specific instead of falling back to a generic deliverable', () => {
+  const anchor = deriveGoalAnchor('作为最顶级的中医，结合问诊和图片分析症状，给出诊断建议，并在需要时继续向用户提问。')
+
+  assert.match(anchor.goal, /中医/)
+  assert.match(anchor.deliverable, /诊断建议|问诊|图片|助手设定/)
+  assert.doesNotMatch(anchor.deliverable, /主要输出产物与完成目标/)
+  assert.equal(anchor.driftGuard.some((item) => /中医|问诊|图片|角色/.test(item)), true)
+})
+
 test('normalizeGoalAnchor trims fields and drops empty drift guards', () => {
   const anchor = normalizeGoalAnchor({
     goal: '  保持原任务目标  ',

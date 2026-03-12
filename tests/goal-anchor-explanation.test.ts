@@ -22,6 +22,22 @@ test('deriveGoalAnchorExplanation creates a fallback explanation from raw prompt
   assert.equal(explanation.rationale.length >= 2, true)
 })
 
+test('deriveGoalAnchorExplanation stays prompt-specific for a cooking help prompt', () => {
+  const explanation = deriveGoalAnchorExplanation(
+    '帮助用户做美味的寿喜烧',
+    {
+      goal: '帮助用户做美味的寿喜烧',
+      deliverable: '一份寿喜烧的做法指导，包含关键步骤、所需食材与注意事项。',
+      driftGuard: ['不要改成泛泛的做菜建议，必须继续聚焦寿喜烧。'],
+    },
+  )
+
+  assert.match(explanation.sourceSummary, /寿喜烧/)
+  assert.equal(explanation.rationale.some((item) => item.includes('寿喜烧')), true)
+  assert.equal(explanation.rationale.some((item) => item.includes('一份寿喜烧的做法指导')), true)
+  assert.equal(explanation.rationale.some((item) => /偏离|泛化|关键产出/.test(item)), true)
+})
+
 test('normalizeGoalAnchorExplanation trims fields and drops empty rationale lines', () => {
   const explanation = normalizeGoalAnchorExplanation({
     sourceSummary: '  保持原始任务摘要  ',

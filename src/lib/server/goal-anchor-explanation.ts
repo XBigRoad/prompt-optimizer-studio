@@ -1,19 +1,27 @@
+import { analyzeGoalAnchorPrompt } from '@/lib/server/goal-anchor'
 import type { GoalAnchor, GoalAnchorExplanation } from '@/lib/server/types'
 
+export const LEGACY_GENERIC_SOURCE_SUMMARIES = [
+  '系统识别到原始任务要求保留核心目标。',
+  '系统保留了原始任务中最核心的目标描述。',
+]
+
 export function deriveGoalAnchorExplanation(rawPrompt: string, goalAnchor: GoalAnchor): GoalAnchorExplanation {
-  const sourceSummary = summarizeSource(rawPrompt)
+  const analysis = analyzeGoalAnchorPrompt(rawPrompt)
+  const sourceSummary = summarizeSource(analysis.prompt)
+
   return normalizeGoalAnchorExplanation({
     sourceSummary,
     rationale: [
-      `系统把任务理解为：${goalAnchor.goal}`,
-      `关键交付物被提炼为：${goalAnchor.deliverable}`,
-      '防漂移条款用于防止优化过程把任务改写成更泛化、更安全但不再忠实原始意图的版本。',
+      buildGoalRationale(analysis.focus),
+      `从原始表达可判断，最终交付应是：${goalAnchor.deliverable}`,
+      '这些边界用于防止多轮优化后偏离主题、丢掉关键产出，或退化成更空泛的说明。',
     ],
   })
 }
 
 export function normalizeGoalAnchorExplanation(input: Partial<GoalAnchorExplanation>): GoalAnchorExplanation {
-  const sourceSummary = normalizeText(input.sourceSummary ?? '') || '系统保留了原始任务中最核心的目标描述。'
+  const sourceSummary = normalizeText(input.sourceSummary ?? '') || LEGACY_GENERIC_SOURCE_SUMMARIES[1]
   const rationale = Array.isArray(input.rationale)
     ? input.rationale.map((item) => normalizeText(item)).filter(Boolean)
     : []
@@ -45,10 +53,20 @@ export function parseGoalAnchorExplanation(value: unknown) {
 
 function summarizeSource(rawPrompt: string) {
   const normalized = normalizeText(rawPrompt)
-  if (normalized.length <= 160) {
-    return normalized
+  if (!normalized) {
+    return LEGACY_GENERIC_SOURCE_SUMMARIES[1]
   }
-  return `${normalized.slice(0, 160).trimEnd()}...`
+
+  const content = normalized.length <= 150 ? normalized : `${normalized.slice(0, 150).trimEnd()}...`
+  return `用户要求：${ensureTerminalPunctuation(content)}`
+}
+
+function buildGoalRationale(focus: string) {
+  return `原始任务明确围绕“${normalizeText(focus) || '原任务'}”展开，核心目标不是泛化建议。`
+}
+
+function ensureTerminalPunctuation(value: string) {
+  return /[。！？.!?]$/u.test(value) ? value : `${value}。`
 }
 
 function normalizeText(value: string) {
