@@ -74,3 +74,37 @@ test('stable-rule cards use a single-column stack instead of a 2+1 mosaic', () =
     /\.compact-goal-grid\s*\{[^}]*grid-template-columns:\s*1fr/s,
   )
 })
+
+test('task scoring editor keeps button actions visibly separated from the textarea', () => {
+  const source = fs.readFileSync(
+    '/Volumes/1TB_No.1/Dev_Workspace/prompt-optimizer-studio/.worktrees/open-source-hardening/src/styles/globals.css',
+    'utf8',
+  )
+
+  assert.match(
+    source,
+    /\.rubric-editor-fold\s*>\s*\.label\s*\{[^}]*padding:\s*0 14px 16px;/s,
+  )
+
+  assert.match(
+    source,
+    /\.rubric-editor-fold\s*>\s*\.inline-actions\s*\{[^}]*padding:\s*12px 14px 14px;/s,
+  )
+})
+
+test('stable-rules note belongs to the left long-term-rules stack instead of floating below the whole two-column area', () => {
+  const source = fs.readFileSync(
+    '/Volumes/1TB_No.1/Dev_Workspace/prompt-optimizer-studio/.worktrees/open-source-hardening/src/components/job-detail-control-room.tsx',
+    'utf8',
+  )
+
+  assert.match(
+    source,
+    /<div className="active-goal-grid compact-goal-grid" data-ui="stable-rules-goal-stack">[\s\S]*?<p className="small goal-summary-note">/s,
+  )
+
+  assert.doesNotMatch(
+    source,
+    /<\/div>\s*<\/div>\s*<p className="small goal-summary-note">/s,
+  )
+})

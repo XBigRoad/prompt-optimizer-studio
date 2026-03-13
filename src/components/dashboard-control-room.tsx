@@ -13,10 +13,12 @@ import {
   Copy,
   History,
   PlayCircle,
+  RefreshCcw,
   Search,
 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import {
   formatRunCount,
   getConversationPolicyLabel,
@@ -46,6 +48,8 @@ type LaneKey = 'attention' | 'running' | 'recent-completed' | 'queued'
 
 type HistoryGroupView = ReturnType<typeof groupHistoryJobsByTitle<DashboardJobView>>[number]
 
+const noopDashboardAction = async (_job: DashboardJobView) => {}
+
 export function DashboardControlRoom({
   actionableOnly,
   loading,
@@ -54,8 +58,10 @@ export function DashboardControlRoom({
   actionInFlight,
   onToggleActionableOnly,
   onCopyPrompt,
+  onCompleteTask = noopDashboardAction,
   onResumeStep,
   onResumeAuto,
+  onRetry = noopDashboardAction,
   middleSlot,
 }: {
   actionableOnly: boolean
@@ -77,8 +83,10 @@ export function DashboardControlRoom({
   actionInFlight: string | null
   onToggleActionableOnly: () => void
   onCopyPrompt: (job: DashboardJobView) => Promise<void>
+  onCompleteTask?: (job: DashboardJobView) => Promise<void>
   onResumeStep: (job: DashboardJobView) => Promise<void>
   onResumeAuto: (job: DashboardJobView) => Promise<void>
+  onRetry?: (job: DashboardJobView) => Promise<void>
   middleSlot?: React.ReactNode
 }) {
   const [historyQuery, setHistoryQuery] = useState('')
@@ -309,8 +317,10 @@ function DashboardLane({
   emptyMessage,
   actionInFlight,
   onCopyPrompt,
+  onCompleteTask = noopDashboardAction,
   onResumeAuto,
   onResumeStep,
+  onRetry = noopDashboardAction,
   compact = false,
   dataUi,
 }: {
@@ -320,8 +330,10 @@ function DashboardLane({
   emptyMessage: string
   actionInFlight: string | null
   onCopyPrompt: (job: DashboardJobView) => Promise<void>
+  onCompleteTask?: (job: DashboardJobView) => Promise<void>
   onResumeAuto: (job: DashboardJobView) => Promise<void>
   onResumeStep: (job: DashboardJobView) => Promise<void>
+  onRetry?: (job: DashboardJobView) => Promise<void>
   compact?: boolean
   dataUi?: string
 }) {
@@ -341,8 +353,10 @@ function DashboardLane({
             job={job}
             actionInFlight={actionInFlight}
             onCopyPrompt={onCopyPrompt}
+            onCompleteTask={onCompleteTask}
             onResumeAuto={onResumeAuto}
             onResumeStep={onResumeStep}
+            onRetry={onRetry}
           />
         ))}
       </motion.div>
@@ -572,20 +586,26 @@ function DashboardJobCard({
   job,
   actionInFlight,
   onCopyPrompt,
+  onCompleteTask = noopDashboardAction,
   onResumeAuto,
   onResumeStep,
+  onRetry = noopDashboardAction,
   subdued = false,
 }: {
   job: DashboardJobView
   actionInFlight: string | null
   onCopyPrompt: (job: DashboardJobView) => Promise<void>
+  onCompleteTask?: (job: DashboardJobView) => Promise<void>
   onResumeAuto: (job: DashboardJobView) => Promise<void>
   onResumeStep: (job: DashboardJobView) => Promise<void>
+  onRetry?: (job: DashboardJobView) => Promise<void>
   subdued?: boolean
 }) {
   const { locale } = useI18n()
   const text = useLocaleText()
   const canAct = job.status === 'manual_review' || job.status === 'paused'
+  const canComplete = ['paused', 'manual_review', 'failed'].includes(job.status) && job.currentRound > 0
+  const canRestart = !['running', 'completed'].includes(job.status)
   const secondaryLink =
     job.status === 'completed'
       ? {
@@ -654,6 +674,34 @@ function DashboardJobCard({
               <button className="button ghost" type="button" onClick={() => void onCopyPrompt(job)}>
                 <Copy size={16} /> {text('复制', 'Copy')}
               </button>
+            ) : null}
+            {canComplete ? (
+              <ConfirmDialog
+                title={text('完成并归档？', 'Complete and archive?')}
+                description={text('这会接受当前最新完整提示词作为最终结果，并把任务移到最新结果 / 历史任务。', 'This accepts the current latest full prompt as the final result and moves the job into latest results/history.')}
+                confirmText={text('确认完成并归档', 'Confirm completion')}
+                tone="danger"
+                disabled={actionInFlight === `${job.id}:complete`}
+                onConfirm={() => onCompleteTask?.(job)}
+              >
+                <button className="button ghost" type="button" disabled={actionInFlight === `${job.id}:complete`}>
+                  <CheckCircle2 size={16} /> {actionInFlight === `${job.id}:complete` ? text('处理中...', 'Working...') : text('完成并归档', 'Complete and archive')}
+                </button>
+              </ConfirmDialog>
+            ) : null}
+            {canRestart ? (
+              <ConfirmDialog
+                title={text('重新开始？', 'Restart from the beginning?')}
+                description={text('这会清空当前候选稿与历史轮次，从初版提示词重新跑。', 'This clears the current candidates and round history, then restarts from the initial prompt.')}
+                confirmText={text('确认重新开始', 'Confirm restart')}
+                tone="danger"
+                disabled={actionInFlight === `${job.id}:retry`}
+                onConfirm={() => onRetry?.(job)}
+              >
+                <button className="button ghost" type="button" disabled={actionInFlight === `${job.id}:retry`}>
+                  <RefreshCcw size={16} /> {actionInFlight === `${job.id}:retry` ? text('处理中...', 'Working...') : text('重新开始', 'Restart')}
+                </button>
+              </ConfirmDialog>
             ) : null}
           </div>
         ) : null}

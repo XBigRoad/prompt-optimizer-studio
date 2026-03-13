@@ -274,6 +274,31 @@ test('completed dashboard cards keep a single copy action and retain detail entr
   assert.doesNotMatch(html, />复制</)
 })
 
+test('actionable dashboard cards expose complete and restart options alongside the existing controls', () => {
+  const html = renderToStaticMarkup(createElement(DashboardControlRoom, {
+    actionableOnly: false,
+    loading: false,
+    groups: {
+      attention: [makeJob('manual-actions', 'manual_review')],
+      running: [],
+      queued: [],
+      recentCompleted: [],
+      history: [],
+    },
+    stats: { attention: 1, running: 0, queued: 0, recentCompleted: 0, history: 0 },
+    actionInFlight: null,
+    onToggleActionableOnly: () => {},
+    onCopyPrompt: async () => {},
+    onResumeStep: async () => {},
+    onResumeAuto: async () => {},
+  }))
+
+  assert.match(html, /继续一轮/)
+  assert.match(html, /自动运行/)
+  assert.match(html, /完成并归档/)
+  assert.match(html, /重新开始/)
+})
+
 test('settings control room moves save action into one shared bar below the compact grid', () => {
   const html = renderToStaticMarkup(createElement(SettingsControlRoom, {
     form: {

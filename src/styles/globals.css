@@ -588,9 +588,12 @@ html[data-locale="en"] .detail-hero .eyebrow {
 
 .select-field-content,
 .combobox-popover {
+  --dropdown-available-height: var(--radix-popover-content-available-height, var(--radix-select-content-available-height, calc(100vh - 96px)));
   width: min(max(320px, var(--radix-select-trigger-width, var(--radix-popover-trigger-width))), calc(100vw - 32px));
   max-width: 440px;
-  max-height: min(420px, calc(100vh - 96px));
+  max-height: min(420px, var(--dropdown-available-height));
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
   overscroll-behavior: contain;
   touch-action: pan-y;
@@ -603,7 +606,8 @@ html[data-locale="en"] .detail-hero .eyebrow {
 
 .select-field-viewport,
 .combobox-list {
-  max-height: min(320px, calc(100vh - 156px));
+  flex: 1 1 auto;
+  min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
   touch-action: pan-y;
@@ -674,6 +678,10 @@ html[data-locale="en"] .detail-hero .eyebrow {
 
 .combobox-command {
   width: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .combobox-search-row {
@@ -1076,11 +1084,12 @@ html[data-locale="en"] .detail-hero .eyebrow {
 }
 
 .rubric-editor-fold > .label {
-  padding: 0 14px;
+  padding: 0 14px 16px;
 }
 
 .rubric-editor-fold > .inline-actions {
-  padding: 0 14px 14px;
+  padding: 12px 14px 14px;
+  border-top: 1px dashed rgba(72, 50, 27, 0.14);
 }
 
 .goal-summary-note,

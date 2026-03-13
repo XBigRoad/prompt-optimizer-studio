@@ -31,20 +31,24 @@ export function ModelAliasCombobox({
   const hydrated = useHydrated()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState("")
+  const [frozenOptions, setFrozenOptions] = useState<ModelOption[]>([])
   const searchInputRef = useRef<HTMLInputElement | null>(null)
 
   const normalizedOptions = useMemo(() => {
     const seen = new Set<string>()
-    return options.filter((option) => {
-      const id = option.id.trim()
-      if (!id || seen.has(id)) return false
-      seen.add(id)
-      return true
-    })
+    return options
+      .flatMap((option) => {
+        const id = option.id.trim()
+        if (!id || seen.has(id)) return []
+        seen.add(id)
+        return [{ id, label: option.label.trim() || id }]
+      })
+      .sort((left, right) => left.id.localeCompare(right.id, undefined, { numeric: true, sensitivity: "base" }))
   }, [options])
 
+  const visibleOptions = open ? (frozenOptions.length > 0 ? frozenOptions : normalizedOptions) : normalizedOptions
   const trimmedQuery = query.trim()
-  const hasExactMatch = normalizedOptions.some((option) => option.id === trimmedQuery)
+  const hasExactMatch = visibleOptions.some((option) => option.id === trimmedQuery)
   const canUseTypedValue = trimmedQuery.length > 0 && !hasExactMatch
   const triggerValue = value.trim() || placeholder || text("选择任务模型", "Choose a task model")
   const stopScrollPropagation = (event: { stopPropagation: () => void }) => {
@@ -57,9 +61,10 @@ export function ModelAliasCombobox({
     }
 
     setQuery("")
+    setFrozenOptions(normalizedOptions)
     const timer = window.setTimeout(() => searchInputRef.current?.focus(), 0)
     return () => window.clearTimeout(timer)
-  }, [open])
+  }, [open, normalizedOptions])
 
   if (!hydrated) {
     return (
@@ -89,7 +94,18 @@ export function ModelAliasCombobox({
   return (
     <label className="label">
       {label}
-      <Popover.Root open={open} onOpenChange={setOpen}>
+      <Popover.Root
+        open={open}
+        onOpenChange={(nextOpen) => {
+          setOpen(nextOpen)
+          if (nextOpen) {
+            setFrozenOptions(normalizedOptions)
+            return
+          }
+
+          setFrozenOptions([])
+        }}
+      >
         <div className="combobox-shell" data-ui="model-alias-combobox">
           <Popover.Trigger asChild>
             <button
@@ -115,6 +131,7 @@ export function ModelAliasCombobox({
               align="start"
               side="bottom"
               sideOffset={8}
+              collisionPadding={16}
               onOpenAutoFocus={(event) => event.preventDefault()}
               onWheelCapture={stopScrollPropagation}
               onTouchMoveCapture={stopScrollPropagation}
@@ -174,7 +191,7 @@ export function ModelAliasCombobox({
                     {text("没有匹配项。可以直接使用当前输入。", "No match found. You can use the current input directly.")}
                   </Command.Empty>
 
-                  {normalizedOptions.map((option) => (
+                  {visibleOptions.map((option) => (
                     <Command.Item
                       key={option.id}
                       value={option.id}

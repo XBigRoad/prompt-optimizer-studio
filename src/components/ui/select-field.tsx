@@ -65,6 +65,7 @@ export function SelectField({
             position="popper"
             side="bottom"
             sideOffset={8}
+            collisionPadding={16}
             onWheelCapture={stopScrollPropagation}
             onTouchMoveCapture={stopScrollPropagation}
           >

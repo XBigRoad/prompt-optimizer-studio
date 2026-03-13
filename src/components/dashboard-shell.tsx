@@ -240,6 +240,44 @@ export function DashboardShell() {
     }
   }
 
+  async function completeTask(job: JobRecord) {
+    setActionInFlight(`${job.id}:complete`)
+    try {
+      const response = await fetch(`/api/jobs/${job.id}/complete`, { method: 'POST' })
+      const payload = await response.json()
+      if (!response.ok) {
+        throw new Error(payload.error ?? text('完成并归档失败。', 'Complete and archive failed.'))
+      }
+      setJobs((current) => current.map((item) => (item.id === job.id ? payload.job : item)))
+      setActionMessage(text(`「${job.title}」已完成并归档。`, `"${job.title}" was completed and archived.`))
+      setError(null)
+    } catch (completeError) {
+      setError(completeError instanceof Error ? completeError.message : text('完成并归档失败。', 'Complete and archive failed.'))
+      setActionMessage(null)
+    } finally {
+      setActionInFlight(null)
+    }
+  }
+
+  async function retryJob(job: JobRecord) {
+    setActionInFlight(`${job.id}:retry`)
+    try {
+      const response = await fetch(`/api/jobs/${job.id}/retry`, { method: 'POST' })
+      const payload = await response.json()
+      if (!response.ok) {
+        throw new Error(payload.error ?? text('重新开始失败。', 'Restart failed.'))
+      }
+      setJobs((current) => current.map((item) => (item.id === job.id ? payload.job : item)))
+      setActionMessage(text(`「${job.title}」已重新开始。`, `"${job.title}" restarted from the beginning.`))
+      setError(null)
+    } catch (retryError) {
+      setError(retryError instanceof Error ? retryError.message : text('重新开始失败。', 'Restart failed.'))
+      setActionMessage(null)
+    } finally {
+      setActionInFlight(null)
+    }
+  }
+
   const submissionStation = (
 	      <section className={`panel submission-station${submissionExpanded ? ' expanded' : ' collapsed'}`}>
 	            <div className="section-head">
@@ -350,8 +388,10 @@ export function DashboardShell() {
             actionInFlight={actionInFlight}
             onToggleActionableOnly={() => setActionableOnly((current) => !current)}
             onCopyPrompt={copyLatestPrompt}
+            onCompleteTask={completeTask}
             onResumeStep={resumeStep}
             onResumeAuto={resumeAuto}
+            onRetry={retryJob}
           />
         </motion.div>
       </StudioFrame>

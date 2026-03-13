@@ -323,6 +323,12 @@ export function JobDetailControlRoom({
                     `${model.goalAnchor.driftGuard.length} guardrails. Expand to view the full text.`,
                   )}
                 />
+                <p className="small goal-summary-note">
+                  {text(
+                    '长期规则会持续约束后续轮次；临时引导只影响下一轮，除非你明确保存新的长期规则。',
+                    'Stable rules keep constraining later rounds. Temporary steering only affects the next round unless you explicitly save a new stable rule.',
+                  )}
+                </p>
               </div>
 
               <div className="stable-scoring-block">
@@ -387,7 +393,6 @@ export function JobDetailControlRoom({
               </div>
             </div>
 
-            <p className="small goal-summary-note">{text('长期规则会持续约束后续轮次；临时引导只影响下一轮，除非你明确保存新的长期规则。', 'Stable rules keep constraining later rounds. Temporary steering only affects the next round unless you explicitly save a new stable rule.')}</p>
             {hasPendingSteering ? (
               <div className="pending-steering-stack">
                 <div className="section-head compact-head">
