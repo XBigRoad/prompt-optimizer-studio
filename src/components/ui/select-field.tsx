@@ -27,6 +27,9 @@ export function SelectField({
 }) {
   const selectedOption = options.find((option) => option.value === value)
   const hydrated = useHydrated()
+  const stopScrollPropagation = (event: { stopPropagation: () => void }) => {
+    event.stopPropagation()
+  }
 
   if (!hydrated) {
     return (
@@ -57,8 +60,19 @@ export function SelectField({
           </Select.Icon>
         </Select.Trigger>
         <Select.Portal>
-          <Select.Content className="select-field-content" position="popper" side="bottom" sideOffset={8}>
-            <Select.Viewport className="select-field-viewport">
+          <Select.Content
+            className="select-field-content"
+            position="popper"
+            side="bottom"
+            sideOffset={8}
+            onWheelCapture={stopScrollPropagation}
+            onTouchMoveCapture={stopScrollPropagation}
+          >
+            <Select.Viewport
+              className="select-field-viewport"
+              onWheelCapture={stopScrollPropagation}
+              onTouchMoveCapture={stopScrollPropagation}
+            >
               {options.map((option) => (
                 <Select.Item key={option.value} value={option.value} className="select-field-item">
                   <Select.ItemIndicator className="select-field-item-indicator">

@@ -19,6 +19,7 @@ test('section rhythm styles avoid fixed header min-height hacks for settings and
   )
 
   assert.match(source, /\.section-body-stack\s*\{/)
+  assert.match(source, /\.settings-control-room\s*\{[^}]*display:\s*grid;[^}]*gap:\s*24px/s)
   assert.match(source, /\.settings-secondary-layout\s*\{[^}]*grid-column:\s*1\s*\/\s*-1/s)
   assert.match(source, /\.settings-form\s*\{[^}]*display:\s*grid;[^}]*gap:\s*24px/s)
 })
@@ -37,12 +38,27 @@ test('dashboard status chrome stays on the local surface and avoids browser-defa
 
   assert.match(
     source,
+    /\.summary-icon\s*\{[^}]*background:\s*color-mix\(/s,
+  )
+
+  assert.match(
+    source,
+    /\.section-title-icon\s*\{[^}]*background:\s*color-mix\(/s,
+  )
+
+  assert.match(
+    source,
     /\.control-tabs-trigger:focus-visible\s*\{[^}]*box-shadow:/s,
   )
 
   assert.match(
     source,
     /\.control-tabs-trigger\[data-state="active"\]\s*\{[^}]*color:\s*var\(--lane-accent\)/s,
+  )
+
+  assert.match(
+    source,
+    /\.control-tabs-trigger\[data-lane="queued"\]\s*\{[^}]*--lane-accent:\s*var\(--seed\)/s,
   )
 })
 

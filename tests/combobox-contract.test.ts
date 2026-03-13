@@ -22,3 +22,19 @@ test('dropdown surfaces keep scroll containment to avoid dragging the whole page
   assert.match(css, /\.select-field-viewport,\s*\.combobox-list\s*\{[\s\S]*touch-action:\s*pan-y;/)
   assert.match(css, /\.select-field-viewport,\s*\.combobox-list\s*\{[\s\S]*scrollbar-gutter:\s*stable;/)
 })
+
+test('dropdown components stop wheel propagation at the popover layer to avoid scroll chaining into the page', () => {
+  const comboboxSource = fs.readFileSync(
+    '/Volumes/1TB_No.1/Dev_Workspace/prompt-optimizer-studio/.worktrees/open-source-hardening/src/components/ui/model-alias-combobox.tsx',
+    'utf8',
+  )
+  const selectSource = fs.readFileSync(
+    '/Volumes/1TB_No.1/Dev_Workspace/prompt-optimizer-studio/.worktrees/open-source-hardening/src/components/ui/select-field.tsx',
+    'utf8',
+  )
+
+  assert.match(comboboxSource, /onWheelCapture=/)
+  assert.match(comboboxSource, /onTouchMoveCapture=/)
+  assert.match(selectSource, /onWheelCapture=/)
+  assert.match(selectSource, /onTouchMoveCapture=/)
+})

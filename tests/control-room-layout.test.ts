@@ -377,6 +377,14 @@ test('job detail control room can render fully in English', () => {
   assert.doesNotMatch(html, /任务控制/)
 })
 
+test('job detail hero keeps a dedicated result-stage chip above the job title', () => {
+  const html = renderToStaticMarkup(createElement(JobDetailControlRoom, makeDetailProps()))
+
+  assert.match(html, /data-ui="detail-stage-chip"/)
+  assert.ok(html.indexOf('data-ui="detail-stage-chip"') < html.indexOf('<h1'))
+  assert.equal(countOccurrences(html, '>结果台<'), 1)
+})
+
 test('job detail keeps the task model editor as a searchable combobox', () => {
   const html = renderToStaticMarkup(createElement(JobDetailControlRoom, makeDetailProps()))
 

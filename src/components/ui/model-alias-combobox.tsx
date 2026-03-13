@@ -47,6 +47,9 @@ export function ModelAliasCombobox({
   const hasExactMatch = normalizedOptions.some((option) => option.id === trimmedQuery)
   const canUseTypedValue = trimmedQuery.length > 0 && !hasExactMatch
   const triggerValue = value.trim() || placeholder || text("选择任务模型", "Choose a task model")
+  const stopScrollPropagation = (event: { stopPropagation: () => void }) => {
+    event.stopPropagation()
+  }
 
   useEffect(() => {
     if (!open) {
@@ -113,6 +116,8 @@ export function ModelAliasCombobox({
               side="bottom"
               sideOffset={8}
               onOpenAutoFocus={(event) => event.preventDefault()}
+              onWheelCapture={stopScrollPropagation}
+              onTouchMoveCapture={stopScrollPropagation}
             >
               <div className="combobox-popover-copy">
                 <strong>{text("先从已拉取模型里选", "Pick from fetched models first")}</strong>
@@ -145,7 +150,12 @@ export function ModelAliasCombobox({
                   />
                 </div>
 
-                <Command.List id={`${inputId}-listbox`} className="combobox-list">
+                <Command.List
+                  id={`${inputId}-listbox`}
+                  className="combobox-list"
+                  onWheelCapture={stopScrollPropagation}
+                  onTouchMoveCapture={stopScrollPropagation}
+                >
                   {canUseTypedValue ? (
                     <Command.Item
                       value={`manual:${trimmedQuery}`}

@@ -4,13 +4,13 @@ import {
   ArrowLeft,
   CheckCircle2,
   ChevronDown,
-  FileOutput,
   FileText,
   PauseCircle,
   PlayCircle,
   Plus,
   RefreshCcw,
   Settings2,
+  Sparkles,
   Trash2,
   WandSparkles,
 } from 'lucide-react'
@@ -165,8 +165,8 @@ export function JobDetailControlRoom({
         </div>
         <div className="detail-hero-grid">
           <div>
-            <span className="eyebrow detail-stage-label detail-stage-chip">
-              <FileOutput size={15} />
+            <span className="eyebrow detail-stage-label detail-stage-chip" data-ui="detail-stage-chip">
+              <Sparkles size={15} />
               {text('结果台', 'Result Desk')}
             </span>
             <h1>{model.title}</h1>
