@@ -345,6 +345,93 @@ test('job reads repair legacy generic goal anchors without touching specific anc
   }
 })
 
+test('job reads also repair malformed structured-prompt anchors that were derived from heading noise or false cooking matches', async () => {
+  const originalCwd = process.cwd()
+  const originalDbPath = process.env.PROMPT_OPTIMIZER_DB_PATH
+  const originalFetch = global.fetch
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'po-goal-anchor-malformed-repair-'))
+  process.env.PROMPT_OPTIMIZER_DB_PATH = path.join(tempDir, 'test.db')
+  process.chdir(tempDir)
+
+  try {
+    const { getDb, resetDbForTests } = await import('../src/lib/server/db')
+    resetDbForTests()
+    const { saveSettings } = await import('../src/lib/server/settings')
+    const { createJobs, getJobById } = await import('../src/lib/server/jobs')
+
+    saveSettings({
+      cpamcBaseUrl: 'http://localhost:8317/v1',
+      cpamcApiKey: 'secret',
+      defaultOptimizerModel: 'gpt-5.2',
+      defaultJudgeModel: 'gpt-5.2',
+    })
+
+    global.fetch = (async () => {
+      throw new Error('simulated goal anchor generation failure')
+    }) as typeof fetch
+
+    const rawPrompt = `
+# Role: 提示词架构师（Prompt Architect V4.2）
+
+## 0. 初始化与身份锁定
+- 时间锚点：{Current_Date}
+- 你是“Prompt Architect V4.2”，不是通用聊天助手，不降级为普通提示词优化器。
+
+## 2. 核心目标
+你的唯一职责是：根据用户任务，自动路由到三条互斥路径之一（A 硬逻辑 / B 软感官 / C 多维系统），并交付唯一、结构化、可直接使用的高质量 Prompt 体系，而不是退化为通用提示词优化建议。
+
+## 3. MVE
+原始任务明确围绕“1个最小验证实验”展开，核心目标不是泛化建议。
+`
+
+    const [job] = await createJobs([
+      { title: 'Malformed structured anchor', rawPrompt, optimizerModel: 'gpt-5.2', judgeModel: 'gpt-5.2' },
+    ])
+
+    const db = getDb()
+    db.prepare(`
+      UPDATE jobs
+      SET goal_anchor_json = ?,
+          goal_anchor_explanation_json = ?
+      WHERE id = ?
+    `).run(
+      JSON.stringify({
+        goal: '# Role: 提示词架构师（Prompt Architect V4.2） ## 0.',
+        deliverable: '一份法指导的做法指导，包含关键步骤、所需食材与注意事项。',
+        driftGuard: [
+          '不要改成泛泛的做菜建议，必须继续聚焦法指导。',
+          '不要只给概述或食材清单，必须保留可执行步骤与关键要点。',
+          '不要偏离到无关的背景科普或其他料理。',
+        ],
+      }),
+      JSON.stringify({
+        sourceSummary: rawPrompt.replace(/\s+/g, ' ').trim(),
+        rationale: [
+          '系统把任务理解为：# Role: 提示词架构师（Prompt Architect V4.2） ## 0.',
+          '关键交付物被提炼为：一份法指导的做法指导，包含关键步骤、所需食材与注意事项。',
+        ],
+      }),
+      job.id,
+    )
+
+    const repaired = getJobById(job.id)
+
+    assert.ok(repaired)
+    assert.doesNotMatch(repaired.goalAnchor.goal, /^#|Role:|## 0/)
+    assert.match(repaired.goalAnchor.goal, /最小验证实验|互斥路径|Prompt 体系/)
+    assert.match(repaired.goalAnchor.deliverable, /Prompt 体系|可直接使用/)
+    assert.doesNotMatch(repaired.goalAnchor.deliverable, /做法指导|食材|料理/)
+  } finally {
+    process.chdir(originalCwd)
+    global.fetch = originalFetch
+    if (originalDbPath === undefined) {
+      delete process.env.PROMPT_OPTIMIZER_DB_PATH
+    } else {
+      process.env.PROMPT_OPTIMIZER_DB_PATH = originalDbPath
+    }
+  }
+})
+
 test('job controls support paused state, resume modes, and max round overrides', async () => {
   const originalCwd = process.cwd()
   const originalDbPath = process.env.PROMPT_OPTIMIZER_DB_PATH

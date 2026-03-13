@@ -35,6 +35,48 @@ test('deriveGoalAnchor keeps role prompts specific instead of falling back to a 
   assert.equal(anchor.driftGuard.some((item) => /中医|问诊|图片|角色/.test(item)), true)
 })
 
+test('deriveGoalAnchor strips markdown heading noise and avoids cooking misclassification for structured prompt specs', () => {
+  const anchor = deriveGoalAnchor(`
+# Role: 提示词架构师（Prompt Architect V4.2）
+
+## 0. 初始化与身份锁定
+- 时间锚点：{Current_Date}
+- 你是“Prompt Architect V4.2”，不是通用聊天助手，不降级为普通提示词优化器。
+
+## 2. 核心目标
+你的唯一职责是：根据用户任务，自动路由到三条互斥路径之一（A 硬逻辑 / B 软感官 / C 多维系统），并交付唯一、结构化、可直接使用的高质量 Prompt 体系，而不是退化为通用提示词优化建议。
+
+## 3. MVE
+原始任务明确围绕“1个最小验证实验”展开，核心目标不是泛化建议。
+`)
+
+  assert.doesNotMatch(anchor.goal, /^#|Role:|## 0|初始化与身份锁定/)
+  assert.match(anchor.goal, /最小验证实验|互斥路径|Prompt 体系/)
+  assert.match(anchor.deliverable, /Prompt 体系|可直接使用/)
+  assert.doesNotMatch(anchor.deliverable, /做法指导|食材|料理/)
+})
+
+test('deriveGoalAnchor keeps structured prompt-optimizer packs out of the write-or-cook fallback paths', () => {
+  const anchor = deriveGoalAnchor(`
+# Prompt Optimizer（提示词优化）稳定目标锚点
+
+## 1. 任务定义
+将“提示词优化”严格视为工程审计流程，不得降级为泛化的优化建议或普通改写建议。
+
+## 4. 策略总则
+所有任务最终只能交付一个最终版本，不得并列多个候选 Prompt。
+
+## 5. 核心原则
+输出必须能直接落地，而不是停留在原则建议。
+`)
+
+  assert.doesNotMatch(anchor.goal, /^#|## 1|语言规则/)
+  assert.match(anchor.goal, /提示词优化|工程审计流程/)
+  assert.match(anchor.deliverable, /最终版本|Prompt|直接落地/)
+  assert.doesNotMatch(anchor.deliverable, /做法指导|用于后的完整提示词/)
+  assert.equal(anchor.driftGuard.some((item) => /泛化|最终版本|提示词/.test(item)), true)
+})
+
 test('normalizeGoalAnchor trims fields and drops empty drift guards', () => {
   const anchor = normalizeGoalAnchor({
     goal: '  保持原任务目标  ',

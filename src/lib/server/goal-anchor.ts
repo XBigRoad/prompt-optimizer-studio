@@ -9,6 +9,13 @@ export const LEGACY_GENERIC_DRIFT_GUARD = [
 
 export type GoalAnchorPromptKind = 'optimize_prompt' | 'cooking_help' | 'generate' | 'role' | 'analysis' | 'general'
 
+type StructuredPromptSummary = {
+  goalText: string
+  deliverableText: string
+  focus: string
+  topic: string | null
+}
+
 export type GoalAnchorPromptAnalysis = {
   prompt: string
   strippedPrompt: string
@@ -16,6 +23,7 @@ export type GoalAnchorPromptAnalysis = {
   focus: string
   role: string | null
   topic: string | null
+  structuredSummary: StructuredPromptSummary | null
 }
 
 export function deriveGoalAnchor(rawPrompt: string): GoalAnchor {
@@ -34,14 +42,15 @@ export function deriveGoalAnchor(rawPrompt: string): GoalAnchor {
 export function analyzeGoalAnchorPrompt(rawPrompt: string): GoalAnchorPromptAnalysis {
   const prompt = normalizeText(rawPrompt)
   const strippedPrompt = stripLeadIn(prompt) || prompt
+  const structuredSummary = summarizeStructuredPrompt(rawPrompt)
   const role = extractRoleSubject(strippedPrompt)
-  const optimizeTopic = extractOptimizeTopic(strippedPrompt)
+  const optimizeTopic = structuredSummary?.topic ?? extractOptimizeTopic(strippedPrompt) ?? extractPromptSystemTopic(strippedPrompt)
   const cookingTopic = extractCookingTopic(strippedPrompt)
   const generatedTopic = extractGeneratedTopic(strippedPrompt)
   const fallbackTopic = extractFallbackTopic(strippedPrompt)
   const topic = optimizeTopic ?? cookingTopic ?? generatedTopic ?? fallbackTopic
 
-  const kind: GoalAnchorPromptKind = optimizeTopic
+  const kind: GoalAnchorPromptKind = structuredSummary || optimizeTopic
     ? 'optimize_prompt'
     : cookingTopic && /(帮助|帮|请帮|做|制作|烹饪|cook|make)/iu.test(strippedPrompt)
       ? 'cooking_help'
@@ -53,7 +62,7 @@ export function analyzeGoalAnchorPrompt(rawPrompt: string): GoalAnchorPromptAnal
             ? 'analysis'
             : 'general'
 
-  const focus = topic ?? role ?? compactTopic(strippedPrompt)
+  const focus = structuredSummary?.focus ?? topic ?? role ?? compactTopic(strippedPrompt)
 
   return {
     prompt,
@@ -62,6 +71,7 @@ export function analyzeGoalAnchorPrompt(rawPrompt: string): GoalAnchorPromptAnal
     focus,
     role,
     topic,
+    structuredSummary,
   }
 }
 
@@ -106,6 +116,10 @@ export function formatGoalAnchorForPrompt(anchor: GoalAnchor) {
 }
 
 function deriveGoalText(analysis: GoalAnchorPromptAnalysis) {
+  if (analysis.structuredSummary) {
+    return analysis.structuredSummary.goalText
+  }
+
   if (analysis.strippedPrompt.length <= 120) {
     return restoreSentencePunctuation(analysis.strippedPrompt)
   }
@@ -124,6 +138,10 @@ function deriveGoalText(analysis: GoalAnchorPromptAnalysis) {
 }
 
 function deriveDeliverableText(analysis: GoalAnchorPromptAnalysis) {
+  if (analysis.structuredSummary) {
+    return analysis.structuredSummary.deliverableText
+  }
+
   switch (analysis.kind) {
     case 'optimize_prompt': {
       const topic = analysis.topic ? `用于${analysis.topic.replace(/的$/u, '')}的` : ''
@@ -233,14 +251,15 @@ function extractOptimizeTopic(value: string) {
 function extractCookingTopic(value: string) {
   return extractTopic(value, [
     /(?:帮助(?:用户)?|帮(?:用户|我)?|请帮(?:用户|我)?)(?:做|制作|烹饪|煮|烧)(?:出)?([^，。！？.!?\n]{1,22})/iu,
-    /(?:做|制作|烹饪|煮|烧)(?:出)?([^，。！？.!?\n]{1,22})/iu,
+    /^(?:请(?:帮(?:用户|我)?|帮助(?:用户|我)?)?\s*)?(?:做|制作|烹饪|煮|烧)(?:出)?([^，。！？.!?\n]{1,22})/iu,
     /(?:make|cook)\s+([^,.!?\n]{1,22})/iu,
   ])
 }
 
 function extractGeneratedTopic(value: string) {
   return extractTopic(value, [
-    /(?:生成|写|撰写|创作|产出|输出)([^，。！？.!?\n]{1,24})/iu,
+    /(?:生成|撰写|创作|产出|输出)([^，。！？.!?\n]{1,24})/iu,
+    /^(?:请(?:帮(?:我|用户)?)?\s*)?写(?:出)?([^，。！？.!?\n]{1,24})/iu,
     /(?:generate|write|create|draft)\s+([^,.!?\n]{1,28})/iu,
   ])
 }
@@ -274,6 +293,227 @@ function extractOutputRequirement(value: string) {
   const match = value.match(/(?:要求|需要|并|最终)?(输出[^，。！？.!?\n]{2,48})/u)
   const normalized = match?.[1] ? cleanTopic(match[1]) : null
   return normalized ? restoreSentencePunctuation(normalized, '') : null
+}
+
+function extractPromptSystemTopic(value: string) {
+  if (/(?:提示词优化|prompt optimizer|prompt architect)/iu.test(value) && /(?:流程|体系|版本|prompt|提示词)/iu.test(value)) {
+    if (/(?:工程审计流程|审计流程)/u.test(value)) {
+      return '提示词优化工程审计流程'
+    }
+    if (/(?:prompt\s*体系|提示词体系)/iu.test(value)) {
+      return '高质量 Prompt 体系'
+    }
+    return '提示词优化'
+  }
+
+  return null
+}
+
+function summarizeStructuredPrompt(rawPrompt: string): StructuredPromptSummary | null {
+  const normalizedRaw = normalizeLineBreaks(rawPrompt)
+  if (!looksLikeStructuredPromptPack(normalizedRaw)) {
+    return null
+  }
+
+  const lines = normalizedRaw
+    .split('\n')
+    .map((line) => ({
+      raw: line.trim(),
+      clean: cleanStructuredLine(line),
+    }))
+    .filter((item) => item.raw.length > 0 || item.clean.length > 0)
+
+  const goalCandidate = pickStructuredGoalLine(lines)
+  const deliverableCandidate = pickStructuredDeliverableLine(lines, goalCandidate)
+  const topic = extractStructuredTopic(goalCandidate, deliverableCandidate)
+  const goalText = restoreSentencePunctuation(goalCandidate ?? topic ?? '保持原始 Prompt 体系的核心目标')
+  const deliverableText = restoreSentencePunctuation(buildStructuredDeliverable(deliverableCandidate, goalCandidate, topic))
+
+  return {
+    goalText,
+    deliverableText,
+    focus: topic ?? compactTopic(goalText, 28),
+    topic,
+  }
+}
+
+function looksLikeStructuredPromptPack(value: string) {
+  const headingCount = (value.match(/^#{1,6}\s+/gmu) ?? []).length
+  const hasPromptSignals = /(提示词|prompt|Prompt)/u.test(value)
+  const hasSpecSignals = /(核心目标|任务定义|策略总则|核心原则|最终版本|可直接使用|互斥路径|路由)/u.test(value)
+  return headingCount >= 2 && hasPromptSignals && hasSpecSignals
+}
+
+function cleanStructuredLine(value: string) {
+  return normalizeText(value)
+    .replace(/^#{1,6}\s*/u, '')
+    .replace(/^[-*+]\s*/u, '')
+    .replace(/^\d+\.\s*/u, '')
+    .replace(/^[（(【[]?[A-ZＡ-Ｚa-zａ-ｚ0-9]+[）)】\].:：]+\s*/u, '')
+    .trim()
+}
+
+function isStructuredHeading(line: { raw: string; clean: string }) {
+  if (/^#{1,6}\s+/u.test(line.raw)) {
+    return true
+  }
+
+  return /^(?:\d+\.\s*)?(?:初始化与身份锁定|语言规则|任务定义|变量校验池|核心目标|策略总则|核心原则|MVE|交付要求|输出要求)$/u.test(line.clean)
+}
+
+function isStructuredNoiseLine(value: string) {
+  return !value
+    || /^(?:时间锚点|Current_Date|role|prompt architect)\b/iu.test(value)
+    || /^\{.+\}$/u.test(value)
+    || /^\d+$/u.test(value)
+}
+
+function pickStructuredGoalLine(lines: Array<{ raw: string; clean: string }>) {
+  const tagged = pickLineAfterHeading(lines, ['核心目标', '任务定义', '核心原则'])
+  if (tagged) {
+    return tagged
+  }
+
+  return pickBestStructuredLine(lines, [
+    '唯一职责',
+    '互斥路径',
+    '工程审计流程',
+    'prompt 体系',
+    '提示词优化',
+    '可直接使用',
+    '最小验证实验',
+  ])
+}
+
+function pickStructuredDeliverableLine(
+  lines: Array<{ raw: string; clean: string }>,
+  goalCandidate: string | null,
+) {
+  const tagged = pickLineAfterHeading(lines, ['交付要求', '输出要求', '策略总则'])
+  if (tagged) {
+    return tagged
+  }
+
+  return pickBestStructuredLine(lines, [
+    '最终版本',
+    '可直接落地',
+    '可直接使用',
+    'prompt 体系',
+    '交付',
+    '候选 prompt',
+    '单一最终版本',
+  ]) ?? goalCandidate
+}
+
+function pickLineAfterHeading(lines: Array<{ raw: string; clean: string }>, headings: string[]) {
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index]
+    if (!headings.some((heading) => line.clean.includes(heading) || line.raw.includes(heading))) {
+      continue
+    }
+
+    for (let nextIndex = index + 1; nextIndex < lines.length; nextIndex += 1) {
+      const nextLine = lines[nextIndex]
+      if (isStructuredHeading(nextLine)) {
+        break
+      }
+
+      if (!isStructuredNoiseLine(nextLine.clean)) {
+        return nextLine.clean
+      }
+    }
+  }
+
+  return null
+}
+
+function pickBestStructuredLine(lines: Array<{ raw: string; clean: string }>, keywords: string[]) {
+  let bestLine: string | null = null
+  let bestScore = -1
+
+  for (const line of lines) {
+    if (isStructuredHeading(line) || isStructuredNoiseLine(line.clean)) {
+      continue
+    }
+
+    const normalized = line.clean
+    const lowered = normalized.toLowerCase()
+    let score = 0
+
+    for (const keyword of keywords) {
+      if (lowered.includes(keyword.toLowerCase())) {
+        score += 3
+      }
+    }
+
+    if (/prompt|提示词|体系|版本|交付|输出|可直接/u.test(normalized)) {
+      score += 2
+    }
+    if (normalized.length >= 24) {
+      score += 1
+    }
+    if (/退化|降级|泛化/u.test(normalized)) {
+      score += 1
+    }
+
+    if (score > bestScore) {
+      bestScore = score
+      bestLine = normalized
+    }
+  }
+
+  return bestScore > 0 ? bestLine : null
+}
+
+function extractStructuredTopic(goalCandidate: string | null, deliverableCandidate: string | null) {
+  const combined = normalizeText(`${goalCandidate ?? ''} ${deliverableCandidate ?? ''}`)
+  if (!combined) {
+    return null
+  }
+
+  if (/(?:提示词优化|prompt optimizer)/iu.test(combined) && /(?:工程审计流程|审计流程)/u.test(combined)) {
+    return '提示词优化工程审计流程'
+  }
+  if (/(?:prompt\s*体系|提示词体系)/iu.test(combined)) {
+    return /最小验证实验/u.test(combined) ? '最小验证实验 Prompt 体系' : '高质量 Prompt 体系'
+  }
+  if (/最小验证实验/u.test(combined)) {
+    return '最小验证实验'
+  }
+  if (/互斥路径/u.test(combined)) {
+    return '多路径 Prompt 路由'
+  }
+  return compactTopic(combined, 24)
+}
+
+function buildStructuredDeliverable(
+  deliverableCandidate: string | null,
+  goalCandidate: string | null,
+  topic: string | null,
+) {
+  const combined = normalizeText(`${deliverableCandidate ?? ''} ${goalCandidate ?? ''} ${topic ?? ''}`)
+  const mentionsPromptSystem = /(?:prompt\s*体系|提示词体系|高质量 prompt 体系)/iu.test(combined)
+  const mentionsFinalVersion = /(?:最终版本|单一最终版本|唯一|不(?:得|并列).*候选\s*prompt|不并列多个候选)/iu.test(combined)
+  const mentionsDirectUse = /(?:可直接使用|可直接落地|直接落地)/u.test(combined)
+
+  if (mentionsPromptSystem && mentionsFinalVersion) {
+    return `一套结构化、${mentionsDirectUse ? '可直接使用' : '可直接落地'}的 Prompt 体系，并最终收敛为单一最终版本`
+  }
+  if (mentionsPromptSystem) {
+    return `一套结构化、${mentionsDirectUse ? '可直接使用' : '可直接落地'}的 Prompt 体系`
+  }
+  if (mentionsFinalVersion) {
+    return `一版${mentionsDirectUse ? '可直接落地' : '可直接使用'}的最终 Prompt 版本，不并列多个候选`
+  }
+  if (/(?:提示词优化|prompt optimizer|工程审计流程)/iu.test(combined)) {
+    return '一版可直接落地的最终 Prompt 版本，体现提示词优化的工程审计流程'
+  }
+
+  return `一套围绕${topic ?? '原任务'}的结构化最终结果`
+}
+
+function normalizeLineBreaks(value: string) {
+  return value.replace(/\r\n?/g, '\n').trim()
 }
 
 function cleanTopic(value: string) {

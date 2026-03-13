@@ -1176,6 +1176,10 @@ function shouldRepairLegacyGoalAnchor(
   goalAnchor: GoalAnchor,
   explanation: GoalAnchorExplanation,
 ) {
+  if (shouldRepairMalformedStructuredPromptAnchor(rawPrompt, goalAnchor, explanation)) {
+    return true
+  }
+
   const hasLegacyDeliverable = normalizeForCompare(goalAnchor.deliverable) === normalizeForCompare(LEGACY_GENERIC_DELIVERABLE)
   if (!hasLegacyDeliverable) {
     return false
@@ -1194,6 +1198,30 @@ function shouldRepairLegacyGoalAnchor(
     || explanation.rationale.some((item) => item.includes('系统把任务理解为：'))
 
   return sourceLooksLegacy || rationaleLooksLegacy
+}
+
+function shouldRepairMalformedStructuredPromptAnchor(
+  rawPrompt: string,
+  goalAnchor: GoalAnchor,
+  explanation: GoalAnchorExplanation,
+) {
+  const normalizedPrompt = normalizeForCompare(rawPrompt)
+  const looksLikeStructuredPrompt = /(?:#|##)\s/.test(rawPrompt)
+    && /(?:提示词|prompt)/iu.test(rawPrompt)
+    && /(?:核心目标|任务定义|策略总则|核心原则|最终版本|可直接使用|互斥路径|工程审计流程)/u.test(rawPrompt)
+
+  if (!looksLikeStructuredPrompt) {
+    return false
+  }
+
+  const goalLooksMalformed = /^#/.test(goalAnchor.goal)
+    || /(?:Role:|##\s*\d|初始化与身份锁定|语言规则)/iu.test(goalAnchor.goal)
+  const deliverableLooksMalformed = /(?:做法指导|食材|料理|用于后的完整提示词)/u.test(goalAnchor.deliverable)
+  const guardsLookMalformed = goalAnchor.driftGuard.some((item) => /(?:做菜建议|食材清单|其他料理|聚焦法指导)/u.test(item))
+  const sourceLooksRawPrompt = normalizeForCompare(explanation.sourceSummary) === normalizedPrompt
+  const rationaleLooksMalformed = explanation.rationale.some((item) => /(?:系统把任务理解为：#|做法指导|食材与注意事项)/u.test(item))
+
+  return goalLooksMalformed || deliverableLooksMalformed || guardsLookMalformed || (sourceLooksRawPrompt && rationaleLooksMalformed)
 }
 
 function listConversationGroups(db: DatabaseSync) {
