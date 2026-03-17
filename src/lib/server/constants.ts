@@ -50,6 +50,8 @@ export const DEFAULT_SETTINGS: Omit<AppSettings, 'updatedAt'> = {
   apiProtocol: 'auto',
   defaultOptimizerModel: '',
   defaultJudgeModel: '',
+  defaultOptimizerReasoningEffort: 'default',
+  defaultJudgeReasoningEffort: 'default',
   scoreThreshold: 95,
   judgePassCount: 3,
   maxRounds: 8,

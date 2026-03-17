@@ -66,6 +66,7 @@ test('OpenAI-compatible adapter posts chat completions with bearer auth', async 
       user: 'user prompt',
       timeoutMs: 1_000,
       maxAttempts: 1,
+      reasoningEffort: 'default',
     })
 
     assert.equal(adapter.protocol, 'openai-compatible')
@@ -77,7 +78,86 @@ test('OpenAI-compatible adapter posts chat completions with bearer auth', async 
       { role: 'system', content: 'system instruction' },
       { role: 'user', content: 'user prompt' },
     ])
+    assert.equal(capturedBody.temperature, 0.2)
     assert.equal(payload.optimizedPrompt, 'final prompt')
+  } finally {
+    global.fetch = originalFetch
+  }
+})
+
+test('OpenAI-compatible adapter sends reasoning_effort and omits temperature for GPT-5 family when reasoning is enabled', async () => {
+  const originalFetch = global.fetch
+  let capturedBody: Record<string, unknown> = {}
+
+  try {
+    global.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      capturedBody = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>
+      return new Response(JSON.stringify({
+        choices: [
+          {
+            message: {
+              content: '{"optimizedPrompt":"final prompt"}',
+            },
+          },
+        ],
+      }), { status: 200 })
+    }) as typeof fetch
+
+    const adapter = createProviderAdapter({
+      cpamcBaseUrl: 'https://api.openai.com/v1',
+      cpamcApiKey: 'sk-openai',
+    })
+
+    await adapter.requestJson({
+      model: 'gpt-5.4',
+      system: 'system instruction',
+      user: 'user prompt',
+      timeoutMs: 1_000,
+      maxAttempts: 1,
+      reasoningEffort: 'xhigh',
+    })
+
+    assert.equal(capturedBody.reasoning_effort, 'xhigh')
+    assert.equal('temperature' in capturedBody, false)
+  } finally {
+    global.fetch = originalFetch
+  }
+})
+
+test('OpenAI-compatible adapter keeps temperature for non GPT-5 models even when reasoning effort is provided', async () => {
+  const originalFetch = global.fetch
+  let capturedBody: Record<string, unknown> = {}
+
+  try {
+    global.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      capturedBody = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>
+      return new Response(JSON.stringify({
+        choices: [
+          {
+            message: {
+              content: '{"optimizedPrompt":"final prompt"}',
+            },
+          },
+        ],
+      }), { status: 200 })
+    }) as typeof fetch
+
+    const adapter = createProviderAdapter({
+      cpamcBaseUrl: 'https://api.openai.com/v1',
+      cpamcApiKey: 'sk-openai',
+    })
+
+    await adapter.requestJson({
+      model: 'gpt-4.1',
+      system: 'system instruction',
+      user: 'user prompt',
+      timeoutMs: 1_000,
+      maxAttempts: 1,
+      reasoningEffort: 'high',
+    })
+
+    assert.equal(capturedBody.reasoning_effort, 'high')
+    assert.equal(capturedBody.temperature, 0.2)
   } finally {
     global.fetch = originalFetch
   }

@@ -22,7 +22,7 @@ test('normalizes OpenAI-style model payloads into alias-only ids', () => {
   assert.deepEqual(result, ['gpt-5.4', 'gemini-3.1-pro', 'gpt-5.2'])
 })
 
-test('createJobs snapshots explicit and default task models', async () => {
+test('createJobs snapshots explicit and default task models plus reasoning defaults', async () => {
   const originalCwd = process.cwd()
   const originalDbPath = process.env.PROMPT_OPTIMIZER_DB_PATH
   const originalFetch = global.fetch
@@ -41,6 +41,8 @@ test('createJobs snapshots explicit and default task models', async () => {
       cpamcApiKey: 'secret',
       defaultOptimizerModel: 'gpt-5.4',
       defaultJudgeModel: 'gemini-3.1-pro',
+      defaultOptimizerReasoningEffort: 'xhigh',
+      defaultJudgeReasoningEffort: 'high',
     })
 
     global.fetch = (async () => {
@@ -62,8 +64,12 @@ test('createJobs snapshots explicit and default task models', async () => {
 
     assert.equal(explicitJob.optimizerModel, 'gpt-5.2')
     assert.equal(explicitJob.judgeModel, 'gemini-3.1-pro')
+    assert.equal(explicitJob.optimizerReasoningEffort, 'xhigh')
+    assert.equal(explicitJob.judgeReasoningEffort, 'high')
     assert.equal(defaultJob.optimizerModel, 'gpt-5.4')
     assert.equal(defaultJob.judgeModel, 'gemini-3.1-pro')
+    assert.equal(defaultJob.optimizerReasoningEffort, 'xhigh')
+    assert.equal(defaultJob.judgeReasoningEffort, 'high')
   } finally {
     process.chdir(originalCwd)
     global.fetch = originalFetch

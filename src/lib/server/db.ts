@@ -24,6 +24,8 @@ export function getDb() {
       api_protocol TEXT NOT NULL DEFAULT 'auto',
       default_optimizer_model TEXT NOT NULL DEFAULT '',
       default_judge_model TEXT NOT NULL DEFAULT '',
+      default_optimizer_reasoning_effort TEXT NOT NULL DEFAULT 'default',
+      default_judge_reasoning_effort TEXT NOT NULL DEFAULT 'default',
       score_threshold INTEGER NOT NULL DEFAULT 95,
       judge_pass_count INTEGER NOT NULL DEFAULT 3,
       max_rounds INTEGER NOT NULL DEFAULT 8,
@@ -58,6 +60,8 @@ export function getDb() {
       raw_prompt TEXT NOT NULL,
       optimizer_model TEXT NOT NULL DEFAULT '',
       judge_model TEXT NOT NULL DEFAULT '',
+      optimizer_reasoning_effort TEXT NOT NULL DEFAULT 'default',
+      judge_reasoning_effort TEXT NOT NULL DEFAULT 'default',
       pending_optimizer_model TEXT,
       pending_judge_model TEXT,
       status TEXT NOT NULL,
@@ -129,8 +133,12 @@ export function getDb() {
   ensureColumn(db, 'settings', 'api_protocol', "TEXT NOT NULL DEFAULT 'auto'")
   ensureColumn(db, 'settings', 'default_optimizer_model', "TEXT NOT NULL DEFAULT ''")
   ensureColumn(db, 'settings', 'default_judge_model', "TEXT NOT NULL DEFAULT ''")
+  ensureColumn(db, 'settings', 'default_optimizer_reasoning_effort', "TEXT NOT NULL DEFAULT 'default'")
+  ensureColumn(db, 'settings', 'default_judge_reasoning_effort', "TEXT NOT NULL DEFAULT 'default'")
   ensureColumn(db, 'jobs', 'optimizer_model', "TEXT NOT NULL DEFAULT ''")
   ensureColumn(db, 'jobs', 'judge_model', "TEXT NOT NULL DEFAULT ''")
+  ensureColumn(db, 'jobs', 'optimizer_reasoning_effort', "TEXT NOT NULL DEFAULT 'default'")
+  ensureColumn(db, 'jobs', 'judge_reasoning_effort', "TEXT NOT NULL DEFAULT 'default'")
   ensureColumn(db, 'jobs', 'pending_optimizer_model', 'TEXT')
   ensureColumn(db, 'jobs', 'pending_judge_model', 'TEXT')
   ensureColumn(db, 'jobs', 'run_mode', "TEXT NOT NULL DEFAULT 'auto'")
@@ -162,6 +170,8 @@ export function getDb() {
         api_protocol,
         default_optimizer_model,
         default_judge_model,
+        default_optimizer_reasoning_effort,
+        default_judge_reasoning_effort,
         score_threshold,
         judge_pass_count,
         max_rounds,
@@ -169,7 +179,7 @@ export function getDb() {
         worker_concurrency,
         conversation_policy,
         updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       1,
       DEFAULT_SETTINGS.cpamcBaseUrl,
@@ -177,6 +187,8 @@ export function getDb() {
       DEFAULT_SETTINGS.apiProtocol,
       DEFAULT_SETTINGS.defaultOptimizerModel,
       DEFAULT_SETTINGS.defaultJudgeModel,
+      DEFAULT_SETTINGS.defaultOptimizerReasoningEffort,
+      DEFAULT_SETTINGS.defaultJudgeReasoningEffort,
       DEFAULT_SETTINGS.scoreThreshold,
       DEFAULT_SETTINGS.judgePassCount,
       DEFAULT_SETTINGS.maxRounds,

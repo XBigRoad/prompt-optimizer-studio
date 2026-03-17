@@ -129,25 +129,110 @@ test('settings route defaults worker concurrency to 2 and persists updates', asy
 
     const initialResponse = await settingsRoute.GET()
     assert.equal(initialResponse.status, 200)
-    const initialPayload = (await initialResponse.json()) as { settings: { workerConcurrency: number } }
+    const initialPayload = (await initialResponse.json()) as {
+      settings: {
+        workerConcurrency: number
+        defaultOptimizerReasoningEffort: string
+        defaultJudgeReasoningEffort: string
+      }
+    }
     assert.equal(initialPayload.settings.workerConcurrency, 2)
+    assert.equal(initialPayload.settings.defaultOptimizerReasoningEffort, 'default')
+    assert.equal(initialPayload.settings.defaultJudgeReasoningEffort, 'default')
 
     const saveResponse = await settingsRoute.POST(new Request('http://localhost/api/settings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         workerConcurrency: 4,
+        defaultOptimizerReasoningEffort: 'xhigh',
+        defaultJudgeReasoningEffort: 'high',
       }),
     }))
 
     assert.equal(saveResponse.status, 200)
-    const savePayload = (await saveResponse.json()) as { settings: { workerConcurrency: number } }
+    const savePayload = (await saveResponse.json()) as {
+      settings: {
+        workerConcurrency: number
+        defaultOptimizerReasoningEffort: string
+        defaultJudgeReasoningEffort: string
+      }
+    }
     assert.equal(savePayload.settings.workerConcurrency, 4)
+    assert.equal(savePayload.settings.defaultOptimizerReasoningEffort, 'xhigh')
+    assert.equal(savePayload.settings.defaultJudgeReasoningEffort, 'high')
 
     const getResponse = await settingsRoute.GET()
     assert.equal(getResponse.status, 200)
-    const getPayload = (await getResponse.json()) as { settings: { workerConcurrency: number } }
+    const getPayload = (await getResponse.json()) as {
+      settings: {
+        workerConcurrency: number
+        defaultOptimizerReasoningEffort: string
+        defaultJudgeReasoningEffort: string
+      }
+    }
     assert.equal(getPayload.settings.workerConcurrency, 4)
+    assert.equal(getPayload.settings.defaultOptimizerReasoningEffort, 'xhigh')
+    assert.equal(getPayload.settings.defaultJudgeReasoningEffort, 'high')
+  } finally {
+    process.chdir(originalCwd)
+    if (originalDbPath === undefined) {
+      delete process.env.PROMPT_OPTIMIZER_DB_PATH
+    } else {
+      process.env.PROMPT_OPTIMIZER_DB_PATH = originalDbPath
+    }
+  }
+})
+
+test('settings route normalizes supported reasoning effort values and falls back invalid input to default', async () => {
+  const originalCwd = process.cwd()
+  const originalDbPath = process.env.PROMPT_OPTIMIZER_DB_PATH
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'po-settings-reasoning-'))
+  process.env.PROMPT_OPTIMIZER_DB_PATH = path.join(tempDir, 'test.db')
+  process.chdir(tempDir)
+
+  try {
+    const { resetDbForTests } = await import('../src/lib/server/db')
+    resetDbForTests()
+    const settingsRoute = await import('../src/app/api/settings/route')
+
+    const validResponse = await settingsRoute.POST(new Request('http://localhost/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        defaultOptimizerReasoningEffort: 'minimal',
+        defaultJudgeReasoningEffort: 'none',
+      }),
+    }))
+
+    assert.equal(validResponse.status, 200)
+    const validPayload = (await validResponse.json()) as {
+      settings: {
+        defaultOptimizerReasoningEffort: string
+        defaultJudgeReasoningEffort: string
+      }
+    }
+    assert.equal(validPayload.settings.defaultOptimizerReasoningEffort, 'minimal')
+    assert.equal(validPayload.settings.defaultJudgeReasoningEffort, 'none')
+
+    const invalidResponse = await settingsRoute.POST(new Request('http://localhost/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        defaultOptimizerReasoningEffort: 'turbo',
+        defaultJudgeReasoningEffort: 'ultra',
+      }),
+    }))
+
+    assert.equal(invalidResponse.status, 200)
+    const invalidPayload = (await invalidResponse.json()) as {
+      settings: {
+        defaultOptimizerReasoningEffort: string
+        defaultJudgeReasoningEffort: string
+      }
+    }
+    assert.equal(invalidPayload.settings.defaultOptimizerReasoningEffort, 'default')
+    assert.equal(invalidPayload.settings.defaultJudgeReasoningEffort, 'default')
   } finally {
     process.chdir(originalCwd)
     if (originalDbPath === undefined) {

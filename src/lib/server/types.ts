@@ -1,5 +1,6 @@
 import type { ConversationPolicy } from '@/lib/engine/conversation-policy'
 import type { RoundJudgment } from '@/lib/engine/optimization-cycle'
+import type { ReasoningEffort } from '@/lib/reasoning-effort'
 
 export type JobStatus = 'pending' | 'running' | 'paused' | 'completed' | 'failed' | 'manual_review' | 'cancelled'
 export type JobRunMode = 'auto' | 'step'
@@ -34,6 +35,8 @@ export interface AppSettings {
   apiProtocol: ApiProtocol
   defaultOptimizerModel: string
   defaultJudgeModel: string
+  defaultOptimizerReasoningEffort: ReasoningEffort
+  defaultJudgeReasoningEffort: ReasoningEffort
   scoreThreshold: number
   judgePassCount: number
   maxRounds: number
@@ -59,6 +62,8 @@ export interface JobRecord {
   rawPrompt: string
   optimizerModel: string
   judgeModel: string
+  optimizerReasoningEffort: ReasoningEffort
+  judgeReasoningEffort: ReasoningEffort
   pendingOptimizerModel: string | null
   pendingJudgeModel: string | null
   status: JobStatus
@@ -119,6 +124,8 @@ export interface JobInput {
   rawPrompt: string
   optimizerModel?: string
   judgeModel?: string
+  optimizerReasoningEffort?: ReasoningEffort
+  judgeReasoningEffort?: ReasoningEffort
   customRubricMd?: string | null
 }
 
