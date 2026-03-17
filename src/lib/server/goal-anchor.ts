@@ -16,6 +16,13 @@ type StructuredPromptSummary = {
   topic: string | null
 }
 
+type ReviewPromptSummary = {
+  targetText: string
+  topic: string
+  directAction: string
+  painPoint: string | null
+}
+
 export type GoalAnchorPromptAnalysis = {
   prompt: string
   strippedPrompt: string
@@ -24,6 +31,7 @@ export type GoalAnchorPromptAnalysis = {
   role: string | null
   topic: string | null
   structuredSummary: StructuredPromptSummary | null
+  reviewSummary: ReviewPromptSummary | null
 }
 
 export function deriveGoalAnchor(rawPrompt: string): GoalAnchor {
@@ -43,8 +51,12 @@ export function analyzeGoalAnchorPrompt(rawPrompt: string): GoalAnchorPromptAnal
   const prompt = normalizeText(rawPrompt)
   const strippedPrompt = stripLeadIn(prompt) || prompt
   const structuredSummary = summarizeStructuredPrompt(rawPrompt)
+  const reviewSummary = summarizeReviewPrompt(strippedPrompt)
   const role = extractRoleSubject(strippedPrompt)
-  const optimizeTopic = structuredSummary?.topic ?? extractOptimizeTopic(strippedPrompt) ?? extractPromptSystemTopic(strippedPrompt)
+  const optimizeTopic = structuredSummary?.topic
+    ?? reviewSummary?.topic
+    ?? extractOptimizeTopic(strippedPrompt)
+    ?? extractPromptSystemTopic(strippedPrompt)
   const cookingTopic = extractCookingTopic(strippedPrompt)
   const generatedTopic = extractGeneratedTopic(strippedPrompt)
   const fallbackTopic = extractFallbackTopic(strippedPrompt)
@@ -62,7 +74,7 @@ export function analyzeGoalAnchorPrompt(rawPrompt: string): GoalAnchorPromptAnal
             ? 'analysis'
             : 'general'
 
-  const focus = structuredSummary?.focus ?? topic ?? role ?? compactTopic(strippedPrompt)
+  const focus = structuredSummary?.focus ?? reviewSummary?.topic ?? topic ?? role ?? compactTopic(strippedPrompt)
 
   return {
     prompt,
@@ -72,6 +84,7 @@ export function analyzeGoalAnchorPrompt(rawPrompt: string): GoalAnchorPromptAnal
     role,
     topic,
     structuredSummary,
+    reviewSummary,
   }
 }
 
@@ -120,6 +133,14 @@ function deriveGoalText(analysis: GoalAnchorPromptAnalysis) {
     return analysis.structuredSummary.goalText
   }
 
+  if (analysis.reviewSummary) {
+    const topicLabel = formatReviewTopicLabel(analysis.reviewSummary.topic)
+    const painText = analysis.reviewSummary.painPoint
+      ? `，重点解决当前${analysis.reviewSummary.painPoint}的问题`
+      : ''
+    return restoreSentencePunctuation(`评审并优化一条用于${topicLabel}的提示词${painText}`)
+  }
+
   if (analysis.strippedPrompt.length <= 120) {
     return restoreSentencePunctuation(analysis.strippedPrompt)
   }
@@ -140,6 +161,14 @@ function deriveGoalText(analysis: GoalAnchorPromptAnalysis) {
 function deriveDeliverableText(analysis: GoalAnchorPromptAnalysis) {
   if (analysis.structuredSummary) {
     return analysis.structuredSummary.deliverableText
+  }
+
+  if (analysis.reviewSummary) {
+    const topicLabel = formatReviewTopicLabel(analysis.reviewSummary.topic)
+    const improvementText = buildReviewImprovementText(analysis.reviewSummary)
+    return restoreSentencePunctuation(
+      `一份针对该${topicLabel}提示词的评审与优化结果，并交付${improvementText}的改进版提示词`,
+    )
   }
 
   switch (analysis.kind) {
@@ -180,6 +209,21 @@ function deriveDeliverableText(analysis: GoalAnchorPromptAnalysis) {
 }
 
 function deriveDriftGuard(analysis: GoalAnchorPromptAnalysis, deliverable: string) {
+  if (analysis.reviewSummary) {
+    const topicLabel = formatReviewTopicLabel(analysis.reviewSummary.topic)
+    const directAction = compactTopic(analysis.reviewSummary.directAction, 20)
+    const painGuard = analysis.reviewSummary.painPoint
+      ? `不要忽略原始痛点，必须围绕“${analysis.reviewSummary.painPoint}”进行优化。`
+      : `不要忽略${topicLabel}提示词的真实问题。`
+
+    return [
+      `不要把任务改成“直接${directAction}”，核心是评审并优化提示词。`,
+      painGuard,
+      `不要泛化为任意提示词优化，场景必须保留${topicLabel}。`,
+      '不要只给解释或优化方向而不交付改进版提示词。',
+    ]
+  }
+
   switch (analysis.kind) {
     case 'optimize_prompt':
       return [
@@ -307,6 +351,37 @@ function extractPromptSystemTopic(value: string) {
   }
 
   return null
+}
+
+function summarizeReviewPrompt(value: string): ReviewPromptSummary | null {
+  if (!/(?:评审|审查|review|评分|打分|优化).{0,24}(?:提示词|prompt)/iu.test(value)) {
+    return null
+  }
+
+  const targetText = extractTopic(value, [
+    /(?:这条|这个|该|现有)?提示词[:：]\s*([^。！？!\n]{4,80})/u,
+    /(?:prompt|Prompt)[:：]\s*([^。！？!\n]{4,80})/u,
+  ])
+
+  if (!targetText) {
+    return null
+  }
+
+  const painPoint = extractReviewPainPoint(value)
+  const primaryTarget = stripReviewPainTail(targetText)
+  const directAction = inferReviewDirectAction(primaryTarget)
+  const topic = inferReviewTopic(primaryTarget, directAction)
+
+  if (!topic) {
+    return null
+  }
+
+  return {
+    targetText,
+    topic,
+    directAction,
+    painPoint,
+  }
 }
 
 function summarizeStructuredPrompt(rawPrompt: string): StructuredPromptSummary | null {
@@ -510,6 +585,74 @@ function buildStructuredDeliverable(
   }
 
   return `一套围绕${topic ?? '原任务'}的结构化最终结果`
+}
+
+function stripReviewPainTail(value: string) {
+  return normalizeText(value)
+    .split(/(?:，|,|但|但是|不过|然而)/u)[0]
+    ?.trim() ?? normalizeText(value)
+}
+
+function inferReviewDirectAction(value: string) {
+  return normalizeText(value)
+    .replace(/^(?:让\s*)?AI\s*(?:帮(?:我|用户)?|帮助(?:我|用户)?)?/iu, '')
+    .replace(/^(?:帮(?:我|用户)?|帮助(?:我|用户)?|替(?:我|用户)?)/u, '')
+    .trim() || normalizeText(value)
+}
+
+function inferReviewTopic(primaryTarget: string, directAction: string) {
+  const writeMatch = directAction.match(/写([^，。！？!?]{1,18})/u)
+  if (writeMatch?.[1]) {
+    return `${cleanTopic(writeMatch[1])}生成`
+  }
+
+  const generateMatch = directAction.match(/生成([^，。！？!?]{1,18})/u)
+  if (generateMatch?.[1]) {
+    return `${cleanTopic(generateMatch[1])}生成`
+  }
+
+  if (/优化器|Prompt Optimizer|提示词优化/iu.test(primaryTarget)) {
+    return 'Prompt Optimizer Review 模式'
+  }
+
+  const normalized = cleanTopic(directAction) || cleanTopic(primaryTarget)
+  return normalized ? compactTopic(normalized, 20) : null
+}
+
+function extractReviewPainPoint(value: string) {
+  const normalized = normalizeText(value)
+
+  if (/输出[^。！？!?]{0,12}空洞/u.test(normalized)) {
+    return '输出内容空洞'
+  }
+  if (/(?:漏字段|缺字段)/u.test(normalized)) {
+    return '字段缺失'
+  }
+  if (/不具体/u.test(normalized)) {
+    return '输出不具体'
+  }
+  if (/泛泛而谈|空泛/u.test(normalized)) {
+    return '输出过于空泛'
+  }
+
+  return null
+}
+
+function formatReviewTopicLabel(topic: string) {
+  return /提示词$/u.test(topic) ? topic : `${topic}`
+}
+
+function buildReviewImprovementText(reviewSummary: ReviewPromptSummary) {
+  if (reviewSummary.painPoint === '输出内容空洞') {
+    return '更能生成具体、充实周报内容'
+  }
+  if (reviewSummary.painPoint === '字段缺失') {
+    return '字段契约更稳定'
+  }
+  if (reviewSummary.painPoint === '输出不具体' || reviewSummary.painPoint === '输出过于空泛') {
+    return '更贴合原任务目标'
+  }
+  return '更贴合原任务目标'
 }
 
 function normalizeLineBreaks(value: string) {

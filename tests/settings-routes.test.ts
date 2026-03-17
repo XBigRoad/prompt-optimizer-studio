@@ -115,6 +115,107 @@ test('settings routes persist apiProtocol and use it for model discovery plus co
   }
 })
 
+test('settings connection test degrades gracefully when an OpenAI-compatible gateway does not expose /models', async () => {
+  const originalCwd = process.cwd()
+  const originalDbPath = process.env.PROMPT_OPTIMIZER_DB_PATH
+  const originalFetch = global.fetch
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'po-settings-gateway-no-models-'))
+  process.env.PROMPT_OPTIMIZER_DB_PATH = path.join(tempDir, 'test.db')
+  process.chdir(tempDir)
+
+  try {
+    global.fetch = (async () => new Response('Not Found', { status: 404 })) as typeof fetch
+
+    const { resetDbForTests } = await import('../src/lib/server/db')
+    resetDbForTests()
+
+    const modelsRoute = await import('../src/app/api/settings/models/route')
+    const testConnectionRoute = await import('../src/app/api/settings/test-connection/route')
+
+    const modelsResponse = await modelsRoute.POST(new Request('http://localhost/api/settings/models', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        cpamcBaseUrl: 'https://gateway.example.com/codex',
+        cpamcApiKey: 'secret',
+        apiProtocol: 'openai-compatible',
+      }),
+    }))
+
+    assert.equal(modelsResponse.status, 200)
+    const modelsPayload = (await modelsResponse.json()) as { models: Array<{ id: string; label: string }> }
+    assert.deepEqual(modelsPayload.models, [])
+
+    const connectionResponse = await testConnectionRoute.POST(new Request('http://localhost/api/settings/test-connection', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        cpamcBaseUrl: 'https://gateway.example.com/codex',
+        cpamcApiKey: 'secret',
+        apiProtocol: 'openai-compatible',
+      }),
+    }))
+
+    assert.equal(connectionResponse.status, 200)
+    const connectionPayload = (await connectionResponse.json()) as {
+      ok: boolean
+      message: string
+      models: Array<{ id: string; label: string }>
+    }
+    assert.equal(connectionPayload.ok, true)
+    assert.deepEqual(connectionPayload.models, [])
+    assert.match(connectionPayload.message, /未返回模型列表/)
+    assert.match(connectionPayload.message, /手动填写模型别名/)
+  } finally {
+    global.fetch = originalFetch
+    process.chdir(originalCwd)
+    if (originalDbPath === undefined) {
+      delete process.env.PROMPT_OPTIMIZER_DB_PATH
+    } else {
+      process.env.PROMPT_OPTIMIZER_DB_PATH = originalDbPath
+    }
+  }
+})
+
+test('settings models POST degrades a missing OpenAI-compatible /models endpoint to an empty list', async () => {
+  const originalCwd = process.cwd()
+  const originalDbPath = process.env.PROMPT_OPTIMIZER_DB_PATH
+  const originalFetch = global.fetch
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'po-settings-models-404-'))
+  process.env.PROMPT_OPTIMIZER_DB_PATH = path.join(tempDir, 'test.db')
+  process.chdir(tempDir)
+
+  try {
+    global.fetch = (async () => new Response('Not Found', { status: 404 })) as typeof fetch
+
+    const { resetDbForTests } = await import('../src/lib/server/db')
+    resetDbForTests()
+
+    const modelsRoute = await import('../src/app/api/settings/models/route')
+    const response = await modelsRoute.POST(new Request('http://localhost/api/settings/models', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        cpamcBaseUrl: 'https://gateway.example.com/codex',
+        cpamcApiKey: 'secret',
+        apiProtocol: 'openai-compatible',
+      }),
+    }))
+
+    assert.equal(response.status, 200)
+    const payload = (await response.json()) as { models: Array<{ id: string; label: string }> }
+    assert.deepEqual(payload.models, [])
+  } finally {
+    global.fetch = originalFetch
+    process.chdir(originalCwd)
+    if (originalDbPath === undefined) {
+      delete process.env.PROMPT_OPTIMIZER_DB_PATH
+    } else {
+      process.env.PROMPT_OPTIMIZER_DB_PATH = originalDbPath
+    }
+  }
+})
+
 test('settings route defaults worker concurrency to 2 and persists updates', async () => {
   const originalCwd = process.cwd()
   const originalDbPath = process.env.PROMPT_OPTIMIZER_DB_PATH

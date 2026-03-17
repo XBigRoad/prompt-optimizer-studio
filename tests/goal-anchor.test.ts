@@ -77,6 +77,16 @@ test('deriveGoalAnchor keeps structured prompt-optimizer packs out of the write-
   assert.equal(anchor.driftGuard.some((item) => /泛化|最终版本|提示词/.test(item)), true)
 })
 
+test('deriveGoalAnchor keeps review-style prompt optimization tasks specific', () => {
+  const anchor = deriveGoalAnchor('请评审并优化这条提示词：让 AI 帮我写团队周报，但现在输出太空泛、不具体。')
+
+  assert.match(anchor.goal, /评审并优化/)
+  assert.match(anchor.deliverable, /改进版提示词/)
+  assert.match(anchor.deliverable, /周报/)
+  assert.equal(anchor.driftGuard.some((item) => /评审并优化提示词/.test(item)), true)
+  assert.equal(anchor.driftGuard.some((item) => /空泛|不具体|痛点/.test(item)), true)
+})
+
 test('normalizeGoalAnchor trims fields and drops empty drift guards', () => {
   const anchor = normalizeGoalAnchor({
     goal: '  保持原任务目标  ',

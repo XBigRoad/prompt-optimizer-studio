@@ -7,7 +7,8 @@ import { JobDetailControlRoom, type JobDetailViewModel } from '@/components/job-
 import { type RoundCandidateView } from '@/components/job-round-card'
 import { StudioFrame } from '@/components/studio-frame'
 import { useI18n, useLocaleText } from '@/lib/i18n'
-import { getTaskModelLabel, resolveLatestFullPrompt } from '@/lib/presentation'
+import type { ReasoningEffort } from '@/lib/reasoning-effort'
+import { getJobFailureKind, getTaskModelLabel, resolveLatestFullPrompt } from '@/lib/presentation'
 import type { SteeringItem } from '@/lib/server/types'
 
 type JobStatus = 'pending' | 'running' | 'paused' | 'completed' | 'failed' | 'manual_review' | 'cancelled'
@@ -58,8 +59,12 @@ interface JobDetailPayload {
     rawPrompt: string
     optimizerModel: string
     judgeModel: string
+    optimizerReasoningEffort: ReasoningEffort
+    judgeReasoningEffort: ReasoningEffort
     pendingOptimizerModel: string | null
     pendingJudgeModel: string | null
+    pendingOptimizerReasoningEffort: ReasoningEffort | null
+    pendingJudgeReasoningEffort: ReasoningEffort | null
     cancelRequestedAt: string | null
     pauseRequestedAt: string | null
     pendingSteeringItems: SteeringItem[]
@@ -71,6 +76,7 @@ interface JobDetailPayload {
     status: JobStatus
     runMode: JobRunMode
     currentRound: number
+    candidateCount: number
     bestAverageScore: number
     maxRoundsOverride: number | null
     passStreak: number
@@ -91,6 +97,7 @@ export function JobDetailShell({ jobId }: { jobId: string }) {
   const [effectiveRubricMd, setEffectiveRubricMd] = useState('')
   const [effectiveRubricSource, setEffectiveRubricSource] = useState<EffectiveRubricSource>('default')
   const [taskModel, setTaskModel] = useState('')
+  const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort>('default')
   const [maxRoundsOverrideValue, setMaxRoundsOverrideValue] = useState('')
   const [pendingSteeringInput, setPendingSteeringInput] = useState('')
   const [customRubricMd, setCustomRubricMd] = useState('')
@@ -182,6 +189,7 @@ export function JobDetailShell({ jobId }: { jobId: string }) {
   useEffect(() => {
     if (!detail || modelDirty) return
     setTaskModel(detail.job.pendingOptimizerModel ?? detail.job.optimizerModel)
+    setReasoningEffort(detail.job.pendingOptimizerReasoningEffort ?? detail.job.optimizerReasoningEffort)
   }, [detail, modelDirty])
 
   useEffect(() => {
@@ -242,8 +250,12 @@ export function JobDetailShell({ jobId }: { jobId: string }) {
       conversationPolicy: detail.job.conversationPolicy,
       optimizerModel: detail.job.optimizerModel,
       judgeModel: detail.job.judgeModel,
+      optimizerReasoningEffort: detail.job.optimizerReasoningEffort,
+      judgeReasoningEffort: detail.job.judgeReasoningEffort,
       pendingOptimizerModel: detail.job.pendingOptimizerModel,
       pendingJudgeModel: detail.job.pendingJudgeModel,
+      pendingOptimizerReasoningEffort: detail.job.pendingOptimizerReasoningEffort,
+      pendingJudgeReasoningEffort: detail.job.pendingJudgeReasoningEffort,
       cancelRequestedAt: detail.job.cancelRequestedAt,
       pauseRequestedAt: detail.job.pauseRequestedAt,
       pendingSteeringItems: detail.job.pendingSteeringItems,
@@ -251,6 +263,9 @@ export function JobDetailShell({ jobId }: { jobId: string }) {
       goalAnchorExplanation: detail.job.goalAnchorExplanation,
       runMode: detail.job.runMode,
       currentRound: detail.job.currentRound,
+      candidateCount: detail.job.candidateCount,
+      scoreState: detail.job.candidateCount > 0 ? 'available' : 'not_generated',
+      failureKind: getJobFailureKind(detail.job),
       bestAverageScore: detail.job.bestAverageScore,
       maxRoundsOverride: detail.job.maxRoundsOverride,
       passStreak: detail.job.passStreak,
@@ -306,15 +321,20 @@ export function JobDetailShell({ jobId }: { jobId: string }) {
       const response = await fetch(`/api/jobs/${jobId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ optimizerModel: taskModel, judgeModel: taskModel }),
+        body: JSON.stringify({
+          optimizerModel: taskModel,
+          judgeModel: taskModel,
+          optimizerReasoningEffort: reasoningEffort,
+          judgeReasoningEffort: reasoningEffort,
+        }),
       })
       const payload = await response.json()
       if (!response.ok) throw new Error(payload.error ?? text('保存失败。', 'Save failed.'))
       setError(null)
       setModelDirty(false)
       setActionMessage(detail?.job.status === 'running'
-        ? text('任务模型已保存，将在下一轮生效。', 'The task model was saved and will take effect next round.')
-        : text('任务模型已保存。', 'The task model was saved.'))
+        ? text('任务模型与推理强度已保存，将在下一轮生效。', 'The task model and reasoning effort were saved and will take effect next round.')
+        : text('任务模型与推理强度已保存。', 'The task model and reasoning effort were saved.'))
       mergeJobUpdate(payload.job)
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : text('保存失败。', 'Save failed.'))
@@ -664,6 +684,7 @@ export function JobDetailShell({ jobId }: { jobId: string }) {
             }}
             form={{
               taskModel,
+              reasoningEffort,
               maxRoundsOverrideValue,
               pendingSteeringInput,
               customRubricMd,
@@ -694,6 +715,10 @@ export function JobDetailShell({ jobId }: { jobId: string }) {
               onTaskModelChange: (value) => {
                 setModelDirty(true)
                 setTaskModel(value)
+              },
+              onReasoningEffortChange: (value) => {
+                setModelDirty(true)
+                setReasoningEffort(value as ReasoningEffort)
               },
               onMaxRoundsOverrideChange: (value) => {
                 setMaxRoundsDirty(true)

@@ -22,7 +22,7 @@ test('normalizes OpenAI-style model payloads into alias-only ids', () => {
   assert.deepEqual(result, ['gpt-5.4', 'gemini-3.1-pro', 'gpt-5.2'])
 })
 
-test('createJobs snapshots explicit and default task models', async () => {
+test('createJobs snapshots explicit and default task models plus reasoning values', async () => {
   const originalCwd = process.cwd()
   const originalDbPath = process.env.PROMPT_OPTIMIZER_DB_PATH
   const originalFetch = global.fetch
@@ -41,18 +41,26 @@ test('createJobs snapshots explicit and default task models', async () => {
       cpamcApiKey: 'secret',
       defaultOptimizerModel: 'gpt-5.4',
       defaultJudgeModel: 'gemini-3.1-pro',
+      defaultOptimizerReasoningEffort: 'xhigh',
+      defaultJudgeReasoningEffort: 'high',
     })
 
     global.fetch = (async () => {
       throw new Error('skip remote goal anchor generation in test')
     }) as typeof fetch
 
-    const [explicitJob, defaultJob] = await createJobs([
+    const [explicitJob, overrideJob, defaultJob] = await createJobs([
       {
         title: 'Explicit models',
         rawPrompt: 'prompt A',
         optimizerModel: 'gpt-5.2',
         judgeModel: 'gemini-3.1-pro',
+      },
+      {
+        title: 'Reasoning override',
+        rawPrompt: 'prompt override',
+        optimizerReasoningEffort: 'minimal',
+        judgeReasoningEffort: 'none',
       },
       {
         title: 'Default models',
@@ -62,8 +70,16 @@ test('createJobs snapshots explicit and default task models', async () => {
 
     assert.equal(explicitJob.optimizerModel, 'gpt-5.2')
     assert.equal(explicitJob.judgeModel, 'gemini-3.1-pro')
+    assert.equal(explicitJob.optimizerReasoningEffort, 'xhigh')
+    assert.equal(explicitJob.judgeReasoningEffort, 'high')
+    assert.equal(overrideJob.optimizerModel, 'gpt-5.4')
+    assert.equal(overrideJob.judgeModel, 'gemini-3.1-pro')
+    assert.equal(overrideJob.optimizerReasoningEffort, 'minimal')
+    assert.equal(overrideJob.judgeReasoningEffort, 'none')
     assert.equal(defaultJob.optimizerModel, 'gpt-5.4')
     assert.equal(defaultJob.judgeModel, 'gemini-3.1-pro')
+    assert.equal(defaultJob.optimizerReasoningEffort, 'xhigh')
+    assert.equal(defaultJob.judgeReasoningEffort, 'high')
   } finally {
     process.chdir(originalCwd)
     global.fetch = originalFetch

@@ -2,6 +2,7 @@ import type { ModelAdapter, OptimizationResult, RoundJudgment } from '@/lib/engi
 import { normalizeGoalAnchor } from '@/lib/server/goal-anchor'
 import { normalizeGoalAnchorExplanation } from '@/lib/server/goal-anchor-explanation'
 import { createProviderAdapter } from '@/lib/server/provider-adapter'
+import { normalizeReasoningEffort, resolveReasoningEffortTimeoutMs } from '@/lib/reasoning-effort'
 import type { GoalAnchor, GoalAnchorExplanation, PromptPackVersion, AppSettings, SteeringItem } from '@/lib/server/types'
 import { buildGoalAnchorPrompts, buildJudgePrompts, buildOptimizerPrompts } from '@/lib/server/prompting'
 
@@ -11,7 +12,12 @@ export class CpamcModelAdapter implements ModelAdapter {
   constructor(
     private readonly settings: Pick<AppSettings, 'cpamcBaseUrl' | 'cpamcApiKey' | 'scoreThreshold'>,
     private readonly pack: PromptPackVersion,
-    private readonly models: { optimizerModel: string; judgeModel: string },
+    private readonly models: {
+      optimizerModel: string
+      judgeModel: string
+      optimizerReasoningEffort?: AppSettings['defaultOptimizerReasoningEffort']
+      judgeReasoningEffort?: AppSettings['defaultJudgeReasoningEffort']
+    },
   ) {
     this.providerAdapter = createProviderAdapter(settings)
   }
@@ -32,7 +38,13 @@ export class CpamcModelAdapter implements ModelAdapter {
       threshold: input.threshold,
     })
 
-    const payload = await this.requestJson(this.models.optimizerModel, system, user, 180_000)
+    const payload = await this.requestJson(
+      this.models.optimizerModel,
+      this.models.optimizerReasoningEffort ?? 'default',
+      system,
+      user,
+      resolveReasoningEffortTimeoutMs(180_000, normalizeReasoningEffort(this.models.optimizerReasoningEffort ?? 'default')),
+    )
     return {
       optimizedPrompt: String(payload.optimizedPrompt ?? input.currentPrompt),
       strategy: payload.strategy === 'preserve' ? 'preserve' : 'rebuild',
@@ -56,7 +68,13 @@ export class CpamcModelAdapter implements ModelAdapter {
       judgeIndex,
     })
 
-    const payload = await this.requestJson(this.models.judgeModel, system, user, 120_000)
+    const payload = await this.requestJson(
+      this.models.judgeModel,
+      this.models.judgeReasoningEffort ?? 'default',
+      system,
+      user,
+      resolveReasoningEffortTimeoutMs(120_000, normalizeReasoningEffort(this.models.judgeReasoningEffort ?? 'default')),
+    )
     return {
       score: normalizeNumericScore(payload.score, 0),
       hasMaterialIssues: Boolean(payload.hasMaterialIssues),
@@ -68,22 +86,29 @@ export class CpamcModelAdapter implements ModelAdapter {
     }
   }
 
-  private async requestJson(model: string, system: string, user: string, timeoutMs: number) {
-    return this.providerAdapter.requestJson({ model, system, user, timeoutMs })
+  private async requestJson(
+    model: string,
+    reasoningEffort: AppSettings['defaultOptimizerReasoningEffort'],
+    system: string,
+    user: string,
+    timeoutMs: number,
+  ) {
+    return this.providerAdapter.requestJson({ model, reasoningEffort, system, user, timeoutMs })
   }
 }
 
 export async function generateGoalAnchorWithModel(
-  settings: Pick<AppSettings, 'cpamcBaseUrl' | 'cpamcApiKey'>,
+  settings: Pick<AppSettings, 'cpamcBaseUrl' | 'cpamcApiKey' | 'defaultOptimizerReasoningEffort'>,
   model: string,
   rawPrompt: string,
 ) {
   const { system, user } = buildGoalAnchorPrompts({ rawPrompt })
   const payload = await createProviderAdapter(settings).requestJson({
     model,
+    reasoningEffort: settings.defaultOptimizerReasoningEffort,
     system,
     user,
-    timeoutMs: 20_000,
+    timeoutMs: resolveReasoningEffortTimeoutMs(20_000, normalizeReasoningEffort(settings.defaultOptimizerReasoningEffort)),
     maxAttempts: 2,
   })
   return {

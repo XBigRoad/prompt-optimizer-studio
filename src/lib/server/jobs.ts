@@ -3,6 +3,7 @@ import type { DatabaseSync } from 'node:sqlite'
 
 import { assignConversationGroup } from '@/lib/engine/conversation-policy'
 import { getJobDisplayError } from '@/lib/presentation'
+import { normalizeReasoningEffort } from '@/lib/reasoning-effort'
 import { getDb } from '@/lib/server/db'
 import {
   deriveGoalAnchor,
@@ -76,6 +77,8 @@ export async function createJobs(inputs: JobInput[]) {
         raw_prompt,
         optimizer_model,
         judge_model,
+        optimizer_reasoning_effort,
+        judge_reasoning_effort,
         pending_optimizer_model,
         pending_judge_model,
         status,
@@ -101,13 +104,15 @@ export async function createJobs(inputs: JobInput[]) {
         error_message,
         created_at,
         updated_at
-      ) VALUES (?, ?, ?, ?, ?, NULL, NULL, 'pending', 'auto', ?, 0, 0, ?, ?, NULL, NULL, NULL, '[]', 0, 0, '[]', NULL, ?, ?, NULL, NULL, ?, NULL, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL, 'pending', 'auto', ?, 0, 0, ?, ?, NULL, NULL, NULL, '[]', 0, 0, '[]', NULL, ?, ?, NULL, NULL, ?, NULL, ?, ?)
     `).run(
       id,
       normalizeTitle(input.title, normalizedPrompt),
       normalizedPrompt,
       models.optimizerModel,
       models.judgeModel,
+      models.optimizerReasoningEffort,
+      models.judgeReasoningEffort,
       pack.id,
       serializeGoalAnchor(goalAnchor.goalAnchor),
       serializeGoalAnchorExplanation(goalAnchor.explanation),
@@ -133,12 +138,21 @@ export function listJobs() {
       jobs.raw_prompt,
       jobs.optimizer_model,
       jobs.judge_model,
+      jobs.optimizer_reasoning_effort,
+      jobs.judge_reasoning_effort,
       jobs.pending_optimizer_model,
       jobs.pending_judge_model,
+      jobs.pending_optimizer_reasoning_effort,
+      jobs.pending_judge_reasoning_effort,
       jobs.status,
       jobs.run_mode,
       jobs.pack_version_id,
       jobs.current_round,
+      (
+        SELECT COUNT(*)
+        FROM candidates
+        WHERE candidates.job_id = jobs.id
+      ) AS candidate_count,
       jobs.best_average_score,
       COALESCE(latest_candidate.optimized_prompt, jobs.raw_prompt) AS latest_prompt,
       jobs.goal_anchor_json,
@@ -185,12 +199,21 @@ export function getJobById(id: string) {
       jobs.raw_prompt,
       jobs.optimizer_model,
       jobs.judge_model,
+      jobs.optimizer_reasoning_effort,
+      jobs.judge_reasoning_effort,
       jobs.pending_optimizer_model,
       jobs.pending_judge_model,
+      jobs.pending_optimizer_reasoning_effort,
+      jobs.pending_judge_reasoning_effort,
       jobs.status,
       jobs.run_mode,
       jobs.pack_version_id,
       jobs.current_round,
+      (
+        SELECT COUNT(*)
+        FROM candidates
+        WHERE candidates.job_id = jobs.id
+      ) AS candidate_count,
       jobs.best_average_score,
       COALESCE(latest_candidate.optimized_prompt, jobs.raw_prompt) AS latest_prompt,
       jobs.goal_anchor_json,
@@ -294,10 +317,21 @@ export function getJobDetail(id: string): JobDetail | null {
   }
 }
 
-export function updateJobModels(jobId: string, models: { optimizerModel: string; judgeModel: string }) {
+export function updateJobModels(jobId: string, models: {
+  optimizerModel: string
+  judgeModel: string
+  optimizerReasoningEffort?: JobInput['optimizerReasoningEffort']
+  judgeReasoningEffort?: JobInput['judgeReasoningEffort']
+}) {
   const job = requireJob(jobId)
   const optimizerModel = models.optimizerModel.trim()
   const judgeModel = models.judgeModel.trim()
+  const optimizerReasoningEffort = models.optimizerReasoningEffort === undefined
+    ? job.optimizerReasoningEffort
+    : normalizeReasoningEffort(models.optimizerReasoningEffort)
+  const judgeReasoningEffort = models.judgeReasoningEffort === undefined
+    ? job.judgeReasoningEffort
+    : normalizeReasoningEffort(models.judgeReasoningEffort)
 
   if (!optimizerModel || !judgeModel) {
     throw new Error('请同时选择优化模型和裁判模型。')
@@ -315,9 +349,11 @@ export function updateJobModels(jobId: string, models: { optimizerModel: string;
       UPDATE jobs
       SET pending_optimizer_model = ?,
           pending_judge_model = ?,
+          pending_optimizer_reasoning_effort = ?,
+          pending_judge_reasoning_effort = ?,
           updated_at = ?
       WHERE id = ?
-    `).run(optimizerModel, judgeModel, now, jobId)
+    `).run(optimizerModel, judgeModel, optimizerReasoningEffort, judgeReasoningEffort, now, jobId)
     return requireJob(jobId)
   }
 
@@ -325,11 +361,15 @@ export function updateJobModels(jobId: string, models: { optimizerModel: string;
     UPDATE jobs
     SET optimizer_model = ?,
         judge_model = ?,
+        optimizer_reasoning_effort = ?,
+        judge_reasoning_effort = ?,
         pending_optimizer_model = NULL,
         pending_judge_model = NULL,
+        pending_optimizer_reasoning_effort = NULL,
+        pending_judge_reasoning_effort = NULL,
         updated_at = ?
     WHERE id = ?
-  `).run(optimizerModel, judgeModel, now, jobId)
+  `).run(optimizerModel, judgeModel, optimizerReasoningEffort, judgeReasoningEffort, now, jobId)
 
   return requireJob(jobId)
 }
@@ -661,6 +701,8 @@ export function completeJob(jobId: string) {
         final_candidate_id = ?,
         pending_optimizer_model = NULL,
         pending_judge_model = NULL,
+        pending_optimizer_reasoning_effort = NULL,
+        pending_judge_reasoning_effort = NULL,
         active_worker_id = NULL,
         worker_heartbeat_at = NULL,
         cancel_requested_at = NULL,
@@ -675,7 +717,12 @@ export function completeJob(jobId: string) {
 
 export function applyPendingJobModels(jobId: string) {
   const job = requireJob(jobId)
-  if (!job.pendingOptimizerModel && !job.pendingJudgeModel) {
+  if (
+    !job.pendingOptimizerModel
+    && !job.pendingJudgeModel
+    && job.pendingOptimizerReasoningEffort === null
+    && job.pendingJudgeReasoningEffort === null
+  ) {
     return job
   }
 
@@ -684,8 +731,12 @@ export function applyPendingJobModels(jobId: string) {
     UPDATE jobs
     SET optimizer_model = COALESCE(NULLIF(pending_optimizer_model, ''), optimizer_model),
         judge_model = COALESCE(NULLIF(pending_judge_model, ''), judge_model),
+        optimizer_reasoning_effort = COALESCE(NULLIF(pending_optimizer_reasoning_effort, ''), optimizer_reasoning_effort),
+        judge_reasoning_effort = COALESCE(NULLIF(pending_judge_reasoning_effort, ''), judge_reasoning_effort),
         pending_optimizer_model = NULL,
         pending_judge_model = NULL,
+        pending_optimizer_reasoning_effort = NULL,
+        pending_judge_reasoning_effort = NULL,
         updated_at = ?
     WHERE id = ?
   `).run(new Date().toISOString(), jobId)
@@ -1112,20 +1163,29 @@ function resumeJob(jobId: string, runMode: JobRunMode) {
 function resolveJobModels(input: JobInput, settings: ReturnType<typeof getSettings>) {
   const optimizerModel = input.optimizerModel?.trim() ?? ''
   const judgeModel = input.judgeModel?.trim() ?? ''
+  const optimizerReasoningEffort = input.optimizerReasoningEffort
+  const judgeReasoningEffort = input.judgeReasoningEffort
 
   if (optimizerModel && judgeModel) {
-    return { optimizerModel, judgeModel }
+    return {
+      optimizerModel,
+      judgeModel,
+      optimizerReasoningEffort: normalizeReasoningEffort(optimizerReasoningEffort ?? settings.defaultOptimizerReasoningEffort),
+      judgeReasoningEffort: normalizeReasoningEffort(judgeReasoningEffort ?? settings.defaultJudgeReasoningEffort),
+    }
   }
 
   validateTaskDefaults(settings)
   return {
     optimizerModel: optimizerModel || settings.defaultOptimizerModel.trim(),
     judgeModel: judgeModel || settings.defaultJudgeModel.trim(),
+    optimizerReasoningEffort: normalizeReasoningEffort(optimizerReasoningEffort ?? settings.defaultOptimizerReasoningEffort),
+    judgeReasoningEffort: normalizeReasoningEffort(judgeReasoningEffort ?? settings.defaultJudgeReasoningEffort),
   }
 }
 
 async function resolveInitialGoalAnchor(
-  settings: Pick<ReturnType<typeof getSettings>, 'cpamcBaseUrl' | 'cpamcApiKey'>,
+  settings: Pick<ReturnType<typeof getSettings>, 'cpamcBaseUrl' | 'cpamcApiKey' | 'defaultOptimizerReasoningEffort'>,
   optimizerModel: string,
   rawPrompt: string,
 ) {
@@ -1472,12 +1532,21 @@ function mapJobRow(row: Record<string, unknown>): JobRecord {
     rawPrompt: String(row.raw_prompt),
     optimizerModel: String(row.optimizer_model ?? ''),
     judgeModel: String(row.judge_model ?? ''),
+    optimizerReasoningEffort: normalizeReasoningEffort(row.optimizer_reasoning_effort),
+    judgeReasoningEffort: normalizeReasoningEffort(row.judge_reasoning_effort),
     pendingOptimizerModel: row.pending_optimizer_model ? String(row.pending_optimizer_model) : null,
     pendingJudgeModel: row.pending_judge_model ? String(row.pending_judge_model) : null,
+    pendingOptimizerReasoningEffort: row.pending_optimizer_reasoning_effort
+      ? normalizeReasoningEffort(row.pending_optimizer_reasoning_effort)
+      : null,
+    pendingJudgeReasoningEffort: row.pending_judge_reasoning_effort
+      ? normalizeReasoningEffort(row.pending_judge_reasoning_effort)
+      : null,
     status: row.status as JobRecord['status'],
     runMode: (row.run_mode ?? 'auto') as JobRunMode,
     packVersionId: String(row.pack_version_id),
     currentRound: Number(row.current_round),
+    candidateCount: Number(row.candidate_count ?? 0),
     bestAverageScore: Number(row.best_average_score),
     latestPrompt: String(row.latest_prompt ?? row.raw_prompt ?? ''),
     goalAnchor: parseGoalAnchor(row.goal_anchor_json),

@@ -17,10 +17,15 @@ export async function POST(request: Request) {
     }
 
     const models = await fetchCpamcModels(merged)
+    const message = models.length > 0
+      ? `连接通过，发现 ${models.length} 个模型。`
+      : merged.apiProtocol === 'openai-compatible'
+        ? '连接已建立，但当前网关未返回模型列表；你仍可手动填写模型别名。'
+        : '连接通过，发现 0 个模型。'
 
     return NextResponse.json({
       ok: true,
-      message: `连接通过，发现 ${models.length} 个模型。`,
+      message,
       models,
     })
   } catch (error) {

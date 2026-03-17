@@ -18,9 +18,11 @@ import {
 import { JobRoundCard, type RoundCandidateView } from '@/components/job-round-card'
 import { ModelAliasCombobox } from '@/components/ui/model-alias-combobox'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import { SelectField } from '@/components/ui/select-field'
 import { useI18n, useLocaleText } from '@/lib/i18n'
+import { buildReasoningEffortOptions, getReasoningEffortLabel, type ReasoningEffort } from '@/lib/reasoning-effort'
 import type { SteeringItem } from '@/lib/server/types'
-import { getConversationPolicyLabel, getJobDisplayError, getJobStatusLabel } from '@/lib/presentation'
+import { getJobDisplayError, getJobScoreDisplay, getJobScoreMeta, getJobStatusLabel } from '@/lib/presentation'
 
 export type JobDetailViewModel = {
   jobId: string
@@ -29,8 +31,12 @@ export type JobDetailViewModel = {
   conversationPolicy: 'stateless' | 'pooled-3x'
   optimizerModel: string
   judgeModel: string
+  optimizerReasoningEffort: ReasoningEffort
+  judgeReasoningEffort: ReasoningEffort
   pendingOptimizerModel: string | null
   pendingJudgeModel: string | null
+  pendingOptimizerReasoningEffort: ReasoningEffort | null
+  pendingJudgeReasoningEffort: ReasoningEffort | null
   cancelRequestedAt: string | null
   pauseRequestedAt: string | null
   pendingSteeringItems: SteeringItem[]
@@ -45,6 +51,9 @@ export type JobDetailViewModel = {
   }
   runMode: 'auto' | 'step'
   currentRound: number
+  candidateCount: number
+  scoreState: 'available' | 'not_generated'
+  failureKind: 'infra' | 'content' | null
   bestAverageScore: number
   maxRoundsOverride: number | null
   passStreak: number
@@ -91,6 +100,7 @@ export function JobDetailControlRoom({
   }
   form: {
     taskModel: string
+    reasoningEffort?: string
     maxRoundsOverrideValue: string
     pendingSteeringInput: string
     customRubricMd: string
@@ -119,6 +129,7 @@ export function JobDetailControlRoom({
     onToggleCompareMode: () => void
     onToggleRound: (candidateId: string) => void
     onTaskModelChange: (value: string) => void
+    onReasoningEffortChange?: (value: string) => void
     onMaxRoundsOverrideChange: (value: string) => void
     onPendingSteeringInputChange: (value: string) => void
     onCustomRubricChange: (value: string) => void
@@ -130,6 +141,7 @@ export function JobDetailControlRoom({
 }) {
   const { locale } = useI18n()
   const text = useLocaleText()
+  const reasoningEffortOptions = buildReasoningEffortOptions(locale)
   const canEdit = model.status !== 'completed'
   const canAdjustStableRules = ['paused', 'manual_review', 'failed'].includes(model.status)
   const canSteer = !['completed', 'cancelled'].includes(model.status)
@@ -155,6 +167,11 @@ export function JobDetailControlRoom({
         : 'built-in default'
   const rubricSourceLine = text(`当前来源：${rubricSourceZh}`, `Current source: ${rubricSourceEn}`)
   const hasSavedJobRubricOverride = Boolean((model.customRubricMd ?? '').trim())
+  const reasoningEffortSummary = model.optimizerReasoningEffort === model.judgeReasoningEffort
+    ? getReasoningEffortLabel(model.optimizerReasoningEffort, locale)
+    : `${getReasoningEffortLabel(model.optimizerReasoningEffort, locale)} / ${getReasoningEffortLabel(model.judgeReasoningEffort, locale)}`
+  const bestScoreDisplay = getJobScoreDisplay(model, locale)
+  const bestScoreMeta = getJobScoreMeta(model, locale)
 
   return (
     <div className="detail-control-room">
@@ -175,10 +192,10 @@ export function JobDetailControlRoom({
           <div className="summary-cluster detail-summary-cluster">
             <SummaryBadge label={text('状态', 'Status')} value={getJobStatusLabel(model.status, locale)} tone={model.status} />
             <SummaryBadge label={text('任务模型', 'Task model')} value={model.modelsLabel} />
+            <SummaryBadge label={text('推理强度', 'Reasoning effort')} value={reasoningEffortSummary} />
             <SummaryBadge label={text('运行模式', 'Run mode')} value={model.runMode === 'step' ? text('单步', 'Step') : text('自动', 'Auto')} />
             <SummaryBadge label={text('轮数上限', 'Round cap')} value={String(model.effectiveMaxRounds)} />
-            <SummaryBadge label={text('最佳分数', 'Best score')} value={model.bestAverageScore.toFixed(2)} />
-            <SummaryBadge label={text('会话', 'Conversation')} value={getConversationPolicyLabel(model.conversationPolicy, locale)} />
+            <SummaryBadge label={text('最佳分数', 'Best score')} value={bestScoreDisplay} meta={bestScoreMeta} />
           </div>
         </div>
       </section>
@@ -497,6 +514,13 @@ export function JobDetailControlRoom({
                 disabled={!canEdit}
                 onChange={handlers.onTaskModelChange}
               />
+              <SelectField
+                label={text('推理强度', 'Reasoning effort')}
+                value={form.reasoningEffort ?? 'default'}
+                options={reasoningEffortOptions}
+                disabled={!canEdit}
+                onChange={(value) => handlers.onReasoningEffortChange?.(value)}
+              />
               <label className="label compact-control-field">
                 {text('任务级最大轮数', 'Task-level round cap')}
                 <input className="input" type="number" min={1} max={99} value={form.maxRoundsOverrideValue} onChange={(event) => handlers.onMaxRoundsOverrideChange(event.target.value)} disabled={!canEdit} />
@@ -505,7 +529,7 @@ export function JobDetailControlRoom({
             {canEdit ? (
               <div className="inline-actions runtime-save-actions">
                 <button className="button ghost compact" type="button" onClick={handlers.onSaveModel} disabled={ui.savingModels}>
-                  {ui.savingModels ? text('保存中...', 'Saving...') : text('保存模型', 'Save model')}
+                  {ui.savingModels ? text('保存中...', 'Saving...') : text('保存模型与推理强度', 'Save model and reasoning')}
                 </button>
                 <button className="button ghost compact" type="button" onClick={handlers.onSaveMaxRoundsOverride} disabled={ui.savingMaxRounds}>
                   {ui.savingMaxRounds ? text('保存中...', 'Saving...') : text('保存轮数', 'Save round cap')}
@@ -725,16 +749,19 @@ export function getDetailNoticeItems(input: {
 function SummaryBadge({
   label,
   value,
+  meta = null,
   tone = 'pending',
 }: {
   label: string
   value: string
+  meta?: string | null
   tone?: JobDetailViewModel['status'] | 'pending'
 }) {
   return (
     <div className={`summary-card tone-${tone}`}>
       <div className="small">{label}</div>
       <div className="summary-value">{value}</div>
+      {meta ? <div className="small">{meta}</div> : null}
     </div>
   )
 }

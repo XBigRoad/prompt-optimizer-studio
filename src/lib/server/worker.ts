@@ -15,23 +15,29 @@ import {
 import { getPromptPackVersion } from '@/lib/server/prompt-pack'
 import { getSettings, validateCpamcConnection } from '@/lib/server/settings'
 import type { JobRunMode, JobStatus, JudgeRunRecord } from '@/lib/server/types'
-import { createWorkerRuntimeState, shouldReplaceWorkerRuntime } from '@/lib/server/worker-runtime'
-
-const WORKER_OWNER_ID = crypto.randomUUID()
+import {
+  createWorkerRuntimeState,
+  resolveStableWorkerOwnerId,
+  shouldReplaceWorkerRuntime,
+} from '@/lib/server/worker-runtime'
 
 const globalWorkerState = globalThis as typeof globalThis & {
   __promptOptimizerWorker?: ReturnType<typeof createWorkerRuntimeState>
+  __promptOptimizerWorkerOwnerId?: string
 }
 
+const WORKER_OWNER_ID = resolveStableWorkerOwnerId(globalWorkerState, () => crypto.randomUUID())
+const WORKER_RUNTIME_VERSION = crypto.randomUUID()
+
 export function ensureWorkerStarted() {
-  if (shouldReplaceWorkerRuntime(globalWorkerState.__promptOptimizerWorker, WORKER_OWNER_ID)) {
+  if (shouldReplaceWorkerRuntime(globalWorkerState.__promptOptimizerWorker, WORKER_OWNER_ID, WORKER_RUNTIME_VERSION)) {
     if (globalWorkerState.__promptOptimizerWorker?.intervalId) {
       clearInterval(globalWorkerState.__promptOptimizerWorker.intervalId)
     }
     if (globalWorkerState.__promptOptimizerWorker?.heartbeatIntervalId) {
       clearInterval(globalWorkerState.__promptOptimizerWorker.heartbeatIntervalId)
     }
-    globalWorkerState.__promptOptimizerWorker = createWorkerRuntimeState(WORKER_OWNER_ID)
+    globalWorkerState.__promptOptimizerWorker = createWorkerRuntimeState(WORKER_OWNER_ID, WORKER_RUNTIME_VERSION)
   }
 
   const state = globalWorkerState.__promptOptimizerWorker
@@ -136,7 +142,12 @@ async function runJob(jobId: string) {
         return
       }
 
-      if (liveJob.pendingOptimizerModel || liveJob.pendingJudgeModel) {
+      if (
+        liveJob.pendingOptimizerModel
+        || liveJob.pendingJudgeModel
+        || liveJob.pendingOptimizerReasoningEffort !== null
+        || liveJob.pendingJudgeReasoningEffort !== null
+      ) {
         applyPendingJobModels(jobId)
       }
 
@@ -174,6 +185,8 @@ async function runJob(jobId: string) {
       const adapter = new CpamcModelAdapter(settings, effectivePack, {
         optimizerModel: activeJob.optimizerModel,
         judgeModel: activeJob.judgeModel,
+        optimizerReasoningEffort: activeJob.optimizerReasoningEffort,
+        judgeReasoningEffort: activeJob.judgeReasoningEffort,
       })
       const result = await runOptimizationCycle({
         adapter,
@@ -262,7 +275,8 @@ async function runJob(jobId: string) {
       hasUsableResult: Boolean(
         failedJob
         && (
-          failedJob.currentRound > 0
+          failedJob.candidateCount > 0
+          || failedJob.currentRound > 0
           || failedJob.finalCandidateId
         )
       ),

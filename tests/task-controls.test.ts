@@ -34,6 +34,8 @@ test('job controls support cancel, next-round model updates, and legacy error ma
       cpamcApiKey: 'secret',
       defaultOptimizerModel: 'gpt-5.2',
       defaultJudgeModel: 'gpt-5.2',
+      defaultOptimizerReasoningEffort: 'medium',
+      defaultJudgeReasoningEffort: 'medium',
     })
 
     global.fetch = (async () => new Response(JSON.stringify({
@@ -53,7 +55,14 @@ test('job controls support cancel, next-round model updates, and legacy error ma
     }), { status: 200 })) as typeof fetch
 
     const [pendingJob, runningJob] = await createJobs([
-      { title: 'Pending job', rawPrompt: 'A', optimizerModel: 'gpt-5.2', judgeModel: 'gpt-5.2' },
+      {
+        title: 'Pending job',
+        rawPrompt: 'A',
+        optimizerModel: 'gpt-5.2',
+        judgeModel: 'gpt-5.2',
+        optimizerReasoningEffort: 'high',
+        judgeReasoningEffort: 'high',
+      },
       { title: 'Running job', rawPrompt: 'B', optimizerModel: 'gpt-5.2', judgeModel: 'gpt-5.2' },
     ])
 
@@ -68,6 +77,8 @@ test('job controls support cancel, next-round model updates, and legacy error ma
     assert.equal(updatedPending.goalAnchor.goal, '保持任务原始目标')
     assert.equal(updatedPending.optimizerModel, 'gpt-5.4')
     assert.equal(updatedPending.judgeModel, 'gemini-3.1-pro')
+    assert.equal(updatedPending.optimizerReasoningEffort, 'high')
+    assert.equal(updatedPending.judgeReasoningEffort, 'high')
 
     const updatedAnchor = updateJobGoalAnchor(pendingJob.id, {
       goal: '保持任务 A 的核心目标',
@@ -86,9 +97,13 @@ test('job controls support cancel, next-round model updates, and legacy error ma
     const scheduled = updateJobModels(runningJob.id, {
       optimizerModel: 'gpt-5.4',
       judgeModel: 'gpt-5.4',
+      optimizerReasoningEffort: 'xhigh',
+      judgeReasoningEffort: 'xhigh',
     })
     assert.equal(scheduled.optimizerModel, 'gpt-5.2')
     assert.equal(scheduled.pendingOptimizerModel, 'gpt-5.4')
+    assert.equal(scheduled.pendingOptimizerReasoningEffort, 'xhigh')
+    assert.equal(scheduled.pendingJudgeReasoningEffort, 'xhigh')
     assert.equal(getJobDisplayError(scheduled.errorMessage), '这是旧版本遗留失败记录。现在可以直接修改模型后重新开始。')
     assert.equal(getJobDisplayError('候选稿分数字段无效：scoreBefore'), '模型本轮返回了无效分数，系统已拦截这次结果写入。请直接重试；若反复出现，建议更换模型或稍后再试。')
     assert.equal(
@@ -107,6 +122,8 @@ test('job controls support cancel, next-round model updates, and legacy error ma
     const promoted = applyPendingJobModels(runningJob.id)
     assert.equal(promoted.optimizerModel, 'gpt-5.4')
     assert.equal(promoted.pendingOptimizerModel, null)
+    assert.equal(promoted.optimizerReasoningEffort, 'xhigh')
+    assert.equal(promoted.pendingOptimizerReasoningEffort, null)
 
     updateJobProgress(runningJob.id, {
       status: 'cancelled',
@@ -121,9 +138,11 @@ test('job controls support cancel, next-round model updates, and legacy error ma
     assert.equal(restarted.errorMessage, null)
     assert.equal(restarted.cancelRequestedAt, null)
     assert.equal(getJobById(runningJob.id)?.judgeModel, 'gpt-5.4')
+    assert.equal(getJobById(runningJob.id)?.judgeReasoningEffort, 'xhigh')
 
     const listedPending = listJobs().find((job) => job.id === pendingJob.id)
     assert.equal(listedPending?.latestPrompt, 'A')
+    assert.equal(listedPending?.optimizerReasoningEffort, 'high')
   } finally {
     process.chdir(originalCwd)
     global.fetch = originalFetch

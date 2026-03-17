@@ -1,5 +1,6 @@
 export interface WorkerRuntimeState {
   ownerId: string
+  runtimeVersion: string
   started: boolean
   intervalId: ReturnType<typeof setInterval> | null
   heartbeatIntervalId: ReturnType<typeof setInterval> | null
@@ -7,9 +8,10 @@ export interface WorkerRuntimeState {
   activeJobIds: Set<string>
 }
 
-export function createWorkerRuntimeState(ownerId: string): WorkerRuntimeState {
+export function createWorkerRuntimeState(ownerId: string, runtimeVersion: string): WorkerRuntimeState {
   return {
     ownerId,
+    runtimeVersion,
     started: false,
     intervalId: null,
     heartbeatIntervalId: null,
@@ -21,6 +23,17 @@ export function createWorkerRuntimeState(ownerId: string): WorkerRuntimeState {
 export function shouldReplaceWorkerRuntime(
   state: WorkerRuntimeState | undefined,
   ownerId: string,
+  runtimeVersion: string,
 ) {
-  return !state || state.ownerId !== ownerId
+  return !state || state.ownerId !== ownerId || state.runtimeVersion !== runtimeVersion
+}
+
+export function resolveStableWorkerOwnerId(
+  holder: { __promptOptimizerWorkerOwnerId?: string },
+  createId: () => string,
+) {
+  if (!holder.__promptOptimizerWorkerOwnerId) {
+    holder.__promptOptimizerWorkerOwnerId = createId()
+  }
+  return holder.__promptOptimizerWorkerOwnerId
 }

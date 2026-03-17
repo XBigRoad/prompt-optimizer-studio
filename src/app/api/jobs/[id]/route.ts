@@ -13,6 +13,7 @@ import {
   updateJobModels,
   updateJobNextRoundInstruction,
 } from '@/lib/server/jobs'
+import { normalizeReasoningEffort } from '@/lib/reasoning-effort'
 import { ensureWorkerStarted } from '@/lib/server/worker'
 
 export const runtime = 'nodejs'
@@ -52,6 +53,8 @@ export async function PATCH(
     const body = await request.json() as {
       optimizerModel?: string
       judgeModel?: string
+      optimizerReasoningEffort?: string
+      judgeReasoningEffort?: string
       maxRoundsOverride?: number | null
       customRubricMd?: string | null
       nextRoundInstruction?: string
@@ -68,10 +71,21 @@ export async function PATCH(
     let goalAnchorDraft: ReturnType<typeof buildGoalAnchorDraftFromPendingSteering>['goalAnchor'] | null = null
     let consumePendingSteeringIds: string[] = []
 
-    if (body.optimizerModel !== undefined || body.judgeModel !== undefined) {
+    if (
+      body.optimizerModel !== undefined
+      || body.judgeModel !== undefined
+      || body.optimizerReasoningEffort !== undefined
+      || body.judgeReasoningEffort !== undefined
+    ) {
       updatedJob = updateJobModels(id, {
-        optimizerModel: body.optimizerModel ?? '',
-        judgeModel: body.judgeModel ?? '',
+        optimizerModel: body.optimizerModel ?? job.optimizerModel,
+        judgeModel: body.judgeModel ?? job.judgeModel,
+        optimizerReasoningEffort: body.optimizerReasoningEffort === undefined
+          ? undefined
+          : normalizeReasoningEffort(body.optimizerReasoningEffort),
+        judgeReasoningEffort: body.judgeReasoningEffort === undefined
+          ? undefined
+          : normalizeReasoningEffort(body.judgeReasoningEffort),
       })
     }
     if (Object.hasOwn(body, 'maxRoundsOverride')) {

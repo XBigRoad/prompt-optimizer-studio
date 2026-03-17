@@ -12,10 +12,6 @@ function matchesInfraFailureMessage(errorMessage: string) {
   return /(fetch failed|timeout|timed out|gateway time-?out|bad gateway|the operation was aborted|etimedout|econnreset|econnrefused|socket hang up|cloudflare|upstream|network|\b50[234]\b)/i.test(errorMessage)
 }
 
-export function isBootstrapExperimentTitle(title: string) {
-  return /^\[Bootstrap:/.test(title.trim())
-}
-
 export function getJobScoreState(job: {
   currentRound: number
   candidateCount?: number | null
@@ -50,6 +46,7 @@ export function getJobScoreDisplay(job: {
   currentRound: number
   candidateCount?: number | null
 }, locale: "zh-CN" | "en" = "zh-CN") {
+  void locale
   return getJobScoreState(job) === "not_generated"
     ? "—"
     : job.bestAverageScore.toFixed(2)

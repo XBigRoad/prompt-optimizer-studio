@@ -3,6 +3,7 @@ import { Activity, CheckCircle2, Settings2, Sparkles } from "lucide-react"
 import { ModelAliasCombobox } from "@/components/ui/model-alias-combobox"
 import { SelectField } from "@/components/ui/select-field"
 import { useI18n, useLocaleText } from "@/lib/i18n"
+import { buildReasoningEffortOptions, type ReasoningEffort } from "@/lib/reasoning-effort"
 import type { ApiProtocol } from "@/lib/server/types"
 
 type ProviderPreset = {
@@ -31,6 +32,7 @@ export function SettingsControlRoom({
     cpamcApiKey: string
     apiProtocol: ApiProtocol
     defaultTaskModel: string
+    reasoningEffort?: string
     scoreThreshold: number
     maxRounds: number
     workerConcurrency: number
@@ -47,12 +49,13 @@ export function SettingsControlRoom({
   onTestConnection: () => void
   onRefreshModels: () => void
   onFormChange: (
-    field: "cpamcBaseUrl" | "cpamcApiKey" | "apiProtocol" | "defaultTaskModel" | "scoreThreshold" | "maxRounds" | "workerConcurrency" | "customRubricMd",
+    field: "cpamcBaseUrl" | "cpamcApiKey" | "apiProtocol" | "defaultTaskModel" | "reasoningEffort" | "scoreThreshold" | "maxRounds" | "workerConcurrency" | "customRubricMd",
     value: string | number,
   ) => void
 }) {
   const { locale } = useI18n()
   const text = useLocaleText()
+  const reasoningEffortOptions = buildReasoningEffortOptions(locale)
 
   const providerPresets: ProviderPreset[] = [
     { key: "manual", label: text("— 手动配置 —", "— Manual setup —"), baseUrl: "", protocol: "auto" },
@@ -234,6 +237,18 @@ export function SettingsControlRoom({
                       disabled={loading || loadingModels}
                       onChange={(next) => onFormChange("defaultTaskModel", next)}
                     />
+                    <SelectField
+                      label={text("推理强度", "Reasoning effort")}
+                      value={form.reasoningEffort ?? 'default'}
+                      options={reasoningEffortOptions}
+                      onChange={(next) => onFormChange("reasoningEffort", next)}
+                    />
+                    <p className="small">
+                      {text(
+                        "默认同步作用于优化器和复核器。不同模型 / 网关的支持范围可能不同。",
+                        "This default applies to optimizer and reviewer together. Support varies by model and gateway.",
+                      )}
+                    </p>
                   </div>
                 </div>
               </section>

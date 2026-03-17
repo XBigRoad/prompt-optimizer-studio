@@ -1,5 +1,6 @@
 import { DEFAULT_SETTINGS } from '@/lib/server/constants'
 import { getDb } from '@/lib/server/db'
+import { normalizeReasoningEffort } from '@/lib/reasoning-effort'
 import type { AppSettings } from '@/lib/server/types'
 
 export function normalizeApiProtocol(value: unknown): AppSettings['apiProtocol'] {
@@ -27,6 +28,8 @@ export function getSettings(): AppSettings {
       api_protocol,
       default_optimizer_model,
       default_judge_model,
+      default_optimizer_reasoning_effort,
+      default_judge_reasoning_effort,
       score_threshold,
       judge_pass_count,
       max_rounds,
@@ -45,6 +48,8 @@ export function getSettings(): AppSettings {
     apiProtocol: normalizeApiProtocol(row.api_protocol),
     defaultOptimizerModel: String(row.default_optimizer_model ?? ''),
     defaultJudgeModel: String(row.default_judge_model ?? ''),
+    defaultOptimizerReasoningEffort: normalizeReasoningEffort(row.default_optimizer_reasoning_effort),
+    defaultJudgeReasoningEffort: normalizeReasoningEffort(row.default_judge_reasoning_effort),
     scoreThreshold: Number(row.score_threshold ?? DEFAULT_SETTINGS.scoreThreshold),
     judgePassCount: Number(row.judge_pass_count ?? DEFAULT_SETTINGS.judgePassCount),
     maxRounds: Number(row.max_rounds ?? DEFAULT_SETTINGS.maxRounds),
@@ -71,6 +76,8 @@ export function saveSettings(input: Partial<AppSettings>) {
         api_protocol = ?,
         default_optimizer_model = ?,
         default_judge_model = ?,
+        default_optimizer_reasoning_effort = ?,
+        default_judge_reasoning_effort = ?,
         score_threshold = ?,
         judge_pass_count = ?,
         max_rounds = ?,
@@ -86,6 +93,8 @@ export function saveSettings(input: Partial<AppSettings>) {
     normalizeApiProtocol(next.apiProtocol),
     next.defaultOptimizerModel,
     next.defaultJudgeModel,
+    normalizeReasoningEffort(next.defaultOptimizerReasoningEffort),
+    normalizeReasoningEffort(next.defaultJudgeReasoningEffort),
     next.scoreThreshold,
     next.judgePassCount,
     next.maxRounds,
