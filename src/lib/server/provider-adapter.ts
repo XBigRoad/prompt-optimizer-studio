@@ -38,6 +38,20 @@ interface OpenAiChatCompletionResponse {
   }
 }
 
+interface OpenAiResponsesResponse {
+  output?: Array<{
+    type?: string
+    role?: string
+    content?: Array<{
+      type?: string
+      text?: string
+    }>
+  }>
+  error?: {
+    message?: string
+  }
+}
+
 interface AnthropicMessagesResponse {
   content?: Array<{
     type?: string
@@ -181,8 +195,15 @@ class OpenAiStyleProviderAdapter implements ProviderAdapter {
   }
 
   async requestJson(input: ProviderJsonRequest) {
-    const endpoint = appendToBasePath(this.settings.cpamcBaseUrl, 'chat/completions')
     const reasoningEffort = normalizeReasoningEffort(input.reasoningEffort)
+    return this.requestJsonViaChatCompletions(input, reasoningEffort)
+  }
+
+  protected async requestJsonViaChatCompletions(
+    input: ProviderJsonRequest,
+    reasoningEffort: ReasoningEffort,
+  ) {
+    const endpoint = appendToBasePath(this.settings.cpamcBaseUrl, 'chat/completions')
     const body = {
       model: input.model,
       messages: [
@@ -208,6 +229,36 @@ class OpenAiStyleProviderAdapter implements ProviderAdapter {
     }, input.maxAttempts ?? 3)
 
     return extractJsonObject(extractOpenAiResponseText(response)) as Record<string, unknown>
+  }
+
+  protected async requestJsonViaResponsesApi(
+    input: ProviderJsonRequest,
+    reasoningEffort: ReasoningEffort,
+  ) {
+    const endpoint = appendToBasePath(this.settings.cpamcBaseUrl, 'responses')
+    const body = {
+      model: input.model,
+      instructions: input.system,
+      input: input.user,
+      ...(reasoningEffort !== 'default' ? { reasoning: { effort: reasoningEffort } } : {}),
+      ...(shouldSendTemperature(input.model, reasoningEffort) ? { temperature: 0.2 } : {}),
+    }
+
+    const response = await requestWithRetry(async () => {
+      const result = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${this.settings.cpamcApiKey}`,
+        },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(input.timeoutMs),
+      })
+
+      return parseOpenAiResponsesResponse(result, '模型请求') as Promise<OpenAiResponsesResponse>
+    }, input.maxAttempts ?? 3)
+
+    return extractJsonObject(extractOpenAiResponsesText(response)) as Record<string, unknown>
   }
 
   async listModels() {
@@ -239,6 +290,20 @@ function shouldSendTemperature(model: string, reasoningEffort: ReasoningEffort) 
 class OpenAiCompatibleProviderAdapter extends OpenAiStyleProviderAdapter {
   constructor(settings: ProviderConnectionSettings) {
     super(settings, 'openai-compatible')
+  }
+
+  async requestJson(input: ProviderJsonRequest) {
+    const reasoningEffort = normalizeReasoningEffort(input.reasoningEffort)
+
+    try {
+      return await this.requestJsonViaChatCompletions(input, reasoningEffort)
+    } catch (error) {
+      if (!isMissingChatCompletionsEndpoint(error)) {
+        throw error
+      }
+
+      return this.requestJsonViaResponsesApi(input, reasoningEffort)
+    }
   }
 }
 
@@ -483,6 +548,25 @@ function extractOpenAiResponseText(response: OpenAiChatCompletionResponse) {
   throw new Error('模型返回了空响应。')
 }
 
+function extractOpenAiResponsesText(response: OpenAiResponsesResponse) {
+  const text = (response.output ?? [])
+    .flatMap((item) => item.type === 'message' ? item.content ?? [] : [])
+    .filter((part) => part.type === 'output_text' && typeof part.text === 'string')
+    .map((part) => part.text ?? '')
+    .join('\n')
+    .trim()
+
+  if (text) {
+    return text
+  }
+
+  if (response.error?.message) {
+    throw new Error(response.error.message)
+  }
+
+  throw new Error('OpenAI Responses API 返回了空响应。')
+}
+
 function extractAnthropicResponseText(response: AnthropicMessagesResponse) {
   const text = (response.content ?? [])
     .filter((part) => part.type === 'text' && typeof part.text === 'string')
@@ -543,15 +627,37 @@ function extractCohereResponseText(response: CohereChatResponse) {
 
 async function parseJsonResponse(response: Response, actionLabel: string) {
   if (!response.ok) {
-    const text = await response.text()
-    const error = new Error(`${actionLabel}失败 (${response.status}): ${text.slice(0, 500)}`)
-    if (response.status === 408 || response.status === 429 || response.status >= 500) {
-      ;(error as Error & { retriable?: boolean }).retriable = true
-    }
-    throw error
+    throw await createHttpError(response, actionLabel)
   }
 
   return response.json() as Promise<unknown>
+}
+
+async function parseOpenAiResponsesResponse(response: Response, actionLabel: string) {
+  if (!response.ok) {
+    throw await createHttpError(response, actionLabel)
+  }
+
+  const contentType = response.headers.get('content-type')?.toLowerCase() ?? ''
+  if (!contentType.includes('text/event-stream')) {
+    return response.json() as Promise<OpenAiResponsesResponse>
+  }
+
+  const payload = await response.text()
+  return parseOpenAiResponsesEventStream(payload)
+}
+
+async function createHttpError(response: Response, actionLabel: string) {
+  const text = await response.text()
+  const error = new Error(`${actionLabel}失败 (${response.status}): ${text.slice(0, 500)}`) as Error & {
+    retriable?: boolean
+    status?: number
+  }
+  error.status = response.status
+  if (response.status === 408 || response.status === 429 || response.status >= 500) {
+    error.retriable = true
+  }
+  return error
 }
 
 async function requestWithRetry<T>(operation: () => Promise<T>, maxAttempts: number) {
@@ -584,6 +690,66 @@ function appendToBasePath(baseUrl: string, tail: string) {
   url.pathname = `/${segments.join('/')}`
   url.search = ''
   return url.toString()
+}
+
+function parseOpenAiResponsesEventStream(payload: string): OpenAiResponsesResponse {
+  const blocks = payload
+    .split(/\n\s*\n/g)
+    .map((block) => block.trim())
+    .filter(Boolean)
+
+  let finalResponse: OpenAiResponsesResponse | null = null
+  let lastPayload: unknown = null
+
+  for (const block of blocks) {
+    const lines = block.split('\n')
+    const event = lines.find((line) => line.startsWith('event:'))?.slice('event:'.length).trim()
+    const data = lines
+      .filter((line) => line.startsWith('data:'))
+      .map((line) => line.slice('data:'.length).trim())
+      .join('\n')
+
+    if (!data || data === '[DONE]') {
+      continue
+    }
+
+    const parsed = JSON.parse(data) as { response?: OpenAiResponsesResponse }
+    lastPayload = parsed
+    if ((event === 'response.completed' || event === 'response.failed') && parsed.response) {
+      finalResponse = parsed.response
+    }
+  }
+
+  if (finalResponse) {
+    return finalResponse
+  }
+
+  if (isOpenAiResponsesWrapper(lastPayload)) {
+    return lastPayload.response
+  }
+
+  if (isOpenAiResponsesResponse(lastPayload)) {
+    return lastPayload
+  }
+
+  throw new Error('OpenAI Responses API 返回了无法解析的事件流。')
+}
+
+function isOpenAiResponsesWrapper(payload: unknown): payload is { response: OpenAiResponsesResponse } {
+  return typeof payload === 'object' && payload !== null && 'response' in payload
+}
+
+function isOpenAiResponsesResponse(payload: unknown): payload is OpenAiResponsesResponse {
+  return typeof payload === 'object' && payload !== null
+}
+
+function isMissingChatCompletionsEndpoint(error: unknown) {
+  return Boolean(
+    error
+    && typeof error === 'object'
+    && 'status' in error
+    && (error as { status?: number }).status === 404,
+  )
 }
 
 function appendVersionedPath(baseUrl: string, versionSegment: string, tail: string) {
