@@ -4,7 +4,7 @@
 
 # Prompt Optimizer Studio
 
-[Chinese Home](./) | **English**
+[Chinese Home](README.md) | **English**
 
 <p align="center">
   <a href="https://img.shields.io/github/v/release/XBigRoad/prompt-optimizer-studio?display_name=tag&style=flat-square"><img alt="Latest release" src="https://img.shields.io/github/v/release/XBigRoad/prompt-optimizer-studio?display_name=tag&style=flat-square" /></a>
@@ -84,7 +84,7 @@ More: [Configuration](#configuration) · [Screenshots](#screenshots)
 
 ## Project Docs
 
-- [Chinese Home](./)
+- [Chinese Home](README.md)
 - [Contributing](CONTRIBUTING_EN.md)
 - [Security Policy](SECURITY_EN.md)
 - [Code of Conduct](CODE_OF_CONDUCT_EN.md)
