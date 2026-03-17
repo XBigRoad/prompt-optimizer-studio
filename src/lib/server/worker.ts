@@ -71,6 +71,18 @@ export function resolvePostReviewStatus(input: {
   return 'running'
 }
 
+export function resolvePostFailureStatus(input: {
+  runMode: JobRunMode
+  hasUsableResult: boolean
+  error: unknown
+}): JobStatus {
+  if (!input.hasUsableResult || !matchesInfraFailure(input.error)) {
+    return 'failed'
+  }
+
+  return input.runMode === 'step' ? 'paused' : 'manual_review'
+}
+
 async function pumpQueue() {
   const state = globalWorkerState.__promptOptimizerWorker
   if (!state) {
@@ -245,12 +257,37 @@ async function runJob(jobId: string) {
     }
   } catch (error) {
     const failedJob = getJobById(jobId)
+    const failureStatus = resolvePostFailureStatus({
+      runMode: failedJob?.runMode ?? 'auto',
+      hasUsableResult: Boolean(
+        failedJob
+        && (
+          failedJob.currentRound > 0
+          || failedJob.finalCandidateId
+        )
+      ),
+      error,
+    })
     updateJobProgress(jobId, {
-      status: 'failed',
+      status: failureStatus,
       currentRound: failedJob?.currentRound ?? 0,
       bestAverageScore: failedJob?.bestAverageScore ?? 0,
       finalCandidateId: failedJob?.finalCandidateId ?? null,
       errorMessage: error instanceof Error ? error.message : 'Unknown worker error',
     })
   }
+}
+
+function matchesInfraFailure(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error ?? '')
+  const status = typeof error === 'object' && error !== null && 'status' in error
+    ? Number((error as { status?: unknown }).status)
+    : NaN
+  const retriable = typeof error === 'object' && error !== null && 'retriable' in error
+    ? Boolean((error as { retriable?: unknown }).retriable)
+    : false
+
+  return retriable
+    || Number.isFinite(status) && (status === 408 || status === 429 || status >= 500)
+    || /(fetch failed|timeout|timed out|gateway time-?out|bad gateway|the operation was aborted|etimedout|econnreset|econnrefused|socket hang up|cloudflare|upstream|network|\b50[234]\b)/i.test(message)
 }

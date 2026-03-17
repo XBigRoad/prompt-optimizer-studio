@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { resolvePostReviewStatus } from '../src/lib/server/worker'
+import { resolvePostFailureStatus, resolvePostReviewStatus } from '../src/lib/server/worker'
 
 test('step mode pauses after exactly one completed round', () => {
   assert.equal(resolvePostReviewStatus({
@@ -41,4 +41,34 @@ test('completion still wins over step or pause controls', () => {
     runMode: 'step',
     pauseRequestedAt: '2026-03-08T10:00:00.000Z',
   }), 'completed')
+})
+
+test('step mode soft-lands infra failures with usable results back to paused', () => {
+  assert.equal(resolvePostFailureStatus({
+    runMode: 'step',
+    hasUsableResult: true,
+    error: Object.assign(new Error('模型请求失败 (504): rawchat.cn | 504: Gateway time-out'), { status: 504, retriable: true }),
+  }), 'paused')
+})
+
+test('auto mode soft-lands infra failures with usable results into manual review', () => {
+  assert.equal(resolvePostFailureStatus({
+    runMode: 'auto',
+    hasUsableResult: true,
+    error: new Error('fetch failed: ETIMEDOUT'),
+  }), 'manual_review')
+})
+
+test('hard failures remain failed when there is no usable result or the error is not infra', () => {
+  assert.equal(resolvePostFailureStatus({
+    runMode: 'step',
+    hasUsableResult: false,
+    error: Object.assign(new Error('模型请求失败 (504): Gateway time-out'), { status: 504, retriable: true }),
+  }), 'failed')
+
+  assert.equal(resolvePostFailureStatus({
+    runMode: 'auto',
+    hasUsableResult: true,
+    error: new Error('候选稿分数字段无效：scoreBefore'),
+  }), 'failed')
 })
