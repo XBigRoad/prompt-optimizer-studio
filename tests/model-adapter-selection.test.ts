@@ -54,6 +54,8 @@ test('adapter uses optimizer and judge models independently', async () => {
     {
       optimizerModel: 'gpt-5.2',
       judgeModel: 'gemini-3.1-pro',
+      optimizerReasoningEffort: 'default',
+      judgeReasoningEffort: 'default',
     },
   )
 
@@ -143,6 +145,8 @@ test('adapter coerces invalid numeric scores to safe fallbacks instead of propag
     {
       optimizerModel: 'gpt-5.2',
       judgeModel: 'gemini-3.1-pro',
+      optimizerReasoningEffort: 'default',
+      judgeReasoningEffort: 'default',
     },
   )
 
@@ -164,4 +168,91 @@ test('adapter coerces invalid numeric scores to safe fallbacks instead of propag
 
   assert.equal(optimization.scoreBefore, 0)
   assert.equal(review.score, 0)
+})
+
+test('xhigh reasoning doubles optimizer and judge request timeouts', async () => {
+  const originalFetch = global.fetch
+  const originalAbortTimeout = AbortSignal.timeout
+  const capturedTimeouts: number[] = []
+  let callCount = 0
+
+  try {
+    AbortSignal.timeout = ((ms: number) => {
+      capturedTimeouts.push(ms)
+      return originalAbortTimeout.call(AbortSignal, ms)
+    }) as typeof AbortSignal.timeout
+
+    global.fetch = (async (_input: RequestInfo | URL, _init?: RequestInit) => {
+      callCount += 1
+      return new Response(JSON.stringify({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify(
+                callCount === 1
+                  ? {
+                      optimizedPrompt: 'better prompt',
+                      strategy: 'rebuild',
+                      scoreBefore: 60,
+                      majorChanges: ['more constraints'],
+                      mve: 'single run',
+                      deadEndSignals: ['vague output'],
+                    }
+                  : {
+                      score: 97,
+                      hasMaterialIssues: false,
+                      summary: 'ready',
+                      findings: [],
+                      suggestedChanges: [],
+                    },
+              ),
+            },
+          },
+        ],
+      }), { status: 200 })
+    }) as typeof fetch
+
+    const adapter = new CpamcModelAdapter(
+      {
+        cpamcBaseUrl: 'http://localhost:8317/v1',
+        cpamcApiKey: 'secret',
+        scoreThreshold: 95,
+      },
+      {
+        id: 'pack-1',
+        hash: 'hash',
+        skillMd: 'skill',
+        rubricMd: 'rubric',
+        templateMd: 'template',
+        createdAt: new Date().toISOString(),
+      },
+      {
+        optimizerModel: 'gpt-5.4',
+        judgeModel: 'gpt-5.4',
+        optimizerReasoningEffort: 'xhigh',
+        judgeReasoningEffort: 'xhigh',
+      },
+    )
+
+    await adapter.optimizePrompt({
+      currentPrompt: 'draft',
+      previousFeedback: [],
+      goalAnchor: {
+        goal: 'Keep the original task.',
+        deliverable: 'Return the original requested deliverable.',
+        driftGuard: ['Do not drift away from the original task.'],
+      },
+      threshold: 95,
+    })
+    await adapter.judgePrompt('candidate', 0, {
+      goal: 'Keep the original task.',
+      deliverable: 'Return the original requested deliverable.',
+      driftGuard: ['Do not drift away from the original task.'],
+    })
+
+    assert.deepEqual(capturedTimeouts, [360_000, 240_000])
+  } finally {
+    global.fetch = originalFetch
+    AbortSignal.timeout = originalAbortTimeout
+  }
 })

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 
+import { normalizeReasoningEffort } from '@/lib/reasoning-effort'
 import { getSettings, normalizeApiProtocol, saveSettings } from '@/lib/server/settings'
 import type { AppSettings } from '@/lib/server/types'
 
@@ -18,6 +19,12 @@ export async function POST(request: Request) {
       ...(typeof body.apiProtocol === 'string' ? { apiProtocol: normalizeApiProtocol(body.apiProtocol) } : {}),
       defaultOptimizerModel: body.defaultOptimizerModel?.trim() ?? '',
       defaultJudgeModel: body.defaultJudgeModel?.trim() ?? '',
+      ...(body.defaultOptimizerReasoningEffort !== undefined
+        ? { defaultOptimizerReasoningEffort: normalizeReasoningEffort(body.defaultOptimizerReasoningEffort) }
+        : {}),
+      ...(body.defaultJudgeReasoningEffort !== undefined
+        ? { defaultJudgeReasoningEffort: normalizeReasoningEffort(body.defaultJudgeReasoningEffort) }
+        : {}),
       scoreThreshold: clampNumber(body.scoreThreshold, 1, 100, 95),
       judgePassCount: clampNumber(body.judgePassCount, 1, 5, 3),
       maxRounds: clampNumber(body.maxRounds, 1, 20, 8),

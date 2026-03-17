@@ -1,5 +1,6 @@
 import { extractJsonObject } from '@/lib/server/json'
 import type { ApiProtocol, AppSettings, ModelCatalogItem } from '@/lib/server/types'
+import { isGpt5FamilyModel, normalizeReasoningEffort, type ReasoningEffort } from '@/lib/reasoning-effort'
 
 export type { ApiProtocol } from '@/lib/server/types'
 
@@ -9,6 +10,7 @@ export interface ProviderJsonRequest {
   user: string
   timeoutMs: number
   maxAttempts?: number
+  reasoningEffort?: ReasoningEffort
 }
 
 export interface ProviderAdapter {
@@ -180,13 +182,15 @@ class OpenAiStyleProviderAdapter implements ProviderAdapter {
 
   async requestJson(input: ProviderJsonRequest) {
     const endpoint = appendToBasePath(this.settings.cpamcBaseUrl, 'chat/completions')
+    const reasoningEffort = normalizeReasoningEffort(input.reasoningEffort)
     const body = {
       model: input.model,
-      temperature: 0.2,
       messages: [
         { role: 'system', content: input.system },
         { role: 'user', content: input.user },
       ],
+      ...(reasoningEffort !== 'default' ? { reasoning_effort: reasoningEffort } : {}),
+      ...(shouldSendTemperature(input.model, reasoningEffort) ? { temperature: 0.2 } : {}),
     }
 
     const response = await requestWithRetry(async () => {
@@ -218,6 +222,14 @@ class OpenAiStyleProviderAdapter implements ProviderAdapter {
     const payload = await parseJsonResponse(response, '拉取模型列表') as OpenAiModelListResponse
     return normalizeProviderModelCatalog(this.protocol, payload)
   }
+}
+
+function shouldSendTemperature(model: string, reasoningEffort: ReasoningEffort) {
+  if (isGpt5FamilyModel(model) && reasoningEffort !== 'default' && reasoningEffort !== 'none') {
+    return false
+  }
+
+  return true
 }
 
 class OpenAiCompatibleProviderAdapter extends OpenAiStyleProviderAdapter {

@@ -3,6 +3,7 @@ import type { DatabaseSync } from 'node:sqlite'
 
 import { assignConversationGroup } from '@/lib/engine/conversation-policy'
 import { getJobDisplayError } from '@/lib/presentation'
+import { normalizeReasoningEffort } from '@/lib/reasoning-effort'
 import { getDb } from '@/lib/server/db'
 import {
   deriveGoalAnchor,
@@ -76,6 +77,8 @@ export async function createJobs(inputs: JobInput[]) {
         raw_prompt,
         optimizer_model,
         judge_model,
+        optimizer_reasoning_effort,
+        judge_reasoning_effort,
         pending_optimizer_model,
         pending_judge_model,
         status,
@@ -101,13 +104,15 @@ export async function createJobs(inputs: JobInput[]) {
         error_message,
         created_at,
         updated_at
-      ) VALUES (?, ?, ?, ?, ?, NULL, NULL, 'pending', 'auto', ?, 0, 0, ?, ?, NULL, NULL, NULL, '[]', 0, 0, '[]', NULL, ?, ?, NULL, NULL, ?, NULL, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL, 'pending', 'auto', ?, 0, 0, ?, ?, NULL, NULL, NULL, '[]', 0, 0, '[]', NULL, ?, ?, NULL, NULL, ?, NULL, ?, ?)
     `).run(
       id,
       normalizeTitle(input.title, normalizedPrompt),
       normalizedPrompt,
       models.optimizerModel,
       models.judgeModel,
+      models.optimizerReasoningEffort,
+      models.judgeReasoningEffort,
       pack.id,
       serializeGoalAnchor(goalAnchor.goalAnchor),
       serializeGoalAnchorExplanation(goalAnchor.explanation),
@@ -133,6 +138,8 @@ export function listJobs() {
       jobs.raw_prompt,
       jobs.optimizer_model,
       jobs.judge_model,
+      jobs.optimizer_reasoning_effort,
+      jobs.judge_reasoning_effort,
       jobs.pending_optimizer_model,
       jobs.pending_judge_model,
       jobs.status,
@@ -185,6 +192,8 @@ export function getJobById(id: string) {
       jobs.raw_prompt,
       jobs.optimizer_model,
       jobs.judge_model,
+      jobs.optimizer_reasoning_effort,
+      jobs.judge_reasoning_effort,
       jobs.pending_optimizer_model,
       jobs.pending_judge_model,
       jobs.status,
@@ -1112,20 +1121,29 @@ function resumeJob(jobId: string, runMode: JobRunMode) {
 function resolveJobModels(input: JobInput, settings: ReturnType<typeof getSettings>) {
   const optimizerModel = input.optimizerModel?.trim() ?? ''
   const judgeModel = input.judgeModel?.trim() ?? ''
+  const optimizerReasoningEffort = input.optimizerReasoningEffort
+  const judgeReasoningEffort = input.judgeReasoningEffort
 
   if (optimizerModel && judgeModel) {
-    return { optimizerModel, judgeModel }
+    return {
+      optimizerModel,
+      judgeModel,
+      optimizerReasoningEffort: normalizeReasoningEffort(optimizerReasoningEffort ?? settings.defaultOptimizerReasoningEffort),
+      judgeReasoningEffort: normalizeReasoningEffort(judgeReasoningEffort ?? settings.defaultJudgeReasoningEffort),
+    }
   }
 
   validateTaskDefaults(settings)
   return {
     optimizerModel: optimizerModel || settings.defaultOptimizerModel.trim(),
     judgeModel: judgeModel || settings.defaultJudgeModel.trim(),
+    optimizerReasoningEffort: normalizeReasoningEffort(optimizerReasoningEffort ?? settings.defaultOptimizerReasoningEffort),
+    judgeReasoningEffort: normalizeReasoningEffort(judgeReasoningEffort ?? settings.defaultJudgeReasoningEffort),
   }
 }
 
 async function resolveInitialGoalAnchor(
-  settings: Pick<ReturnType<typeof getSettings>, 'cpamcBaseUrl' | 'cpamcApiKey'>,
+  settings: Pick<ReturnType<typeof getSettings>, 'cpamcBaseUrl' | 'cpamcApiKey' | 'defaultOptimizerReasoningEffort'>,
   optimizerModel: string,
   rawPrompt: string,
 ) {
@@ -1472,6 +1490,8 @@ function mapJobRow(row: Record<string, unknown>): JobRecord {
     rawPrompt: String(row.raw_prompt),
     optimizerModel: String(row.optimizer_model ?? ''),
     judgeModel: String(row.judge_model ?? ''),
+    optimizerReasoningEffort: normalizeReasoningEffort(row.optimizer_reasoning_effort),
+    judgeReasoningEffort: normalizeReasoningEffort(row.judge_reasoning_effort),
     pendingOptimizerModel: row.pending_optimizer_model ? String(row.pending_optimizer_model) : null,
     pendingJudgeModel: row.pending_judge_model ? String(row.pending_judge_model) : null,
     status: row.status as JobRecord['status'],

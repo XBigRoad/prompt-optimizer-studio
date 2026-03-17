@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react'
 import { SettingsControlRoom } from '@/components/settings-control-room'
 import { StudioFrame } from '@/components/studio-frame'
 import { useLocaleText } from '@/lib/i18n'
+import type { ReasoningEffort } from '@/lib/reasoning-effort'
 import type { ApiProtocol } from '@/lib/server/types'
 
 interface SettingsForm {
@@ -13,6 +14,7 @@ interface SettingsForm {
   cpamcApiKey: string
   apiProtocol: ApiProtocol
   defaultTaskModel: string
+  reasoningEffort: ReasoningEffort
   scoreThreshold: number
   maxRounds: number
   workerConcurrency: number
@@ -29,6 +31,7 @@ const DEFAULT_FORM: SettingsForm = {
   cpamcApiKey: '',
   apiProtocol: 'auto',
   defaultTaskModel: '',
+  reasoningEffort: 'default',
   scoreThreshold: 95,
   maxRounds: 8,
   workerConcurrency: 2,
@@ -68,6 +71,7 @@ export function SettingsShell() {
             cpamcApiKey: settingsPayload.settings.cpamcApiKey,
             apiProtocol: settingsPayload.settings.apiProtocol ?? 'auto',
             defaultTaskModel: settingsPayload.settings.defaultOptimizerModel,
+            reasoningEffort: settingsPayload.settings.defaultOptimizerReasoningEffort ?? 'default',
             scoreThreshold: settingsPayload.settings.scoreThreshold,
             maxRounds: settingsPayload.settings.maxRounds,
             workerConcurrency: settingsPayload.settings.workerConcurrency,
@@ -105,6 +109,8 @@ export function SettingsShell() {
           apiProtocol: form.apiProtocol,
           defaultOptimizerModel: form.defaultTaskModel,
           defaultJudgeModel: form.defaultTaskModel,
+          defaultOptimizerReasoningEffort: form.reasoningEffort,
+          defaultJudgeReasoningEffort: form.reasoningEffort,
           scoreThreshold: form.scoreThreshold,
           maxRounds: form.maxRounds,
           workerConcurrency: form.workerConcurrency,
@@ -119,6 +125,7 @@ export function SettingsShell() {
         ...current,
         apiProtocol: payload.settings.apiProtocol ?? current.apiProtocol,
         defaultTaskModel: payload.settings.defaultOptimizerModel,
+        reasoningEffort: payload.settings.defaultOptimizerReasoningEffort ?? current.reasoningEffort,
         scoreThreshold: payload.settings.scoreThreshold,
         maxRounds: payload.settings.maxRounds,
         workerConcurrency: payload.settings.workerConcurrency,

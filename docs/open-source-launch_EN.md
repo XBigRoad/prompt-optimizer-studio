@@ -12,11 +12,15 @@ This file keeps copy-ready text for the GitHub repository page and public releas
 
 ### GitHub About
 
-Automated prompt optimization pipeline with human steering and copy-ready final prompts.
+Self-hosted prompt optimizer for multi-round refinement with human steering and copy-ready final prompts.
+
+### GitHub Homepage
+
+`https://github.com/XBigRoad/prompt-optimizer-studio/blob/main/docs/deployment/docker-self-hosted.md`
 
 ### Short Pitch
 
-Prompt Optimizer Studio turns prompt refinement into an operator-friendly pipeline. Start from a draft prompt, let optimizer and reviewer iterate automatically, step in when the direction drifts, and end with a full prompt you can actually ship.
+Prompt Optimizer Studio turns prompt optimization into a workflow ordinary prompt users can actually follow: start from a draft prompt, let optimizer and reviewer refine it across rounds, step in when the direction drifts, and leave with a full prompt you can actually copy and use.
 
 ## Key Messages
 
@@ -30,9 +34,24 @@ Prompt Optimizer Studio turns prompt refinement into an operator-friendly pipeli
 
 ## Release Title
 
-`v0.1.2 - Configurable Scoring, Broader Model Coverage, and Bilingual UI`
+`v0.1.3 - GPT-5 reasoning-effort settings patch`
 
 ## Release History
+
+### v0.1.3
+
+Release shape:
+
+- This release remains the **Self-Hosted / Server Edition**.
+- It is a patch release on top of `v0.1.2`, focused on fixing the public build so `gpt-5.4` reasoning effort can be configured and audited explicitly.
+
+Highlights:
+
+- **Reasoning-effort controls in settings**: the Config Desk now persists a default reasoning effort for optimizer and reviewer, including `default / none / minimal / low / medium / high / xhigh`.
+- **Public-line persistence is now complete**: both `settings` and `jobs` store reasoning effort snapshots so public jobs can be audited after the fact.
+- **More correct GPT-5 request shaping**: the public build now forwards `reasoning_effort` for `gpt-5` family models and avoids sending incompatible `temperature` settings when reasoning is enabled.
+- **Timeout protection for higher reasoning levels**: `high / xhigh` automatically expand optimizer / reviewer timeouts to reduce false timeouts under heavier reasoning load.
+- **v0.1.3 compatibility patch across the stack**: the settings UI, settings API, database migration path, and verification tests were all updated together so the public line regains reasoning-control visibility comparable to the private line.
 
 ### v0.1.2
 
@@ -71,4 +90,4 @@ Highlights:
 
 ## Suggested Topics
 
-`prompt-engineering`, `prompt-optimizer`, `automation`, `prompt-pipeline`, `nextjs`, `react`, `typescript`, `sqlite`, `docker`, `openai-compatible`, `anthropic`, `gemini`, `mistral`, `cohere`, `openrouter`, `deepseek`, `bilingual`, `self-hosted`, `developer-tools`, `ai-tooling`
+`prompt-optimizer`, `prompt-engineering`, `prompt-automation`, `human-in-the-loop`, `self-hosted`, `ai-tooling`, `openai-compatible`
