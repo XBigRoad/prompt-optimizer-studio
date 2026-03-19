@@ -10,6 +10,7 @@ export interface ProviderJsonRequest {
   user: string
   timeoutMs: number
   maxAttempts?: number
+  attemptTimeoutCapMs?: number
   reasoningEffort?: ReasoningEffort
 }
 
@@ -20,6 +21,9 @@ export interface ProviderAdapter {
 }
 
 type ProviderConnectionSettings = Pick<AppSettings, 'cpamcBaseUrl' | 'cpamcApiKey'> & Partial<Pick<AppSettings, 'apiProtocol'>>
+
+const DEFAULT_MODEL_REQUEST_ATTEMPT_TIMEOUT_CAP_MS = 60_000
+const DEFAULT_MODEL_REQUEST_MAX_ATTEMPTS = 2
 
 interface OpenAiModelListResponse {
   data?: Array<{
@@ -214,19 +218,26 @@ class OpenAiStyleProviderAdapter implements ProviderAdapter {
       ...(shouldSendTemperature(input.model, reasoningEffort) ? { temperature: 0.2 } : {}),
     }
 
-    const response = await requestWithRetry(async () => {
-      const result = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${this.settings.cpamcApiKey}`,
-        },
-        body: JSON.stringify(body),
-        signal: AbortSignal.timeout(input.timeoutMs),
-      })
+    const response = await requestWithRetry((attemptTimeoutMs) => (
+      runRequestWithTimeout('模型请求', attemptTimeoutMs, async (signal) => {
+        const result = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${this.settings.cpamcApiKey}`,
+          },
+          body: JSON.stringify(body),
+          signal,
+        })
 
-      return parseJsonResponse(result, '模型请求') as Promise<OpenAiChatCompletionResponse>
-    }, input.maxAttempts ?? 3)
+        return parseJsonResponse(result, '模型请求', attemptTimeoutMs) as Promise<OpenAiChatCompletionResponse>
+      })
+    ), {
+      maxAttempts: input.maxAttempts ?? DEFAULT_MODEL_REQUEST_MAX_ATTEMPTS,
+      attemptTimeoutCapMs: input.attemptTimeoutCapMs ?? DEFAULT_MODEL_REQUEST_ATTEMPT_TIMEOUT_CAP_MS,
+      timeoutMs: input.timeoutMs,
+      actionLabel: '模型请求',
+    })
 
     return extractJsonObject(extractOpenAiResponseText(response)) as Record<string, unknown>
   }
@@ -244,37 +255,51 @@ class OpenAiStyleProviderAdapter implements ProviderAdapter {
       ...(shouldSendTemperature(input.model, reasoningEffort) ? { temperature: 0.2 } : {}),
     }
 
-    const response = await requestWithRetry(async () => {
-      const result = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${this.settings.cpamcApiKey}`,
-        },
-        body: JSON.stringify(body),
-        signal: AbortSignal.timeout(input.timeoutMs),
-      })
+    const response = await requestWithRetry((attemptTimeoutMs) => (
+      runRequestWithTimeout('模型请求', attemptTimeoutMs, async (signal) => {
+        const result = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${this.settings.cpamcApiKey}`,
+          },
+          body: JSON.stringify(body),
+          signal,
+        })
 
-      return parseOpenAiResponsesResponse(result, '模型请求') as Promise<OpenAiResponsesResponse>
-    }, input.maxAttempts ?? 3)
+        return parseOpenAiResponsesResponse(result, '模型请求', attemptTimeoutMs) as Promise<OpenAiResponsesResponse>
+      })
+    ), {
+      maxAttempts: input.maxAttempts ?? DEFAULT_MODEL_REQUEST_MAX_ATTEMPTS,
+      attemptTimeoutCapMs: input.attemptTimeoutCapMs ?? DEFAULT_MODEL_REQUEST_ATTEMPT_TIMEOUT_CAP_MS,
+      timeoutMs: input.timeoutMs,
+      actionLabel: '模型请求',
+    })
 
     return extractJsonObject(extractOpenAiResponsesText(response)) as Record<string, unknown>
   }
 
   async listModels() {
     const endpoint = appendToBasePath(this.settings.cpamcBaseUrl, 'models')
-    const response = await fetch(endpoint, {
-      headers: {
-        Authorization: `Bearer ${this.settings.cpamcApiKey}`,
-      },
-      signal: AbortSignal.timeout(30_000),
+    const payload = await runRequestWithTimeout('拉取模型列表', 30_000, async (signal) => {
+      const response = await fetch(endpoint, {
+        headers: {
+          Authorization: `Bearer ${this.settings.cpamcApiKey}`,
+        },
+        signal,
+      })
+
+      if (response.status === 404 && this.protocol === 'openai-compatible') {
+        return null
+      }
+
+      return parseJsonResponse(response, '拉取模型列表', 30_000) as Promise<OpenAiModelListResponse>
     })
 
-    if (response.status === 404 && this.protocol === 'openai-compatible') {
+    if (payload === null) {
       return []
     }
 
-    const payload = await parseJsonResponse(response, '拉取模型列表') as OpenAiModelListResponse
     return normalizeProviderModelCatalog(this.protocol, payload)
   }
 }
@@ -338,35 +363,44 @@ class AnthropicNativeProviderAdapter implements ProviderAdapter {
       max_tokens: 2_048,
     }
 
-    const response = await requestWithRetry(async () => {
-      const result = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': this.settings.cpamcApiKey,
-          'anthropic-version': '2023-06-01',
-        },
-        body: JSON.stringify(body),
-        signal: AbortSignal.timeout(input.timeoutMs),
-      })
+    const response = await requestWithRetry((attemptTimeoutMs) => (
+      runRequestWithTimeout('Anthropic 请求', attemptTimeoutMs, async (signal) => {
+        const result = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': this.settings.cpamcApiKey,
+            'anthropic-version': '2023-06-01',
+          },
+          body: JSON.stringify(body),
+          signal,
+        })
 
-      return parseJsonResponse(result, 'Anthropic 请求') as Promise<AnthropicMessagesResponse>
-    }, input.maxAttempts ?? 3)
+        return parseJsonResponse(result, 'Anthropic 请求', attemptTimeoutMs) as Promise<AnthropicMessagesResponse>
+      })
+    ), {
+      maxAttempts: input.maxAttempts ?? DEFAULT_MODEL_REQUEST_MAX_ATTEMPTS,
+      attemptTimeoutCapMs: input.attemptTimeoutCapMs ?? DEFAULT_MODEL_REQUEST_ATTEMPT_TIMEOUT_CAP_MS,
+      timeoutMs: input.timeoutMs,
+      actionLabel: 'Anthropic 请求',
+    })
 
     return extractJsonObject(extractAnthropicResponseText(response)) as Record<string, unknown>
   }
 
   async listModels() {
     const endpoint = appendVersionedPath(this.settings.cpamcBaseUrl, 'v1', 'models')
-    const response = await fetch(endpoint, {
-      headers: {
-        'x-api-key': this.settings.cpamcApiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      signal: AbortSignal.timeout(30_000),
-    })
+    const payload = await runRequestWithTimeout('拉取模型列表', 30_000, async (signal) => {
+      const response = await fetch(endpoint, {
+        headers: {
+          'x-api-key': this.settings.cpamcApiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        signal,
+      })
 
-    const payload = await parseJsonResponse(response, '拉取模型列表') as AnthropicModelListResponse
+      return parseJsonResponse(response, '拉取模型列表', 30_000) as Promise<AnthropicModelListResponse>
+    })
     return normalizeProviderModelCatalog(this.protocol, payload)
   }
 }
@@ -398,33 +432,42 @@ class GeminiNativeProviderAdapter implements ProviderAdapter {
       },
     }
 
-    const response = await requestWithRetry(async () => {
-      const result = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-goog-api-key': this.settings.cpamcApiKey,
-        },
-        body: JSON.stringify(body),
-        signal: AbortSignal.timeout(input.timeoutMs),
-      })
+    const response = await requestWithRetry((attemptTimeoutMs) => (
+      runRequestWithTimeout('Gemini 请求', attemptTimeoutMs, async (signal) => {
+        const result = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-goog-api-key': this.settings.cpamcApiKey,
+          },
+          body: JSON.stringify(body),
+          signal,
+        })
 
-      return parseJsonResponse(result, 'Gemini 请求') as Promise<GeminiGenerateContentResponse>
-    }, input.maxAttempts ?? 3)
+        return parseJsonResponse(result, 'Gemini 请求', attemptTimeoutMs) as Promise<GeminiGenerateContentResponse>
+      })
+    ), {
+      maxAttempts: input.maxAttempts ?? DEFAULT_MODEL_REQUEST_MAX_ATTEMPTS,
+      attemptTimeoutCapMs: input.attemptTimeoutCapMs ?? DEFAULT_MODEL_REQUEST_ATTEMPT_TIMEOUT_CAP_MS,
+      timeoutMs: input.timeoutMs,
+      actionLabel: 'Gemini 请求',
+    })
 
     return extractJsonObject(extractGeminiResponseText(response)) as Record<string, unknown>
   }
 
   async listModels() {
     const endpoint = appendVersionedPath(this.settings.cpamcBaseUrl, 'v1beta', 'models')
-    const response = await fetch(endpoint, {
-      headers: {
-        'x-goog-api-key': this.settings.cpamcApiKey,
-      },
-      signal: AbortSignal.timeout(30_000),
-    })
+    const payload = await runRequestWithTimeout('拉取模型列表', 30_000, async (signal) => {
+      const response = await fetch(endpoint, {
+        headers: {
+          'x-goog-api-key': this.settings.cpamcApiKey,
+        },
+        signal,
+      })
 
-    const payload = await parseJsonResponse(response, '拉取模型列表') as GeminiModelListResponse
+      return parseJsonResponse(response, '拉取模型列表', 30_000) as Promise<GeminiModelListResponse>
+    })
     return normalizeProviderModelCatalog(this.protocol, payload)
   }
 }
@@ -445,33 +488,42 @@ class CohereNativeProviderAdapter implements ProviderAdapter {
       temperature: 0.2,
     }
 
-    const response = await requestWithRetry(async () => {
-      const result = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${this.settings.cpamcApiKey}`,
-        },
-        body: JSON.stringify(body),
-        signal: AbortSignal.timeout(input.timeoutMs),
-      })
+    const response = await requestWithRetry((attemptTimeoutMs) => (
+      runRequestWithTimeout('Cohere 请求', attemptTimeoutMs, async (signal) => {
+        const result = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${this.settings.cpamcApiKey}`,
+          },
+          body: JSON.stringify(body),
+          signal,
+        })
 
-      return parseJsonResponse(result, 'Cohere 请求') as Promise<CohereChatResponse>
-    }, input.maxAttempts ?? 3)
+        return parseJsonResponse(result, 'Cohere 请求', attemptTimeoutMs) as Promise<CohereChatResponse>
+      })
+    ), {
+      maxAttempts: input.maxAttempts ?? DEFAULT_MODEL_REQUEST_MAX_ATTEMPTS,
+      attemptTimeoutCapMs: input.attemptTimeoutCapMs ?? DEFAULT_MODEL_REQUEST_ATTEMPT_TIMEOUT_CAP_MS,
+      timeoutMs: input.timeoutMs,
+      actionLabel: 'Cohere 请求',
+    })
 
     return extractJsonObject(extractCohereResponseText(response)) as Record<string, unknown>
   }
 
   async listModels() {
     const endpoint = appendVersionedPath(this.settings.cpamcBaseUrl, 'v2', 'models')
-    const response = await fetch(endpoint, {
-      headers: {
-        Authorization: `Bearer ${this.settings.cpamcApiKey}`,
-      },
-      signal: AbortSignal.timeout(30_000),
-    })
+    const payload = await runRequestWithTimeout('拉取模型列表', 30_000, async (signal) => {
+      const response = await fetch(endpoint, {
+        headers: {
+          Authorization: `Bearer ${this.settings.cpamcApiKey}`,
+        },
+        signal,
+      })
 
-    const payload = await parseJsonResponse(response, '拉取模型列表') as CohereModelListResponse
+      return parseJsonResponse(response, '拉取模型列表', 30_000) as Promise<CohereModelListResponse>
+    })
     return normalizeProviderModelCatalog(this.protocol, payload)
   }
 }
@@ -625,30 +677,30 @@ function extractCohereResponseText(response: CohereChatResponse) {
   throw new Error('Cohere 返回了空响应。')
 }
 
-async function parseJsonResponse(response: Response, actionLabel: string) {
+async function parseJsonResponse(response: Response, actionLabel: string, timeoutMs: number) {
   if (!response.ok) {
-    throw await createHttpError(response, actionLabel)
+    throw await createHttpError(response, actionLabel, timeoutMs)
   }
 
-  return response.json() as Promise<unknown>
+  return readResponseJsonWithTimeout(response, actionLabel, resolveBodyReadTimeoutMs(timeoutMs))
 }
 
-async function parseOpenAiResponsesResponse(response: Response, actionLabel: string) {
+async function parseOpenAiResponsesResponse(response: Response, actionLabel: string, timeoutMs: number) {
   if (!response.ok) {
-    throw await createHttpError(response, actionLabel)
+    throw await createHttpError(response, actionLabel, timeoutMs)
   }
 
   const contentType = response.headers.get('content-type')?.toLowerCase() ?? ''
   if (!contentType.includes('text/event-stream')) {
-    return response.json() as Promise<OpenAiResponsesResponse>
+    return readResponseJsonWithTimeout(response, actionLabel, resolveBodyReadTimeoutMs(timeoutMs)) as Promise<OpenAiResponsesResponse>
   }
 
-  const payload = await response.text()
+  const payload = await readResponseTextWithTimeout(response, actionLabel, resolveBodyReadTimeoutMs(timeoutMs))
   return parseOpenAiResponsesEventStream(payload)
 }
 
-async function createHttpError(response: Response, actionLabel: string) {
-  const text = await response.text()
+async function createHttpError(response: Response, actionLabel: string, timeoutMs: number) {
+  const text = await readResponseTextWithTimeout(response, actionLabel, resolveBodyReadTimeoutMs(timeoutMs))
   const error = new Error(`${actionLabel}失败 (${response.status}): ${text.slice(0, 500)}`) as Error & {
     retriable?: boolean
     status?: number
@@ -658,25 +710,141 @@ async function createHttpError(response: Response, actionLabel: string) {
   return error
 }
 
-async function requestWithRetry<T>(operation: () => Promise<T>, maxAttempts: number) {
+function resolveBodyReadTimeoutMs(timeoutMs: number) {
+  return Math.max(1, timeoutMs - 10)
+}
+
+function readResponseJsonWithTimeout(response: Response, actionLabel: string, timeoutMs: number) {
+  return readResponseBodyWithTimeout(response, actionLabel, timeoutMs, () => response.json() as Promise<unknown>)
+}
+
+function readResponseTextWithTimeout(response: Response, actionLabel: string, timeoutMs: number) {
+  return readResponseBodyWithTimeout(response, actionLabel, timeoutMs, () => response.text())
+}
+
+async function readResponseBodyWithTimeout<T>(
+  response: Response,
+  actionLabel: string,
+  timeoutMs: number,
+  readBody: () => Promise<T>,
+) {
+  let timer: ReturnType<typeof setTimeout> | null = null
+  try {
+    return await Promise.race([
+      readBody(),
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(() => {
+          void response.body?.cancel().catch(() => {})
+          const error = new Error(`${actionLabel}失败：response body timeout after ${timeoutMs}ms`) as Error & {
+            retriable?: boolean
+            status?: number
+          }
+          error.retriable = true
+          error.status = 408
+          reject(error)
+        }, timeoutMs)
+      }),
+    ])
+  } finally {
+    if (timer) {
+      clearTimeout(timer)
+    }
+  }
+}
+
+async function requestWithRetry<T>(
+  operation: (attemptTimeoutMs: number) => Promise<T>,
+  options: { maxAttempts: number; attemptTimeoutCapMs?: number; timeoutMs: number; actionLabel: string },
+) {
   let attempt = 0
   let lastError: unknown
+  const startedAt = Date.now()
 
-  while (attempt < maxAttempts) {
+  while (attempt < options.maxAttempts) {
+    const attemptTimeoutMs = resolveAttemptTimeoutMs(startedAt, options.timeoutMs, options.attemptTimeoutCapMs)
+    if (attemptTimeoutMs <= 0) {
+      throw lastError ?? createRequestTimeoutError(options.actionLabel, options.timeoutMs)
+    }
     try {
-      return await operation()
+      return await operation(attemptTimeoutMs)
     } catch (error) {
       lastError = error
       attempt += 1
       const retriable = isRetriableRequestError(error)
-      if (!retriable || attempt >= maxAttempts) {
+      if (!retriable || attempt >= options.maxAttempts) {
         throw error
       }
-      await wait(500 * 2 ** (attempt - 1))
+      const remainingTimeoutMs = resolveRemainingTimeoutMs(startedAt, options.timeoutMs)
+      const retryDelayMs = resolveRetryDelayMs(attempt, remainingTimeoutMs, options.maxAttempts)
+      if (retryDelayMs <= 0) {
+        throw error
+      }
+      await wait(retryDelayMs)
     }
   }
 
   throw lastError
+}
+
+function resolveRemainingTimeoutMs(startedAt: number, totalTimeoutMs: number) {
+  return Math.max(0, totalTimeoutMs - (Date.now() - startedAt))
+}
+
+function resolveAttemptTimeoutMs(startedAt: number, totalTimeoutMs: number, attemptTimeoutCapMs?: number) {
+  const remainingTimeoutMs = resolveRemainingTimeoutMs(startedAt, totalTimeoutMs)
+  const normalizedCapMs = Math.max(1, attemptTimeoutCapMs ?? totalTimeoutMs)
+  return Math.max(0, Math.min(remainingTimeoutMs, normalizedCapMs))
+}
+
+function resolveRetryDelayMs(attempt: number, remainingTimeoutMs: number, maxAttempts: number) {
+  const remainingAttempts = Math.max(0, maxAttempts - attempt)
+  const reservedMs = remainingAttempts * 10
+  if (remainingTimeoutMs <= reservedMs) {
+    return 0
+  }
+
+  return Math.min(500 * 2 ** (attempt - 1), remainingTimeoutMs - reservedMs)
+}
+
+function createRequestTimeoutError(actionLabel: string, timeoutMs: number) {
+  const error = new Error(`${actionLabel}失败：request timeout after ${timeoutMs}ms`) as Error & {
+    retriable?: boolean
+    status?: number
+  }
+  error.retriable = true
+  error.status = 408
+  return error
+}
+
+async function runRequestWithTimeout<T>(
+  actionLabel: string,
+  timeoutMs: number,
+  operation: (signal: AbortSignal) => Promise<T>,
+) {
+  const controller = new AbortController()
+  let timer: ReturnType<typeof setTimeout> | null = null
+
+  try {
+    return await Promise.race([
+      operation(controller.signal),
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(() => {
+          controller.abort()
+          const error = new Error(`${actionLabel}失败：request timeout after ${timeoutMs}ms`) as Error & {
+            retriable?: boolean
+            status?: number
+          }
+          error.retriable = true
+          error.status = 408
+          reject(error)
+        }, timeoutMs)
+      }),
+    ])
+  } finally {
+    if (timer) {
+      clearTimeout(timer)
+    }
+  }
 }
 
 function isRetriableRequestError(error: unknown) {

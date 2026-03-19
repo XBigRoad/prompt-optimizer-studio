@@ -83,6 +83,115 @@ test('OpenAI-compatible adapter posts chat completions with bearer auth', async 
   }
 })
 
+test('OpenAI-compatible adapter times out when response body never resolves and cancels the body stream', async () => {
+  const originalFetch = global.fetch
+  let cancelled = false
+
+  try {
+    global.fetch = (async () => ({
+      ok: true,
+      status: 200,
+      headers: new Headers(),
+      json: async () => new Promise<never>(() => {}),
+      body: {
+        cancel: async () => {
+          cancelled = true
+        },
+      },
+    })) as typeof fetch
+
+    const adapter = createProviderAdapter({
+      cpamcBaseUrl: 'https://api.openai.com/v1',
+      cpamcApiKey: 'sk-openai',
+    })
+
+    const startedAt = Date.now()
+    await assert.rejects(
+      () => adapter.requestJson({
+        model: 'gpt-5.4',
+        system: 'system instruction',
+        user: 'user prompt',
+        timeoutMs: 20,
+        maxAttempts: 1,
+        reasoningEffort: 'xhigh',
+      }),
+      (error: unknown) => {
+        assert.match(String(error), /(response body timeout|request timeout)/i)
+        return true
+      },
+    )
+    assert.equal(cancelled, true)
+    assert.ok(Date.now() - startedAt < 1_000)
+  } finally {
+    global.fetch = originalFetch
+  }
+})
+
+test('OpenAI-compatible adapter times out when fetch never settles even if the mock ignores abort signals', async () => {
+  const originalFetch = global.fetch
+
+  try {
+    global.fetch = (async () => new Promise<never>(() => {})) as typeof fetch
+
+    const adapter = createProviderAdapter({
+      cpamcBaseUrl: 'https://api.openai.com/v1',
+      cpamcApiKey: 'sk-openai',
+    })
+
+    const startedAt = Date.now()
+    await assert.rejects(
+      () => Promise.race([
+        adapter.requestJson({
+          model: 'gpt-5.4',
+          system: 'system instruction',
+          user: 'user prompt',
+          timeoutMs: 20,
+          maxAttempts: 1,
+          reasoningEffort: 'xhigh',
+        }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('test timeout')), 200)),
+      ]),
+      (error: unknown) => {
+        assert.doesNotMatch(String(error), /test timeout/i)
+        assert.match(String(error), /request timeout/i)
+        return true
+      },
+    )
+    assert.ok(Date.now() - startedAt < 1_000)
+  } finally {
+    global.fetch = originalFetch
+  }
+})
+
+test('OpenAI-compatible adapter applies timeout budget across retries instead of multiplying it per attempt', async () => {
+  const originalFetch = global.fetch
+
+  try {
+    global.fetch = (async () => new Promise<never>(() => {})) as typeof fetch
+
+    const adapter = createProviderAdapter({
+      cpamcBaseUrl: 'https://api.openai.com/v1',
+      cpamcApiKey: 'sk-openai',
+    })
+
+    const startedAt = Date.now()
+    await assert.rejects(
+      () => adapter.requestJson({
+        model: 'gpt-5.4',
+        system: 'system instruction',
+        user: 'user prompt',
+        timeoutMs: 80,
+        maxAttempts: 3,
+        reasoningEffort: 'xhigh',
+      }),
+      /request timeout/i,
+    )
+    assert.ok(Date.now() - startedAt < 160)
+  } finally {
+    global.fetch = originalFetch
+  }
+})
+
 test('OpenAI-compatible adapter falls back to /responses when chat/completions is missing', async () => {
   const originalFetch = global.fetch
   const requestedUrls: string[] = []
@@ -640,6 +749,68 @@ test('OpenAI-compatible adapter does not retry generic thrown internal errors', 
     )
 
     assert.equal(attempts, 1)
+  } finally {
+    global.fetch = originalFetch
+  }
+})
+
+test('OpenAI-compatible adapter caps a single attempt timeout below the total budget', async () => {
+  const originalFetch = global.fetch
+  const startedAt = Date.now()
+
+  try {
+    global.fetch = (() => new Promise(() => {})) as typeof fetch
+
+    const adapter = createProviderAdapter({
+      cpamcBaseUrl: 'https://api.openai.com/v1',
+      cpamcApiKey: 'sk-openai',
+    })
+
+    await assert.rejects(
+      () => adapter.requestJson({
+        model: 'gpt-5.4',
+        system: 'system instruction',
+        user: 'user prompt',
+        timeoutMs: 200,
+        maxAttempts: 1,
+        attemptTimeoutCapMs: 40,
+      }),
+      /request timeout after 40ms/i,
+    )
+
+    const elapsedMs = Date.now() - startedAt
+    assert.ok(elapsedMs < 160, `expected capped timeout under 160ms, got ${elapsedMs}ms`)
+  } finally {
+    global.fetch = originalFetch
+  }
+})
+
+test('OpenAI-compatible adapter defaults model requests to two attempts', async () => {
+  const originalFetch = global.fetch
+  let attempts = 0
+
+  try {
+    global.fetch = (async () => {
+      attempts += 1
+      throw new TypeError('fetch failed: ETIMEDOUT while contacting upstream')
+    }) as typeof fetch
+
+    const adapter = createProviderAdapter({
+      cpamcBaseUrl: 'https://api.openai.com/v1',
+      cpamcApiKey: 'sk-openai',
+    })
+
+    await assert.rejects(
+      () => adapter.requestJson({
+        model: 'gpt-5.4',
+        system: 'system instruction',
+        user: 'user prompt',
+        timeoutMs: 1_000,
+      }),
+      /ETIMEDOUT/i,
+    )
+
+    assert.equal(attempts, 2)
   } finally {
     global.fetch = originalFetch
   }
