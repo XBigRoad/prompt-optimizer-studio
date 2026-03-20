@@ -7,3 +7,4 @@ test-results
 tsconfig.tsbuildinfo
 data/*.db*
 .worktrees
+.agentdocs

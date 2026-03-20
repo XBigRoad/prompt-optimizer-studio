@@ -270,6 +270,77 @@ test('OpenAI-compatible adapter falls back to /responses when chat/completions i
   }
 })
 
+test('OpenAI-compatible adapter also falls back to /responses for non-GPT-5 model aliases', async () => {
+  const originalFetch = global.fetch
+  const requestedUrls: string[] = []
+  const requestBodies: Array<Record<string, unknown>> = []
+
+  try {
+    global.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      requestedUrls.push(url)
+      requestBodies.push(JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>)
+
+      if (url.endsWith('/chat/completions')) {
+        return new Response('Not Found', { status: 404 })
+      }
+
+      if (url.endsWith('/responses')) {
+        return new Response(JSON.stringify({
+          id: 'resp_789',
+          status: 'completed',
+          output: [
+            {
+              type: 'message',
+              role: 'assistant',
+              content: [
+                {
+                  type: 'output_text',
+                  text: '{"optimizedPrompt":"fallback prompt for alias"}',
+                },
+              ],
+            },
+          ],
+        }), {
+          status: 200,
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        })
+      }
+
+      throw new Error(`Unexpected URL: ${url}`)
+    }) as typeof fetch
+
+    const adapter = createProviderAdapter({
+      cpamcBaseUrl: 'https://gateway.example.com/codex',
+      cpamcApiKey: 'secret',
+      apiProtocol: 'openai-compatible',
+    })
+
+    const payload = await adapter.requestJson({
+      model: 'deepseek-v3',
+      system: 'system instruction',
+      user: 'user prompt',
+      timeoutMs: 1_000,
+      maxAttempts: 1,
+      reasoningEffort: 'default',
+    })
+
+    assert.deepEqual(requestedUrls, [
+      'https://gateway.example.com/codex/chat/completions',
+      'https://gateway.example.com/codex/responses',
+    ])
+    assert.equal(requestBodies[1]?.model, 'deepseek-v3')
+    assert.equal(requestBodies[1]?.instructions, 'system instruction')
+    assert.equal(requestBodies[1]?.input, 'user prompt')
+    assert.equal(requestBodies[1]?.temperature, 0.2)
+    assert.equal(payload.optimizedPrompt, 'fallback prompt for alias')
+  } finally {
+    global.fetch = originalFetch
+  }
+})
+
 test('OpenAI-compatible adapter can parse JSON from Responses API payloads', async () => {
   const originalFetch = global.fetch
 

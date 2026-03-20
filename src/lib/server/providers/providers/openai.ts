@@ -139,7 +139,7 @@ export class OpenAiCompatibleProviderAdapter extends OpenAiStyleProviderAdapter 
     try {
       return await this.requestJsonViaChatCompletions(input, reasoningEffort)
     } catch (error) {
-      if (!isGpt5FamilyModel(input.model) || !isMissingChatCompletionsEndpoint(error)) {
+      if (!isMissingChatCompletionsEndpoint(error)) {
         throw error
       }
       return this.requestJsonViaResponsesApi(input, reasoningEffort)
