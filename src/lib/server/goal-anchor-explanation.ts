@@ -1,5 +1,5 @@
 import { analyzeGoalAnchorPrompt } from '@/lib/server/goal-anchor'
-import type { GoalAnchor, GoalAnchorExplanation } from '@/lib/server/types'
+import type { GoalAnchor, GoalAnchorExplanation } from '@/lib/contracts'
 
 export const LEGACY_GENERIC_SOURCE_SUMMARIES = [
   '系统识别到原始任务要求保留核心目标。',

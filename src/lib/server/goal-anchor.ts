@@ -1,4 +1,4 @@
-import type { GoalAnchor } from '@/lib/server/types'
+import type { GoalAnchor } from '@/lib/contracts'
 
 export const LEGACY_GENERIC_DELIVERABLE = '保持原任务要求的主要输出产物与完成目标。'
 export const LEGACY_GENERIC_DRIFT_GUARD = [
@@ -661,8 +661,8 @@ function normalizeLineBreaks(value: string) {
 
 function cleanTopic(value: string) {
   return value
-    .replace(/^[“"'`【\[]+/u, '')
-    .replace(/[”"'`】\]]+$/u, '')
+    .replace(/^(?:\[|[“"'`【])+/u, '')
+    .replace(/(?:\]|[”"'`】])+$/u, '')
     .replace(/[。！？.!?]+$/u, '')
     .replace(/^(一个|一份|一种|一些)/u, '')
     .trim()

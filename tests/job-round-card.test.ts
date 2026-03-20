@@ -4,7 +4,7 @@ import test from 'node:test'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 
-import { JobRoundCard, type RoundCandidateView } from '../src/components/job-round-card'
+import { JobRoundCard, type RoundCandidateView } from '../src/components/widgets/job-detail/round-card'
 
 const candidate: RoundCandidateView = {
   id: 'candidate-1',

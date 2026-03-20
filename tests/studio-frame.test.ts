@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 
-import { StudioFrame } from '../src/components/studio-frame'
+import { StudioFrame } from '../src/components/shared/layout/studio-frame'
 
 test('studio frame renders a left navigation rail', () => {
   const html = renderToStaticMarkup(createElement(StudioFrame, {

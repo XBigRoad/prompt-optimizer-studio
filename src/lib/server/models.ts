@@ -1,6 +1,6 @@
-import { createProviderAdapter, normalizeProviderModelCatalog } from '@/lib/server/provider-adapter'
-import { validateCpamcConnection } from '@/lib/server/settings'
-import type { AppSettings, ModelCatalogItem } from '@/lib/server/types'
+import { createProviderAdapter, normalizeProviderModelCatalog } from '@/lib/server/providers/index'
+import { validateCpamcConnection } from '@/lib/server/settings/index'
+import type { AppSettings, ModelCatalogItem } from '@/lib/contracts'
 
 interface OpenAiModelListResponse {
   data?: Array<{

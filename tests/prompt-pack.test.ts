@@ -13,7 +13,7 @@ test('resolvePromptPackDir defaults to the repo-local prompt pack', () => {
 
   try {
     const dir = resolvePromptPackDir()
-    assert.match(dir, new RegExp(`prompt-pack[\\/]default$`))
+    assert.equal(path.normalize(dir), path.join(process.cwd(), 'prompt-pack', 'default'))
   } finally {
     if (original === undefined) {
       delete process.env.PROMPT_OPTIMIZER_PROMPT_PACK_DIR

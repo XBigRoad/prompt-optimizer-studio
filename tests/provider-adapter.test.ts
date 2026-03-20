@@ -98,7 +98,7 @@ test('OpenAI-compatible adapter times out when response body never resolves and 
           cancelled = true
         },
       },
-    })) as typeof fetch
+    })) as unknown as typeof fetch
 
     const adapter = createProviderAdapter({
       cpamcBaseUrl: 'https://api.openai.com/v1',

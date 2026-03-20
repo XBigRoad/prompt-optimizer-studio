@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server'
 
-import { getJobById } from '@/lib/server/jobs'
-import { ensurePromptPackVersion } from '@/lib/server/prompt-pack'
-import { getSettings } from '@/lib/server/settings'
+import { getJobById } from '@/lib/server/jobs/index'
+import { ensurePromptPackVersion } from '@/lib/server/prompt-pack/index'
+import { getSettings } from '@/lib/server/settings/index'
 
 export const runtime = 'nodejs'
 

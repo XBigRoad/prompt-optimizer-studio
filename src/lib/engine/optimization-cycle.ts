@@ -1,4 +1,4 @@
-import type { GoalAnchor, SteeringItem } from '@/lib/server/types'
+import type { GoalAnchor, SteeringItem } from '@/lib/contracts'
 
 export interface RoundJudgment {
   score: number

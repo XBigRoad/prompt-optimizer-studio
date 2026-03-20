@@ -1,5 +1,5 @@
 import { formatGoalAnchorForPrompt } from '@/lib/server/goal-anchor'
-import type { GoalAnchor, PromptPackVersion, SteeringItem } from '@/lib/server/types'
+import type { GoalAnchor, PromptPackVersion, SteeringItem } from '@/lib/contracts'
 
 export function compactFeedback(
   feedback: string[],

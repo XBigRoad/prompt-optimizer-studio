@@ -1,4 +1,4 @@
-import { SettingsShell } from '@/components/settings-shell'
+import { SettingsShell } from '@/components/widgets/settings/page-shell'
 
 export default function SettingsPage() {
   return <SettingsShell />

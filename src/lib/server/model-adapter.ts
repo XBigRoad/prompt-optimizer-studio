@@ -1,9 +1,9 @@
 import type { ModelAdapter, OptimizationResult, RoundJudgment } from '@/lib/engine/optimization-cycle'
 import { normalizeGoalAnchor } from '@/lib/server/goal-anchor'
 import { normalizeGoalAnchorExplanation } from '@/lib/server/goal-anchor-explanation'
-import { createProviderAdapter } from '@/lib/server/provider-adapter'
+import { createProviderAdapter } from '@/lib/server/providers/index'
 import { normalizeReasoningEffort, resolveReasoningEffortTimeoutMs } from '@/lib/reasoning-effort'
-import type { GoalAnchor, GoalAnchorExplanation, PromptPackVersion, AppSettings, SteeringItem } from '@/lib/server/types'
+import type { GoalAnchor, GoalAnchorExplanation, PromptPackVersion, AppSettings, SteeringItem } from '@/lib/contracts'
 import { buildGoalAnchorPrompts, buildJudgePrompts, buildOptimizerPrompts } from '@/lib/server/prompting'
 
 export class CpamcModelAdapter implements ModelAdapter {
