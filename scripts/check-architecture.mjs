@@ -12,6 +12,8 @@ const retiredCompatFiles = new Set([
   'src/lib/server/settings.ts',
   'src/lib/server/prompt-pack.ts',
   'src/lib/server/db.ts',
+  'src/lib/server/goal-anchor.ts',
+  'src/lib/server/goal-anchor-explanation.ts',
   'src/components/dashboard-control-room.tsx',
   'src/components/dashboard-shell.tsx',
   'src/components/job-detail-control-room.tsx',
@@ -33,6 +35,7 @@ const modularServerModules = new Set([
   'settings',
   'prompt-pack',
   'db',
+  'goal-anchor',
 ])
 const importPattern = /(?:import|export)\s+(?:type\s+)?(?:[^'"]+?\s+from\s+)?['"]([^'"]+)['"]|import\(\s*['"]([^'"]+)['"]\s*\)/g
 const machineAbsolutePathPattern = /(?:^|['"`\s(])(?:\/Volumes\/|\/Users\/|\/home\/|[A-Za-z]:[\\/])/

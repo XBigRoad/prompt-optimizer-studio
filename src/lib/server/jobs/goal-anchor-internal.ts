@@ -1,5 +1,5 @@
 import { getDb } from '@/lib/server/db/index'
-import { normalizeGoalAnchor, serializeGoalAnchor } from '@/lib/server/goal-anchor'
+import { normalizeGoalAnchor, serializeGoalAnchor } from '@/lib/server/goal-anchor/index'
 import type { GoalAnchor } from '@/lib/contracts'
 
 import { requireJob } from '@/lib/server/jobs/queries-internal'

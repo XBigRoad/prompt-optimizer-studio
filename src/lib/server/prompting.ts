@@ -1,4 +1,4 @@
-import { formatGoalAnchorForPrompt } from '@/lib/server/goal-anchor'
+import { formatGoalAnchorForPrompt } from '@/lib/server/goal-anchor/index'
 import type { GoalAnchor, PromptPackVersion, SteeringItem } from '@/lib/contracts'
 
 export function compactFeedback(

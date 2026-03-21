@@ -8,13 +8,13 @@ import {
   LEGACY_GENERIC_DRIFT_GUARD,
   parseGoalAnchor,
   serializeGoalAnchor,
-} from '@/lib/server/goal-anchor'
+} from '@/lib/server/goal-anchor/index'
 import {
   deriveGoalAnchorExplanation,
   LEGACY_GENERIC_SOURCE_SUMMARIES,
   parseGoalAnchorExplanation,
   serializeGoalAnchorExplanation,
-} from '@/lib/server/goal-anchor-explanation'
+} from '@/lib/server/goal-anchor/index'
 import type {
   CandidateRecord,
   GoalAnchor,

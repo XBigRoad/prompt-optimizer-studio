@@ -61,6 +61,7 @@
 - [x] 删除旧 `providers/adapter.ts` 大文件，保留 `providers/index.ts` 作为唯一公共入口。
 - [x] 将 `widgets/job-detail/page-shell.tsx` 拆成 query/actions/view-model 编排层，减少页面容器直接承载的加载与 mutation 逻辑。
 - [x] 将 `widgets/job-detail/control-room.tsx` 继续拆为 result/stable-rules/runtime-controls/pending-steering/diagnostics section，保留页面顺序与交互语义。
+- [x] 将 `goal-anchor` / `goal-anchor-explanation` 从 `src/lib/server` 根级文件收敛为显式模块，避免 `jobs/*` 继续依赖根级隐式能力。
 
 ## 关键决策
 
@@ -69,5 +70,6 @@
 - 对超大文件采用“显式登记 + 后续退出”策略，而不是一边过渡一边假装架构已经收敛完成。
 - `jobs` 对外分成两类入口：`index.ts` 面向 route/页面用例，`runtime.ts` 面向 worker；runtime-only 能力不再经公共 `index.ts` 暴露。
 - `providers` 模块对外唯一入口为 `providers/index.ts`；provider-specific normalize/parser/transport 均视为内部实现。
+- `goal-anchor` 视为独立服务端能力模块，统一从 `src/lib/server/goal-anchor/*` 消费；禁止重新引入根级 `goal-anchor*.ts` 文件。
 - `job-detail/page-shell.tsx` 只保留页面编排职责；数据加载、动作编排、view-model 计算已拆出独立文件，避免继续在单文件堆积状态机。
 - `job-detail/control-room.tsx` 只保留页面级装配；section 组件只接收 view model / UI state / handlers，不直接触碰 server API。

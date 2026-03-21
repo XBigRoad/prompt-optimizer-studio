@@ -6,7 +6,7 @@ import {
   normalizeGoalAnchorExplanation,
   parseGoalAnchorExplanation,
   serializeGoalAnchorExplanation,
-} from '../src/lib/server/goal-anchor-explanation'
+} from '../src/lib/server/goal-anchor/index'
 
 test('deriveGoalAnchorExplanation creates a fallback explanation from raw prompt and goal anchor', () => {
   const explanation = deriveGoalAnchorExplanation(

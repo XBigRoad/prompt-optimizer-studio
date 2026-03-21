@@ -1,4 +1,4 @@
-import { analyzeGoalAnchorPrompt } from '@/lib/server/goal-anchor'
+import { analyzeGoalAnchorPrompt } from '@/lib/server/goal-anchor/core'
 import type { GoalAnchor, GoalAnchorExplanation } from '@/lib/contracts'
 
 export const LEGACY_GENERIC_SOURCE_SUMMARIES = [

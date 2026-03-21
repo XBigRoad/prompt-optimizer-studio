@@ -1,6 +1,5 @@
 import type { ModelAdapter, OptimizationResult, RoundJudgment } from '@/lib/engine/optimization-cycle'
-import { normalizeGoalAnchor } from '@/lib/server/goal-anchor'
-import { normalizeGoalAnchorExplanation } from '@/lib/server/goal-anchor-explanation'
+import { normalizeGoalAnchor, normalizeGoalAnchorExplanation } from '@/lib/server/goal-anchor/index'
 import { createProviderAdapter } from '@/lib/server/providers/index'
 import { normalizeReasoningEffort, resolveReasoningEffortTimeoutMs } from '@/lib/reasoning-effort'
 import type { GoalAnchor, GoalAnchorExplanation, PromptPackVersion, AppSettings, SteeringItem } from '@/lib/contracts'

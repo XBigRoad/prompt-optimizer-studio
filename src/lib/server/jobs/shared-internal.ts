@@ -1,8 +1,7 @@
 import { createHash } from 'node:crypto'
 
 import { normalizeReasoningEffort } from '@/lib/reasoning-effort'
-import { deriveGoalAnchor } from '@/lib/server/goal-anchor'
-import { deriveGoalAnchorExplanation } from '@/lib/server/goal-anchor-explanation'
+import { deriveGoalAnchor, deriveGoalAnchorExplanation } from '@/lib/server/goal-anchor/index'
 import { generateGoalAnchorWithModel } from '@/lib/server/model-adapter'
 import { getSettings, validateTaskDefaults } from '@/lib/server/settings/index'
 import type { JobInput, JobRecord, SteeringItem } from '@/lib/contracts'
