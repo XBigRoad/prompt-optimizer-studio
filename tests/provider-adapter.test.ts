@@ -6,7 +6,6 @@ import {
   inferApiProtocol,
 } from '../src/lib/server/providers/index'
 import { normalizeProviderModelCatalog } from '../src/lib/server/providers/catalog'
-import { normalizeModelCatalog } from '../src/lib/server/models'
 
 test('inferApiProtocol detects official Anthropic and Gemini endpoints while preserving OpenAI-compatible gateways', () => {
   assert.equal(inferApiProtocol('https://api.openai.com/v1'), 'openai-compatible')
@@ -476,7 +475,7 @@ test('OpenAI-compatible optimizer timeout-like chat failures stay on chat and do
   const telemetry: Array<Record<string, unknown>> = []
 
   try {
-    global.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    global.fetch = (async (input: RequestInfo | URL, _init?: RequestInit) => {
       const url = String(input)
       requestedUrls.push(url)
 

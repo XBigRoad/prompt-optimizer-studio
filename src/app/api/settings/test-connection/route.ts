@@ -57,11 +57,14 @@ async function verifyOpenAiCompatibleInferenceAccess(
   try {
     await runOpenAiCompatibleChatProbe(settings, probeModel)
   } catch (error) {
-    throw new Error(buildOpenRouterInferenceFailureMessage({
-      requestedModel,
-      probeModel,
-      cause: error,
-    }))
+    throw new Error(
+      buildOpenRouterInferenceFailureMessage({
+        requestedModel,
+        probeModel,
+        cause: error,
+      }),
+      { cause: error },
+    )
   }
 }
 

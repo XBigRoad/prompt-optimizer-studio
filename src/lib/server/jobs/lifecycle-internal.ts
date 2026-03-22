@@ -494,6 +494,7 @@ export function recordRoundRunForActiveWorker(jobId: string, workerOwnerId: stri
       try {
         db.exec('ROLLBACK')
       } catch {
+        // ROLLBACK 失败时保留原始错误作为主错误返回。
       }
     }
     throw error
