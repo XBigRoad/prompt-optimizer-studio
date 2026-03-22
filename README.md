@@ -19,22 +19,22 @@
 
 **你会得到**
 
-- 一份可以直接复制使用的完整 prompt
-- 一条可暂停、可继续、可人工纠偏的多轮优化链路
-- 一套留在自己环境里的配置、运行参数和结果记录
+- 🧾 一份可以直接复制使用的完整 prompt
+- 🔁 一条可暂停、可继续、可人工纠偏的多轮优化链路
+- 🛠️ 一套留在自己环境里的配置、运行参数和结果记录
 
 <p align="center">
-  <a href="#三句话先看懂"><strong>先看懂</strong></a> ·
-  <a href="#工作流程"><strong>工作流程</strong></a> ·
-  <a href="#一轮怎么跑"><strong>一轮语义</strong></a> ·
-  <a href="#当前停止规则"><strong>停止规则</strong></a> ·
-  <a href="#人工引导与长期规则"><strong>引导与长期规则</strong></a> ·
-  <a href="#页面截图"><strong>页面截图</strong></a> ·
-  <a href="#开始使用"><strong>开始使用</strong></a> ·
-  <a href="docs/deployment/docker-self-hosted.md"><strong>Docker 自托管</strong></a>
+  <a href="#-三句话先看懂"><strong>👀 先看懂</strong></a> ·
+  <a href="#-工作流程"><strong>🧭 工作流程</strong></a> ·
+  <a href="#-一轮怎么跑"><strong>🔄 一轮语义</strong></a> ·
+  <a href="#-当前停止规则"><strong>🛑 停止规则</strong></a> ·
+  <a href="#-人工引导与长期规则"><strong>🧩 引导与长期规则</strong></a> ·
+  <a href="#-页面截图"><strong>🖼️ 页面截图</strong></a> ·
+  <a href="#-开始使用"><strong>🚀 开始使用</strong></a> ·
+  <a href="docs/deployment/docker-self-hosted.md"><strong>🐳 Docker 自托管</strong></a>
 </p>
 
-## 三句话先看懂
+## 👀 三句话先看懂
 
 | 你最关心的事 | 这里怎么回答 |
 | --- | --- |
@@ -42,7 +42,7 @@
 | **它怎么跑** | 当前版本进入一轮后，系统会安排“复核当前版本”和“生成下一版”这两件事；新版本要到下一轮才会被评分 |
 | **它不是什么** | 不是只展示 diff 的改写器，也不是替你自动盖章“这版一定最合适”的黑盒系统 |
 
-## 你可以用它做什么
+## 🎯 你可以用它做什么
 
 | 如果你现在遇到的是 | Prompt Optimizer Studio 更适合怎么帮你 |
 | --- | --- |
@@ -51,7 +51,7 @@
 | 需要把结果交给同事或客户 | 最后拿到的是一份可以直接复制使用的完整 prompt，而不是内部 diff 日志 |
 | 想在自己的环境里接不同 provider / 模型 | 走自托管服务端路径，保留设置、运行参数和结果链路的可检查性 |
 
-## 工作流程
+## 🧭 工作流程
 
 ```mermaid
 flowchart LR
@@ -65,7 +65,7 @@ flowchart LR
     E -- 是 --> G[交付最近可用的完整 prompt]
 ```
 
-## 一轮怎么跑
+## 🔄 一轮怎么跑
 
 当前产品语义不是“先优化，再给新版本打分”。一轮里真正发生的是下面这件事：
 
@@ -78,7 +78,7 @@ flowchart LR
 
 一句话概括：**本轮展示的是上一版 prompt 的评分，本轮产出的是下一版 prompt。**
 
-## 当前停止规则
+## 🛑 当前停止规则
 
 当前公开版的停止规则可以直接理解成：
 
@@ -92,7 +92,7 @@ flowchart LR
   - 如果本轮复核过线，但新版本没有成功生成，就回退交付刚刚通过复核的当前版本
 - 如果还没满足连续 3 轮过线就先达到 `maxRounds`，任务会停到人工复核，而不是假装已经完成
 
-## 人工引导与长期规则
+## 🧩 人工引导与长期规则
 
 这里有两个概念，当前产品里是分开的：
 
@@ -108,7 +108,7 @@ flowchart LR
 - 未被选中或未保存的引导，不会自动写进长期规则
 - 如果某条下一轮引导被写进了新的完整 prompt，后续轮次会因为完整 prompt 本身更新而自然继承它，而不是因为系统把这条引导永久附着在后台
 
-## 页面截图
+## 🖼️ 页面截图
 
 以下截图基于当前公开构建版本的本地自托管实例拍摄。
 
@@ -116,7 +116,7 @@ flowchart LR
 | --- | --- | --- |
 | <img src="docs/screenshots/dashboard-control-room.png" alt="任务控制室" width="100%" /> | <img src="docs/screenshots/job-detail-result-desk.png" alt="结果台" width="100%" /> | <img src="docs/screenshots/settings-console.png" alt="配置台" width="100%" /> |
 
-## 开始使用
+## 🚀 开始使用
 
 | 你现在想做什么 | 入口 |
 | --- | --- |
@@ -127,7 +127,7 @@ flowchart LR
 
 更多信息： [配置方式](#配置方式) · [项目文档](#项目文档)
 
-## 项目文档
+## 📚 项目文档
 
 - [英文首页](README_EN.md)
 - [贡献指南](CONTRIBUTING.md)
@@ -136,14 +136,14 @@ flowchart LR
 - [开源发布文案](docs/open-source-launch.md)
 - [许可证](LICENSE)
 
-## 快速开始
+## ⚡ 快速开始
 
-### 环境要求
+### 📦 环境要求
 
 - `Node 22.22.x`
 - `npm`
 
-### 本地开发
+### 💻 本地开发
 
 ```bash
 npm install
@@ -156,13 +156,13 @@ npm run dev
 http://localhost:3000
 ```
 
-### 完整检查
+### ✅ 完整检查
 
 ```bash
 npm run check
 ```
 
-### Docker 自托管
+### 🐳 Docker 自托管
 
 ```bash
 cp .env.example .env
@@ -183,7 +183,7 @@ curl http://localhost:3000/api/health
 
 完整部署说明见 [Docker 自托管文档](docs/deployment/docker-self-hosted.md)。
 
-## 配置方式
+## ⚙️ 配置方式
 
 应用通过**配置台**完成配置。
 
@@ -205,7 +205,7 @@ curl http://localhost:3000/api/health
 - 在任务详情页调整任务模型、推理强度和轮数上限
 - 在结果台直接查看当前评分标准、下一轮引导和长期规则
 
-## Provider 与兼容性
+## 🔌 Provider 与兼容性
 
 当前公开版支持：
 
@@ -238,7 +238,7 @@ curl http://localhost:3000/api/health
 
 如果你接的是官方 API，`Base URL` 直接填写官方根地址即可，不需要额外自建代理路径。
 
-## 发布形态
+## 🏗️ 发布形态
 
 当前仓库发布的是 **Self-Hosted / Server Edition（自托管服务端版）**。
 
@@ -259,7 +259,7 @@ data/prompt-optimizer.db
 PROMPT_OPTIMIZER_DB_PATH=/your/custom/path.db
 ```
 
-## 常见问题
+## ❓ 常见问题
 
 - **这是官方在线 SaaS 吗？**
   - 不是。当前仓库是自托管服务端版。
@@ -282,7 +282,7 @@ PROMPT_OPTIMIZER_DB_PATH=/your/custom/path.db
 - **为什么使用 AGPL-3.0？**
   - 因为这个项目希望即使被别人改成在线服务继续对外提供，也必须继续公开对应源码。
 
-## 贡献与许可证
+## 🤝 贡献与许可证
 
 - 贡献说明：[`CONTRIBUTING.md`](CONTRIBUTING.md)
 - 安全策略：[`SECURITY.md`](SECURITY.md)

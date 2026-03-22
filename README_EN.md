@@ -19,22 +19,22 @@ A **self-hosted** prompt-optimization workspace for teams and individuals who wa
 
 **What you get**
 
-- a copy-ready full prompt instead of patch fragments
-- a multi-round optimization flow you can pause, steer, and inspect
-- settings, runtime controls, and results that stay in your own environment
+- 🧾 a copy-ready full prompt instead of patch fragments
+- 🔁 a multi-round optimization flow you can pause, steer, and inspect
+- 🛠️ settings, runtime controls, and results that stay in your own environment
 
 <p align="center">
-  <a href="#three-things-to-know-first"><strong>First Look</strong></a> ·
-  <a href="#how-it-works"><strong>Workflow</strong></a> ·
-  <a href="#what-one-round-actually-means"><strong>Round Semantics</strong></a> ·
-  <a href="#current-stop-rule"><strong>Stop Rule</strong></a> ·
-  <a href="#temporary-steering-and-stable-rules"><strong>Steering</strong></a> ·
-  <a href="#screenshots"><strong>Screenshots</strong></a> ·
-  <a href="#start-here"><strong>Start Here</strong></a> ·
-  <a href="docs/deployment/docker-self-hosted_EN.md"><strong>Docker Self-Hosted</strong></a>
+  <a href="#-three-things-to-know-first"><strong>👀 First Look</strong></a> ·
+  <a href="#-how-it-works"><strong>🧭 Workflow</strong></a> ·
+  <a href="#-what-one-round-actually-means"><strong>🔄 Round Semantics</strong></a> ·
+  <a href="#-current-stop-rule"><strong>🛑 Stop Rule</strong></a> ·
+  <a href="#-temporary-steering-and-stable-rules"><strong>🧩 Steering</strong></a> ·
+  <a href="#-screenshots"><strong>🖼️ Screenshots</strong></a> ·
+  <a href="#-start-here"><strong>🚀 Start Here</strong></a> ·
+  <a href="docs/deployment/docker-self-hosted_EN.md"><strong>🐳 Docker Self-Hosted</strong></a>
 </p>
 
-## Three Things to Know First
+## 👀 Three Things to Know First
 
 | The question | The short answer |
 | --- | --- |
@@ -42,7 +42,7 @@ A **self-hosted** prompt-optimization workspace for teams and individuals who wa
 | **How does it run?** | The current prompt enters a round, the system reviews that current version and generates the next version, and the new version is reviewed in the next round |
 | **What is it not?** | Not just a diff viewer, and not a black box pretending it can stamp one final perfect answer for you |
 
-## What You Can Use It For
+## 🎯 What You Can Use It For
 
 | If your situation looks like this | Prompt Optimizer Studio is better suited to |
 | --- | --- |
@@ -51,7 +51,7 @@ A **self-hosted** prompt-optimization workspace for teams and individuals who wa
 | You need something you can pass to teammates or clients | End with a full prompt you can directly copy and use |
 | You want to connect your own providers and models | Run it as a self-hosted server path with inspectable settings, runtime, and result history |
 
-## How It Works
+## 🧭 How It Works
 
 ```mermaid
 flowchart LR
@@ -65,7 +65,7 @@ flowchart LR
     E -- Yes --> G[Deliver the latest usable full prompt]
 ```
 
-## What One Round Actually Means
+## 🔄 What One Round Actually Means
 
 The public product semantics are not "optimize first, then score the new output." A round actually works like this:
 
@@ -78,7 +78,7 @@ The public product semantics are not "optimize first, then score the new output.
 
 In short: **the score you see belongs to the current input prompt, while the output of the round becomes the next prompt.**
 
-## Current Stop Rule
+## 🛑 Current Stop Rule
 
 The current public stop rule is:
 
@@ -92,7 +92,7 @@ The current public stop rule is:
   - if the round passed review but produced no new output, the already reviewed passing input becomes the final delivery
 - if the job hits `maxRounds` before that streak is complete, it stops at manual review instead of pretending to be done
 
-## Temporary Steering And Stable Rules
+## 🧩 Temporary Steering And Stable Rules
 
 These are two different concepts in the product:
 
@@ -108,7 +108,7 @@ Additional notes:
 - unselected or unsaved steering items do not silently become stable rules
 - if a one-time steering note gets written into the full prompt itself, later rounds inherit that through the prompt content, not because the system secretly keeps the steering item forever
 
-## Screenshots
+## 🖼️ Screenshots
 
 The screenshots below were captured from the current public build running as a local self-hosted instance.
 
@@ -116,7 +116,7 @@ The screenshots below were captured from the current public build running as a l
 | --- | --- | --- |
 | <img src="docs/screenshots/dashboard-control-room.png" alt="Control Room" width="100%" /> | <img src="docs/screenshots/job-detail-result-desk.png" alt="Result Desk" width="100%" /> | <img src="docs/screenshots/settings-console.png" alt="Config Desk" width="100%" /> |
 
-## Start Here
+## 🚀 Start Here
 
 | What you want to do now | Entry |
 | --- | --- |
@@ -127,7 +127,7 @@ The screenshots below were captured from the current public build running as a l
 
 More: [Configuration](#configuration) · [Project Docs](#project-docs)
 
-## Project Docs
+## 📚 Project Docs
 
 - [Chinese Home](README.md)
 - [Contributing](CONTRIBUTING_EN.md)
@@ -136,14 +136,14 @@ More: [Configuration](#configuration) · [Project Docs](#project-docs)
 - [Open Source Launch Copy](docs/open-source-launch_EN.md)
 - [License](LICENSE)
 
-## Quick Start
+## ⚡ Quick Start
 
-### Requirements
+### 📦 Requirements
 
 - `Node 22.22.x`
 - `npm`
 
-### Local Development
+### 💻 Local Development
 
 ```bash
 npm install
@@ -156,13 +156,13 @@ Open:
 http://localhost:3000
 ```
 
-### Full Verification
+### ✅ Full Verification
 
 ```bash
 npm run check
 ```
 
-### Docker Self-Hosted
+### 🐳 Docker Self-Hosted
 
 ```bash
 cp .env.example .env
@@ -183,7 +183,7 @@ curl http://localhost:3000/api/health
 
 For full deployment instructions, see the [Docker self-hosted guide](docs/deployment/docker-self-hosted_EN.md).
 
-## Configuration
+## ⚙️ Configuration
 
 The app is configured from the **Config Desk**.
 
@@ -205,7 +205,7 @@ At the job level, the public build also supports:
 - adjusting task model, reasoning effort, and round cap from the job detail page
 - inspecting the active scoring rubric, next-round steering, and stable rules in job detail
 
-## Provider And Compatibility Notes
+## 🔌 Provider And Compatibility Notes
 
 The current public build supports:
 
@@ -238,7 +238,7 @@ Common `Base URL` examples:
 
 Official APIs work directly from their provider root. No custom proxy path is required.
 
-## Deployment Model
+## 🏗️ Deployment Model
 
 This repository currently ships the **Self-Hosted / Server Edition**.
 
@@ -259,7 +259,7 @@ You can override it with:
 PROMPT_OPTIMIZER_DB_PATH=/your/custom/path.db
 ```
 
-## FAQ
+## ❓ FAQ
 
 - **Is this a hosted SaaS?**
   - No. This repository currently ships the self-hosted server edition.
@@ -282,7 +282,7 @@ PROMPT_OPTIMIZER_DB_PATH=/your/custom/path.db
 - **Why AGPL-3.0?**
   - Because modified hosted versions should remain source-available to the users who depend on them.
 
-## Contributing And License
+## 🤝 Contributing And License
 
 - Contribution guide: [`CONTRIBUTING_EN.md`](CONTRIBUTING_EN.md)
 - Security policy: [`SECURITY_EN.md`](SECURITY_EN.md)
