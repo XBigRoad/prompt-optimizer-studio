@@ -1,10 +1,7 @@
 {
-  "generatedAt": "2026-03-16T13:40:00+08:00",
-  "source": "local self-hosted instance on codex/open-source-hardening",
-  "language": "zh-CN",
-  "dashboardRoute": "/",
-  "settingsRoute": "/settings",
-  "detailRoute": "/jobs/577a910e-024f-4484-8af3-482afa628032",
-  "detailJobId": "577a910e-024f-4484-8af3-482afa628032",
-  "detailCompareMode": true
+  "generatedAt": "2026-03-22T03:14:51.884Z",
+  "fixture": "scripts/demo-fixtures/real-live-script-job.json",
+  "jobCount": 1,
+  "dashboardFeaturedJobId": "4b2035e7-85c6-4058-9a1c-0bba4ae4395f",
+  "detailScreenshotJobId": "4b2035e7-85c6-4058-9a1c-0bba4ae4395f"
 }

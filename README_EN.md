@@ -13,37 +13,37 @@
   <a href="LICENSE"><img alt="AGPL-3.0 License" src="https://img.shields.io/badge/license-AGPL--3.0-1d3557?style=flat-square" /></a>
 </p>
 
-Automated, pipeline-style prompt optimization for people who still want control. ✨ It turns one-off prompt rewriting into a pauseable, steerable, multi-round workflow.
-Start from a draft prompt, let the system iterate round by round, and step in whenever the run drifts so you end with a copy-ready full prompt instead of a patch log.
+A **self-hosted** prompt-optimization workspace for people who still want control. You start with a draft prompt, the system pushes it through multi-round optimization and review, and you can step in whenever the run drifts. The deliverable is a **copy-ready full prompt**, not just a patch log.
 
-> This repository currently ships the `Self-Hosted / Server Edition`.
+> This repository ships the `Self-Hosted / Server Edition`. It is not an official hosted SaaS, and it does not claim to automatically prove a single globally optimal prompt.
 
 <p align="center">
-  <a href="#what-you-can-use-it-for"><strong>✨ What It Does</strong></a> ·
+  <a href="#three-things-to-know-first"><strong>✨ First Look</strong></a> ·
+  <a href="#what-you-can-use-it-for"><strong>🧭 Use Cases</strong></a> ·
   <a href="#how-it-works"><strong>🔄 Workflow</strong></a> ·
-  <a href="#start-here"><strong>🚀 Start Here</strong></a> ·
   <a href="#screenshots"><strong>🖼️ Screenshots</strong></a> ·
-  <a href="docs/deployment/docker-self-hosted_EN.md"><strong>🐳 Docker Self-Hosted</strong></a> ·
-  <a href="https://github.com/XBigRoad/prompt-optimizer-studio/releases"><strong>Releases</strong></a>
+  <a href="#start-here"><strong>🚀 Start Here</strong></a> ·
+  <a href="docs/deployment/docker-self-hosted_EN.md"><strong>🐳 Docker Self-Hosted</strong></a>
 </p>
+
+## Three Things to Know First
+
+| The question | The short answer |
+| --- | --- |
+| **What is it?** | A self-hosted workspace that turns prompt optimization into a pauseable, steerable, reviewable process |
+| **How does it run?** | Draft prompt → optimizer / reviewer rounds → human steering when needed → final full prompt |
+| **What is it not?** | Not just a diff viewer, and not a black box claiming it found the one globally best prompt |
 
 ## What You Can Use It For
 
-✨ If what you really want is a prompt you can copy and use, this is the section that matters.
-
-Most prompt optimizers stop at showing diffs, patch fragments, or internal reasoning.
-
-`Prompt Optimizer Studio` is built around a different promise:
-
-| What you need | How Prompt Optimizer Studio helps |
+| If your situation looks like this | Prompt Optimizer Studio is better suited to |
 | --- | --- |
-| Stop reading patch fragments | It keeps the `latest full prompt` visible and copyable instead of only showing diffs |
-| Want automatic multi-round improvement | The optimizer and reviewer keep iterating until they pass or hit a stop rule |
-| Need steering when the run drifts | You can pause, add next-round guidance, continue one round, or resume auto, with `goalAnchor` + drift checks helping keep direction |
+| You have a draft prompt but it is not ready to hand off yet | Keep refining toward a usable full prompt instead of only showing patch fragments |
+| You want automatic multi-round improvement without losing control | Let optimizer and reviewer run while keeping pause, next-round steering, and one-round-continue controls available |
+| You need something you can pass to teammates or clients | End with a full prompt you can directly copy and use |
+| You want to connect your own providers and models | Run it as a self-hosted server path with inspectable settings, runtime, and result history |
 
 ## How It Works
-
-🔄 From the first draft to the final full prompt, the main path is just this:
 
 ```mermaid
 flowchart LR
@@ -58,29 +58,35 @@ flowchart LR
     E -- Yes --> H[Copy the final full prompt]
 ```
 
-## Start Here
+## Why It Feels Different From A Patch Viewer
 
-🚀 If you want to get started right now, these are the only links you need first:
+- **Full prompt first**
+  - The main deliverable is the latest full prompt, not a diff-oriented audit trail.
+- **Human steering stays in the main path**
+  - You can pause, steer, continue one round, or resume auto without restarting everything.
+- **Stop logic stays visible**
+  - Jobs keep moving until they pass or hit an explicit stopping condition.
+- **It tries to reduce silent drift**
+  - `goalAnchor`, drift checks, and reviewer isolation all help preserve task intent.
+
+## Screenshots
+
+The screenshots below were captured from the current public candidate running as a local self-hosted instance.
+
+| Control Room | Result Desk | Config Desk |
+| --- | --- | --- |
+| <img src="docs/screenshots/dashboard-control-room.png" alt="Control Room" width="100%" /> | <img src="docs/screenshots/job-detail-result-desk.png" alt="Result Desk" width="100%" /> | <img src="docs/screenshots/settings-console.png" alt="Config Desk" width="100%" /> |
+
+## Start Here
 
 | What you want to do now | Entry |
 | --- | --- |
-| Run it locally | [Quick Start](#quick-start) |
+| Run it locally first | [Quick Start](#quick-start) |
 | Self-host with Docker | [Docker Self-Hosted Guide](docs/deployment/docker-self-hosted_EN.md) |
-| Check release packages and updates | [Releases](https://github.com/XBigRoad/prompt-optimizer-studio/releases) |
-| Read common questions | [FAQ](#faq) |
+| Check release history | [Releases](https://github.com/XBigRoad/prompt-optimizer-studio/releases) |
+| Read common questions and limits | [FAQ](#faq) |
 
-More: [Configuration](#configuration) · [Screenshots](#screenshots)
-
-## What Makes It Feel Different
-
-- **Full prompt first**
-  - The main deliverable is the prompt you can actually ship, not a diff viewer.
-- **Operator in the loop**
-  - Human intervention is a first-class control path, not an afterthought.
-- **Multi-round automation with visible stop logic**
-  - Runs keep going until they pass the target or hit the configured round limits.
-- **Intent protection**
-  - `goalAnchor`, drift labels, and reviewer isolation help reduce silent prompt drift.
+More: [Configuration](#configuration) · [Project Docs](#project-docs)
 
 ## Project Docs
 
@@ -90,14 +96,6 @@ More: [Configuration](#configuration) · [Screenshots](#screenshots)
 - [Code of Conduct](CODE_OF_CONDUCT_EN.md)
 - [Open Source Launch Copy](docs/open-source-launch_EN.md)
 - [License](LICENSE)
-
-## Screenshots
-
-The screenshots below are captured from the current public candidate running as a local self-hosted instance.
-
-| Control Room | Result Desk | Config Desk |
-| --- | --- | --- |
-| <img src="docs/screenshots/dashboard-control-room.png" alt="Control Room" width="100%" /> | <img src="docs/screenshots/job-detail-result-desk.png" alt="Result Desk" width="100%" /> | <img src="docs/screenshots/settings-console.png" alt="Config Desk" width="100%" /> |
 
 ## Quick Start
 
