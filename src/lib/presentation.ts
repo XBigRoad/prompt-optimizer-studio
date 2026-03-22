@@ -1,6 +1,6 @@
 import type { ConversationPolicy } from "@/lib/engine/conversation-policy"
 import { normalizeEscapedMultilineText } from "@/lib/prompt-text"
-import type { JobStatus } from "@/lib/server/types"
+import type { JobStatus } from "@/lib/contracts"
 
 export type JobFailureKind = "infra" | "content"
 export type JobScoreState = "available" | "not_generated"

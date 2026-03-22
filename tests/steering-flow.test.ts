@@ -104,7 +104,8 @@ test('legacy single steering migrates into the pending list and consumption remo
     const { resetDbForTests, getDb } = await import('../src/lib/server/db')
     resetDbForTests()
     const { saveSettings } = await import('../src/lib/server/settings')
-    const { addPendingSteeringItem, consumePendingSteeringItems, createJobs, getJobById, getOptimizerSeed } = await import('../src/lib/server/jobs')
+    const { addPendingSteeringItem, createJobs, getJobById } = await import('../src/lib/server/jobs')
+    const { consumePendingSteeringItems, getOptimizerSeed } = await import('../src/lib/server/jobs/runtime')
 
     saveSettings({
       cpamcBaseUrl: 'http://localhost:8317/v1',
@@ -217,7 +218,8 @@ test('candidate history exposes applied steering items for the consumed round', 
     const { resetDbForTests } = await import('../src/lib/server/db')
     resetDbForTests()
     const { saveSettings } = await import('../src/lib/server/settings')
-    const { addPendingSteeringItem, createCandidateWithJudges, createJobs, getJobDetail, getOptimizerSeed } = await import('../src/lib/server/jobs')
+    const { addPendingSteeringItem, createJobs, getJobDetail } = await import('../src/lib/server/jobs')
+    const { createCandidateWithJudges, getOptimizerSeed } = await import('../src/lib/server/jobs/runtime')
 
     saveSettings({
       cpamcBaseUrl: 'http://localhost:8317/v1',

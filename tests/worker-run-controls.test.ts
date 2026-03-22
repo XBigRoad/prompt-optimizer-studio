@@ -6,7 +6,7 @@ import {
   resolvePostFailureStatus,
   resolvePostReviewStatus,
   resolveRoundExecutionMode,
-} from '../src/lib/server/worker'
+} from '../src/lib/server/runtime/index'
 
 test('step mode pauses after exactly one completed round', () => {
   assert.equal(resolvePostReviewStatus({

@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
+import path from 'node:path'
 import test from 'node:test'
 
+const globalsCssPath = path.resolve(process.cwd(), 'src/styles/globals.css')
+const stableRulesPanelPath = path.resolve(process.cwd(), 'src/components/widgets/job-detail/stable-rules-panel.tsx')
+
 test('section rhythm styles avoid fixed header min-height hacks for settings and latest-results lanes', () => {
-  const source = fs.readFileSync(
-    '/Volumes/1TB_No.1/Dev_Workspace/prompt-optimizer-studio/.worktrees/open-source-hardening/src/styles/globals.css',
-    'utf8',
-  )
+  const source = fs.readFileSync(globalsCssPath, 'utf8')
 
   assert.doesNotMatch(
     source,
@@ -26,10 +27,7 @@ test('section rhythm styles avoid fixed header min-height hacks for settings and
 
 
 test('dashboard status chrome stays on the local surface and avoids browser-default blue focus', () => {
-  const source = fs.readFileSync(
-    '/Volumes/1TB_No.1/Dev_Workspace/prompt-optimizer-studio/.worktrees/open-source-hardening/src/styles/globals.css',
-    'utf8',
-  )
+  const source = fs.readFileSync(globalsCssPath, 'utf8')
 
   assert.doesNotMatch(
     source,
@@ -64,10 +62,7 @@ test('dashboard status chrome stays on the local surface and avoids browser-defa
 
 
 test('stable-rule cards use a single-column stack instead of a 2+1 mosaic', () => {
-  const source = fs.readFileSync(
-    '/Volumes/1TB_No.1/Dev_Workspace/prompt-optimizer-studio/.worktrees/open-source-hardening/src/styles/globals.css',
-    'utf8',
-  )
+  const source = fs.readFileSync(globalsCssPath, 'utf8')
 
   assert.match(
     source,
@@ -76,10 +71,7 @@ test('stable-rule cards use a single-column stack instead of a 2+1 mosaic', () =
 })
 
 test('decision lanes cap the desktop queue width and demote prompt previews to supporting copy', () => {
-  const source = fs.readFileSync(
-    '/Volumes/1TB_No.1/Dev_Workspace/prompt-optimizer-studio/.worktrees/open-source-hardening/src/styles/globals.css',
-    'utf8',
-  )
+  const source = fs.readFileSync(globalsCssPath, 'utf8')
 
   assert.match(
     source,
@@ -103,10 +95,7 @@ test('decision lanes cap the desktop queue width and demote prompt previews to s
 })
 
 test('task scoring editor keeps button actions visibly separated from the textarea', () => {
-  const source = fs.readFileSync(
-    '/Volumes/1TB_No.1/Dev_Workspace/prompt-optimizer-studio/.worktrees/open-source-hardening/src/styles/globals.css',
-    'utf8',
-  )
+  const source = fs.readFileSync(globalsCssPath, 'utf8')
 
   assert.match(
     source,
@@ -120,10 +109,7 @@ test('task scoring editor keeps button actions visibly separated from the textar
 })
 
 test('stable-rules note belongs to the left long-term-rules stack instead of floating below the whole two-column area', () => {
-  const source = fs.readFileSync(
-    '/Volumes/1TB_No.1/Dev_Workspace/prompt-optimizer-studio/.worktrees/open-source-hardening/src/components/job-detail-control-room.tsx',
-    'utf8',
-  )
+  const source = fs.readFileSync(stableRulesPanelPath, 'utf8')
 
   assert.match(
     source,

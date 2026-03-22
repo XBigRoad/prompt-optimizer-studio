@@ -53,10 +53,9 @@ test('job controls support cancel, next-round model updates, and legacy error ma
       updateJobGoalAnchor,
       cancelJob,
       resetJobForRetry,
-      updateJobProgress,
-      applyPendingJobModels,
       getJobDisplayError,
     } = await import('../src/lib/server/jobs')
+    const { updateJobProgress, applyPendingJobModels } = await import('../src/lib/server/jobs/runtime')
 
     saveSettings({
       cpamcBaseUrl: 'http://localhost:8317/v1',
@@ -478,20 +477,17 @@ test('job controls support paused state, resume modes, and max round overrides',
     const { saveSettings } = await import('../src/lib/server/settings')
     const {
       addPendingSteeringItem,
-      claimNextRunnableJob,
       clearPendingSteeringItems,
-      consumePendingSteeringItems,
       createJobs,
       getJobById,
-      getOptimizerSeed,
       listJobs,
       pauseJob,
       resumeJobAuto,
       resumeJobStep,
       updateJobGoalAnchor,
       updateJobMaxRoundsOverride,
-      updateJobProgress,
     } = await import('../src/lib/server/jobs')
+    const { claimNextRunnableJob, consumePendingSteeringItems, getOptimizerSeed, updateJobProgress } = await import('../src/lib/server/jobs/runtime')
 
     saveSettings({
       cpamcBaseUrl: 'http://localhost:8317/v1',
@@ -679,11 +675,11 @@ test('manual completion marks job completed and keeps pending steering', async (
     const {
       addPendingSteeringItem,
       completeJob,
-      createCandidateWithJudges,
       createJobs,
       getJobById,
       pauseJob,
     } = await import('../src/lib/server/jobs')
+    const { createCandidateWithJudges } = await import('../src/lib/server/jobs/runtime')
 
     saveSettings({
       cpamcBaseUrl: 'http://localhost:8317/v1',
@@ -780,7 +776,8 @@ test('cannot manually complete a running job', async () => {
     const { resetDbForTests } = await import('../src/lib/server/db')
     resetDbForTests()
     const { saveSettings } = await import('../src/lib/server/settings')
-    const { claimNextRunnableJob, completeJob, createJobs } = await import('../src/lib/server/jobs')
+    const { completeJob, createJobs } = await import('../src/lib/server/jobs')
+    const { claimNextRunnableJob } = await import('../src/lib/server/jobs/runtime')
 
     saveSettings({
       cpamcBaseUrl: 'http://localhost:8317/v1',
@@ -826,7 +823,8 @@ test('job complete route marks a paused job completed and returns updated job', 
     const { resetDbForTests } = await import('../src/lib/server/db')
     resetDbForTests()
     const { saveSettings } = await import('../src/lib/server/settings')
-    const { createCandidateWithJudges, createJobs, pauseJob } = await import('../src/lib/server/jobs')
+    const { createJobs, pauseJob } = await import('../src/lib/server/jobs')
+    const { createCandidateWithJudges } = await import('../src/lib/server/jobs/runtime')
     const route = await import('../src/app/api/jobs/[id]/complete/route')
 
     saveSettings({
@@ -958,7 +956,8 @@ test('job claim lease prevents double-claiming the same running job', async () =
     const { resetDbForTests } = await import('../src/lib/server/db')
     resetDbForTests()
     const { saveSettings } = await import('../src/lib/server/settings')
-    const { claimNextRunnableJob, createJobs } = await import('../src/lib/server/jobs')
+    const { createJobs } = await import('../src/lib/server/jobs')
+    const { claimNextRunnableJob } = await import('../src/lib/server/jobs/runtime')
 
     saveSettings({
       cpamcBaseUrl: 'http://localhost:8317/v1',
@@ -1005,7 +1004,8 @@ test('stale running job lease can be reclaimed by another worker', async () => {
     const { resetDbForTests, getDb } = await import('../src/lib/server/db')
     resetDbForTests()
     const { saveSettings } = await import('../src/lib/server/settings')
-    const { claimNextRunnableJob, createJobs } = await import('../src/lib/server/jobs')
+    const { createJobs } = await import('../src/lib/server/jobs')
+    const { claimNextRunnableJob } = await import('../src/lib/server/jobs/runtime')
 
     saveSettings({
       cpamcBaseUrl: 'http://localhost:8317/v1',
@@ -1361,7 +1361,8 @@ test('worker round writer derives the next round from the highest stored candida
     const { resetDbForTests, getDb } = await import('../src/lib/server/db')
     resetDbForTests()
     const { saveSettings } = await import('../src/lib/server/settings')
-    const { createJobs, createCandidateWithJudgesForActiveWorker } = await import('../src/lib/server/jobs')
+    const { createJobs } = await import('../src/lib/server/jobs')
+    const { createCandidateWithJudgesForActiveWorker } = await import('../src/lib/server/jobs/runtime')
 
     saveSettings({
       cpamcBaseUrl: 'http://localhost:8317/v1',
@@ -1505,7 +1506,8 @@ test('createCandidateWithJudges rejects invalid numeric scores with a clear erro
     const { resetDbForTests } = await import('../src/lib/server/db')
     resetDbForTests()
     const { saveSettings } = await import('../src/lib/server/settings')
-    const { createJobs, createCandidateWithJudges } = await import('../src/lib/server/jobs')
+    const { createJobs } = await import('../src/lib/server/jobs')
+    const { createCandidateWithJudges } = await import('../src/lib/server/jobs/runtime')
 
     saveSettings({
       cpamcBaseUrl: 'http://localhost:8317/v1',

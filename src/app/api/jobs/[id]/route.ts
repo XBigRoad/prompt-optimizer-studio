@@ -12,9 +12,9 @@ import {
   updateJobMaxRoundsOverride,
   updateJobModels,
   updateJobNextRoundInstruction,
-} from '@/lib/server/jobs'
+} from '@/lib/server/jobs/index'
 import { normalizeReasoningEffort } from '@/lib/reasoning-effort'
-import { ensureWorkerStarted } from '@/lib/server/worker'
+import { ensureWorkerStarted } from '@/lib/server/runtime/index'
 
 export const runtime = 'nodejs'
 

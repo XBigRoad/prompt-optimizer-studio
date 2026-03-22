@@ -1,4 +1,4 @@
-import type { CandidateRecord } from '@/lib/server/types'
+import type { CandidateRecord } from '@/lib/contracts'
 import { useI18n, useLocaleText } from '@/lib/i18n'
 import { humanizePlaceholderMve } from '@/lib/prompt-text'
 

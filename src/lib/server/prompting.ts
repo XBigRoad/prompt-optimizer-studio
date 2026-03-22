@@ -1,5 +1,5 @@
-import { formatGoalAnchorForPrompt } from '@/lib/server/goal-anchor'
-import type { GoalAnchor, PromptPackVersion, SteeringItem } from '@/lib/server/types'
+import { formatGoalAnchorForPrompt } from '@/lib/server/goal-anchor/index'
+import type { GoalAnchor, PromptPackVersion, SteeringItem } from '@/lib/contracts'
 
 const optimizerSystemPromptCache = new Map<string, string>()
 const judgeSystemPromptCache = new Map<string, string>()

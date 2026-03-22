@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url'
 
 import type { ConversationPolicy } from '@/lib/engine/conversation-policy'
 import { resolveRuntimeEnv } from '@/lib/server/runtime-env'
-import type { AppSettings } from '@/lib/server/types'
+import type { AppSettings } from '@/lib/contracts'
 
 const PROMPT_PACK_DIR_ENV = 'PROMPT_OPTIMIZER_PROMPT_PACK_DIR'
 

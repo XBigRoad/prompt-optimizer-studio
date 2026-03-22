@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 
-import { getJobById, resumeJobAuto } from '@/lib/server/jobs'
-import { ensureWorkerStarted } from '@/lib/server/worker'
+import { getJobById, resumeJobAuto } from '@/lib/server/jobs/index'
+import { ensureWorkerStarted } from '@/lib/server/runtime/index'
 
 export const runtime = 'nodejs'
 

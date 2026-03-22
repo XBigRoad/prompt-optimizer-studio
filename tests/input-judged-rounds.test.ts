@@ -34,7 +34,8 @@ test('optimizer seed hands off only the latest prompt without review memory', as
     const { resetDbForTests, getDb } = await import('../src/lib/server/db')
     resetDbForTests()
     const { saveSettings } = await import('../src/lib/server/settings')
-    const { createJobs, getOptimizerSeed } = await import('../src/lib/server/jobs')
+    const { createJobs } = await import('../src/lib/server/jobs')
+    const { getOptimizerSeed } = await import('../src/lib/server/jobs/runtime')
 
     saveSettings({
       cpamcBaseUrl: 'http://localhost:8317/v1',
@@ -359,7 +360,8 @@ test('worker round writer keeps input review score out of the new output candida
     const { resetDbForTests, getDb } = await import('../src/lib/server/db')
     resetDbForTests()
     const { saveSettings } = await import('../src/lib/server/settings')
-    const { createJobs, getJobDetail, recordRoundRunForActiveWorker } = await import('../src/lib/server/jobs')
+    const { createJobs, getJobDetail } = await import('../src/lib/server/jobs')
+    const { recordRoundRunForActiveWorker } = await import('../src/lib/server/jobs/runtime')
 
     saveSettings({
       cpamcBaseUrl: 'http://localhost:8317/v1',
@@ -486,7 +488,8 @@ test('round diagnostics keep the passed review even when no new output candidate
     const { resetDbForTests, getDb } = await import('../src/lib/server/db')
     resetDbForTests()
     const { saveSettings } = await import('../src/lib/server/settings')
-    const { createJobs, getJobDetail, recordRoundRunForActiveWorker } = await import('../src/lib/server/jobs')
+    const { createJobs, getJobDetail } = await import('../src/lib/server/jobs')
+    const { recordRoundRunForActiveWorker } = await import('../src/lib/server/jobs/runtime')
 
     saveSettings({
       cpamcBaseUrl: 'http://localhost:8317/v1',

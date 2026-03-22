@@ -7,17 +7,17 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import {
   DashboardControlRoom,
   type DashboardJobView,
-} from '../src/components/dashboard-control-room'
-import { DashboardShell } from '../src/components/dashboard-shell'
+} from '../src/components/widgets/dashboard/control-room'
+import { DashboardShell } from '../src/components/widgets/dashboard/page-shell'
 import {
   JobDetailControlRoom,
   getDetailNoticeItems,
   type JobDetailViewModel,
-} from '../src/components/job-detail-control-room'
-import type { RoundCandidateView } from '../src/components/job-round-card'
-import { SettingsControlRoom } from '../src/components/settings-control-room'
-import { StudioFrame } from '../src/components/studio-frame'
-import { ModelAliasCombobox } from '../src/components/ui/model-alias-combobox'
+} from '../src/components/widgets/job-detail/control-room'
+import type { RoundCandidateView } from '../src/components/widgets/job-detail/round-card'
+import { SettingsControlRoom } from '../src/components/widgets/settings/control-room'
+import { StudioFrame } from '../src/components/shared/layout/studio-frame'
+import { ModelAliasCombobox } from '../src/components/shared/ui/model-alias-combobox'
 import { I18nProvider } from '../src/lib/i18n'
 
 test('studio frame and control room can render fully in English', () => {
@@ -1308,6 +1308,7 @@ function makeDetailModel(): JobDetailViewModel {
     modelsLabel: 'gpt-5.2',
     effectiveMaxRounds: 12,
     candidates: [],
+    roundRuns: [],
   }
 }
 

@@ -5,7 +5,7 @@ import {
   createWorkerRuntimeState,
   resolveStableWorkerOwnerId,
   shouldReplaceWorkerRuntime,
-} from '../src/lib/server/worker-runtime'
+} from '../src/lib/server/runtime/index'
 
 test('replaces worker runtime when owner changes', () => {
   const existing = createWorkerRuntimeState('owner-a', 'runtime-a')

@@ -6,7 +6,7 @@ import {
   normalizeGoalAnchor,
   parseGoalAnchor,
   serializeGoalAnchor,
-} from '../src/lib/server/goal-anchor'
+} from '../src/lib/server/goal-anchor/index'
 
 test('deriveGoalAnchor creates a stable initial anchor from raw prompt', () => {
   const anchor = deriveGoalAnchor('请帮我优化一个用于医疗分诊的提示词，要求输出结构化分诊结论和风险等级。')

@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server'
 
-import { createJobs, listJobs } from '@/lib/server/jobs'
-import { ensureWorkerStarted } from '@/lib/server/worker'
-import type { JobInput } from '@/lib/server/types'
+import { createJobs, listJobs } from '@/lib/server/jobs/index'
+import { ensureWorkerStarted } from '@/lib/server/runtime/index'
+import type { JobInput } from '@/lib/contracts'
 
 export const runtime = 'nodejs'
 

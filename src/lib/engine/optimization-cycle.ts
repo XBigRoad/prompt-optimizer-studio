@@ -1,5 +1,5 @@
-import type { GoalAnchor, SteeringItem } from '@/lib/server/types'
-import type { ProviderRequestTelemetryEvent } from '@/lib/server/request-telemetry'
+import type { ProviderRequestTelemetryEvent } from '@/lib/contracts/provider'
+import type { GoalAnchor, SteeringItem } from '@/lib/contracts'
 
 export interface RoundJudgment {
   score: number

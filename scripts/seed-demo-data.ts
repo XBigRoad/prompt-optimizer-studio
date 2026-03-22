@@ -2,12 +2,11 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { resetDbForTests, getDb } from '../src/lib/server/db'
-import { serializeGoalAnchor } from '../src/lib/server/goal-anchor'
-import { serializeGoalAnchorExplanation } from '../src/lib/server/goal-anchor-explanation'
-import { ensurePromptPackVersion } from '../src/lib/server/prompt-pack'
-import { saveSettings } from '../src/lib/server/settings'
-import type { JobDetail } from '../src/lib/server/types'
+import { resetDbForTests, getDb } from '../src/lib/server/db/index'
+import { serializeGoalAnchor, serializeGoalAnchorExplanation } from '../src/lib/server/goal-anchor/index'
+import { ensurePromptPackVersion } from '../src/lib/server/prompt-pack/index'
+import { saveSettings } from '../src/lib/server/settings/index'
+import type { JobDetail } from '../src/lib/contracts'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)

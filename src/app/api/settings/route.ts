@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server'
 
 import { normalizeReasoningEffort } from '@/lib/reasoning-effort'
-import { getSettings, normalizeApiProtocol, saveSettings } from '@/lib/server/settings'
-import type { AppSettings } from '@/lib/server/types'
+import { getSettings, normalizeApiProtocol, saveSettings } from '@/lib/server/settings/index'
+import type { AppSettings } from '@/lib/contracts'
 
 export const runtime = 'nodejs'
 

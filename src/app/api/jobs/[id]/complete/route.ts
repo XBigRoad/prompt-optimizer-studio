@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 
-import { completeJob, getJobById } from '@/lib/server/jobs'
+import { completeJob, getJobById } from '@/lib/server/jobs/index'
 
 export const runtime = 'nodejs'
 

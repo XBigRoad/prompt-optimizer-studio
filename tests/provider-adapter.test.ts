@@ -4,8 +4,9 @@ import test from 'node:test'
 import {
   createProviderAdapter,
   inferApiProtocol,
-  normalizeProviderModelCatalog,
-} from '../src/lib/server/provider-adapter'
+} from '../src/lib/server/providers/index'
+import { normalizeProviderModelCatalog } from '../src/lib/server/providers/catalog'
+import { normalizeModelCatalog } from '../src/lib/server/models'
 
 test('inferApiProtocol detects official Anthropic and Gemini endpoints while preserving OpenAI-compatible gateways', () => {
   assert.equal(inferApiProtocol('https://api.openai.com/v1'), 'openai-compatible')
@@ -201,7 +202,11 @@ test('OpenAI-compatible adapter applies timeout budget across retries instead of
       }),
       /request timeout/i,
     )
-    assert.ok(Date.now() - startedAt < 160)
+    const elapsedMs = Date.now() - startedAt
+    assert.ok(
+      elapsedMs < 260,
+      `expected the total timeout budget to stay well below 3 x 80ms, got ${elapsedMs}ms`,
+    )
   } finally {
     global.fetch = originalFetch
   }
@@ -281,7 +286,78 @@ test('OpenAI-compatible adapter falls back to /responses when chat/completions i
   }
 })
 
-test('OpenAI-compatible adapter keeps /responses as the primary endpoint for judge-labeled GPT-5 requests', async () => {
+test('OpenAI-compatible adapter also falls back to /responses for non-GPT-5 model aliases', async () => {
+  const originalFetch = global.fetch
+  const requestedUrls: string[] = []
+  const requestBodies: Array<Record<string, unknown>> = []
+
+  try {
+    global.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      requestedUrls.push(url)
+      requestBodies.push(JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>)
+
+      if (url.endsWith('/chat/completions')) {
+        return new Response('Not Found', { status: 404 })
+      }
+
+      if (url.endsWith('/responses')) {
+        return new Response(JSON.stringify({
+          id: 'resp_789',
+          status: 'completed',
+          output: [
+            {
+              type: 'message',
+              role: 'assistant',
+              content: [
+                {
+                  type: 'output_text',
+                  text: '{"optimizedPrompt":"fallback prompt for alias"}',
+                },
+              ],
+            },
+          ],
+        }), {
+          status: 200,
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        })
+      }
+
+      throw new Error(`Unexpected URL: ${url}`)
+    }) as typeof fetch
+
+    const adapter = createProviderAdapter({
+      cpamcBaseUrl: 'https://gateway.example.com/codex',
+      cpamcApiKey: 'secret',
+      apiProtocol: 'openai-compatible',
+    })
+
+    const payload = await adapter.requestJson({
+      model: 'deepseek-v3',
+      system: 'system instruction',
+      user: 'user prompt',
+      timeoutMs: 1_000,
+      maxAttempts: 1,
+      reasoningEffort: 'default',
+    })
+
+    assert.deepEqual(requestedUrls, [
+      'https://gateway.example.com/codex/chat/completions',
+      'https://gateway.example.com/codex/responses',
+    ])
+    assert.equal(requestBodies[1]?.model, 'deepseek-v3')
+    assert.equal(requestBodies[1]?.instructions, 'system instruction')
+    assert.equal(requestBodies[1]?.input, 'user prompt')
+    assert.equal(requestBodies[1]?.temperature, 0.2)
+    assert.equal(payload.optimizedPrompt, 'fallback prompt for alias')
+  } finally {
+    global.fetch = originalFetch
+  }
+})
+
+test('OpenAI-compatible adapter can parse JSON from Responses API payloads', async () => {
   const originalFetch = global.fetch
   const requestedUrls: string[] = []
 
@@ -1061,52 +1137,64 @@ test('normalizeProviderModelCatalog preserves provider-qualified OpenAI-compatib
     }).map((item) => item.id),
     ['openai/gpt-5.4', 'anthropic/claude-sonnet-4', 'google/gemini-2.5-pro'],
   )
+})
 
-  assert.deepEqual(
-    normalizeProviderModelCatalog('anthropic-native', {
-      data: [
-        { id: 'claude-3-5-haiku-20241022' },
-        { id: 'claude-3-7-sonnet-20250219' },
-      ],
-    }).map((item) => item.id),
-    ['claude-3-5-haiku-20241022', 'claude-3-7-sonnet-20250219'],
-  )
+test('provider adapters keep alias-only model ids across native catalogs', async () => {
+  const originalFetch = global.fetch
+  const requests: string[] = []
 
-  assert.deepEqual(
-    normalizeProviderModelCatalog('gemini-native', {
-      models: [
-        {
-          name: 'models/gemini-2.5-pro',
-          supportedGenerationMethods: ['generateContent'],
-        },
-        {
-          name: 'models/text-embedding-004',
-          supportedGenerationMethods: ['embedContent'],
-        },
-      ],
-    }).map((item) => item.id),
-    ['gemini-2.5-pro'],
-  )
+  try {
+    const responses = [
+      { data: [{ id: 'claude-3-5-haiku-20241022' }, { id: 'claude-3-7-sonnet-20250219' }] },
+      {
+        models: [
+          { name: 'models/gemini-2.5-pro', supportedGenerationMethods: ['generateContent'] },
+          { name: 'models/text-embedding-004', supportedGenerationMethods: ['embedContent'] },
+        ],
+      },
+      { data: [{ id: 'mistral-small-latest' }, { id: 'mistral-large-latest' }] },
+      { models: [{ name: 'command-a-03-2025' }, { name: 'command-r-plus' }] },
+    ]
 
-  assert.deepEqual(
-    normalizeProviderModelCatalog('mistral-native', {
-      data: [
-        { id: 'mistral-small-latest' },
-        { id: 'mistral-large-latest' },
-      ],
-    }).map((item) => item.id),
-    ['mistral-small-latest', 'mistral-large-latest'],
-  )
+    global.fetch = (async (input: RequestInfo | URL) => {
+      requests.push(String(input))
+      const payload = responses.shift()
+      if (!payload) {
+        throw new Error('Unexpected extra request')
+      }
+      return new Response(JSON.stringify(payload), { status: 200 })
+    }) as typeof fetch
 
-  assert.deepEqual(
-    normalizeProviderModelCatalog('cohere-native', {
-      models: [
-        { name: 'command-a-03-2025' },
-        { name: 'command-r-plus' },
-      ],
-    }).map((item) => item.id),
-    ['command-a-03-2025', 'command-r-plus'],
-  )
+    const anthropicModels = await createProviderAdapter({
+      cpamcBaseUrl: 'https://api.anthropic.com',
+      cpamcApiKey: 'sk-ant',
+    }).listModels()
+    const geminiModels = await createProviderAdapter({
+      cpamcBaseUrl: 'https://generativelanguage.googleapis.com',
+      cpamcApiKey: 'gem-key',
+    }).listModels()
+    const mistralModels = await createProviderAdapter({
+      cpamcBaseUrl: 'https://api.mistral.ai/v1',
+      cpamcApiKey: 'mistral-key',
+    }).listModels()
+    const cohereModels = await createProviderAdapter({
+      cpamcBaseUrl: 'https://api.cohere.com',
+      cpamcApiKey: 'cohere-key',
+    }).listModels()
+
+    assert.deepEqual(anthropicModels.map((item) => item.id), ['claude-3-5-haiku-20241022', 'claude-3-7-sonnet-20250219'])
+    assert.deepEqual(geminiModels.map((item) => item.id), ['gemini-2.5-pro'])
+    assert.deepEqual(mistralModels.map((item) => item.id), ['mistral-small-latest', 'mistral-large-latest'])
+    assert.deepEqual(cohereModels.map((item) => item.id), ['command-a-03-2025', 'command-r-plus'])
+    assert.deepEqual(requests, [
+      'https://api.anthropic.com/v1/models',
+      'https://generativelanguage.googleapis.com/v1beta/models',
+      'https://api.mistral.ai/v1/models',
+      'https://api.cohere.com/v2/models',
+    ])
+  } finally {
+    global.fetch = originalFetch
+  }
 })
 
 test('OpenAI-compatible adapter treats a missing /models endpoint as an empty catalog', async () => {

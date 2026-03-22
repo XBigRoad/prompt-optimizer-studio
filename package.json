@@ -9,9 +9,11 @@
     "dev": "next dev",
     "build": "next build --webpack",
     "start": "next start",
+    "lint": "eslint . --ext .ts,.tsx,.js,.jsx,.mjs",
+    "check:architecture": "dependency-cruiser --config dependency-cruiser.cjs src && node scripts/check-architecture.mjs",
     "typecheck": "next typegen && tsc --noEmit",
     "test": "node --import tsx --test tests/**/*.test.ts",
-    "check": "npm run typecheck && npm run test && npm run build",
+    "check": "npm run lint && npm run check:architecture && npm run typecheck && npm run test && npm run build",
     "demo:seed": "node --import tsx scripts/seed-demo-data.ts"
   },
   "dependencies": {
@@ -28,11 +30,16 @@
     "react-dom": "19.1.0"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/node": "^22.15.18",
     "@types/react": "19.1.4",
     "@types/react-dom": "19.1.5",
+    "dependency-cruiser": "^17.3.9",
+    "eslint": "^10.1.0",
+    "eslint-config-next": "^16.2.0",
     "tsx": "^4.20.6",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.57.1"
   },
   "license": "AGPL-3.0-only"
 }

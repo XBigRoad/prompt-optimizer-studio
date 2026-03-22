@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 
-import { ensurePromptPackVersion } from '@/lib/server/prompt-pack'
-import { getSettings } from '@/lib/server/settings'
+import { ensurePromptPackVersion } from '@/lib/server/prompt-pack/index'
+import { getSettings } from '@/lib/server/settings/index'
 
 export const runtime = 'nodejs'
 

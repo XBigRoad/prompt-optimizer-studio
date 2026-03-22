@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 
-import { cancelJob, getJobById } from '@/lib/server/jobs'
+import { cancelJob, getJobById } from '@/lib/server/jobs/index'
 
 export const runtime = 'nodejs'
 

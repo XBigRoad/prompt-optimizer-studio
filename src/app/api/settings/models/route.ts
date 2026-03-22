@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server'
 
 import { fetchCpamcModels } from '@/lib/server/models'
-import { getSettings, normalizeApiProtocol } from '@/lib/server/settings'
-import type { AppSettings } from '@/lib/server/types'
+import { getSettings, normalizeApiProtocol } from '@/lib/server/settings/index'
+import type { AppSettings } from '@/lib/contracts'
 
 export const runtime = 'nodejs'
 

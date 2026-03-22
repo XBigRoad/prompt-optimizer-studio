@@ -1,11 +1,10 @@
 import type { ModelAdapter, OptimizationResult, RoundJudgment } from '@/lib/engine/optimization-cycle'
 import { normalizeEscapedMultilineText } from '@/lib/prompt-text'
-import { normalizeGoalAnchor } from '@/lib/server/goal-anchor'
-import { normalizeGoalAnchorExplanation } from '@/lib/server/goal-anchor-explanation'
-import { createProviderAdapter, inferApiProtocol } from '@/lib/server/provider-adapter'
-import type { ProviderRequestLabel, ProviderRequestTelemetryEvent } from '@/lib/server/request-telemetry'
 import { isGpt5FamilyModel, normalizeReasoningEffort, resolveReasoningEffortTimeoutMs } from '@/lib/reasoning-effort'
-import type { GoalAnchor, GoalAnchorExplanation, PromptPackVersion, AppSettings, SteeringItem } from '@/lib/server/types'
+import type { GoalAnchor, GoalAnchorExplanation, PromptPackVersion, AppSettings, SteeringItem } from '@/lib/contracts'
+import { normalizeGoalAnchor, normalizeGoalAnchorExplanation } from '@/lib/server/goal-anchor/index'
+import { createProviderAdapter, inferApiProtocol } from '@/lib/server/providers/index'
+import type { ProviderRequestLabel, ProviderRequestTelemetryEvent } from '@/lib/contracts/provider'
 import { buildGoalAnchorPrompts, buildJudgePrompts, buildOptimizerPrompts } from '@/lib/server/prompting'
 
 const DEEP_ROUND_OPTIMIZER_RESPONSES_PROMPT_LENGTH = 2600
