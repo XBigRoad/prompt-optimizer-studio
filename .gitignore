@@ -8,3 +8,4 @@ tsconfig.tsbuildinfo
 data/*.db*
 .worktrees
 .agentdocs
+.ops/*.db*
