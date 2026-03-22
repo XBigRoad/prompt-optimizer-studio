@@ -44,10 +44,11 @@ test('legacy round card uses clearer score and review labels', () => {
   assert.match(html, /走偏风险/)
   assert.match(html, /还要补的地方/)
   assert.match(html, /这版提示词复核结果/)
-  assert.match(html, /这次复核发现的问题/)
-  assert.match(html, /下一步建议/)
+  assert.match(html, /这轮还卡在哪/)
+  assert.match(html, /下一步怎么改/)
   assert.doesNotMatch(html, />MVE</)
   assert.doesNotMatch(html, /复核分数/)
+  assert.doesNotMatch(html, /发现的问题/)
 })
 
 test('legacy round card hides empty panels and humanizes placeholder MVE copy', () => {
@@ -73,6 +74,21 @@ test('legacy round card hides empty panels and humanizes placeholder MVE copy', 
   assert.doesNotMatch(html, /这轮改了什么/)
   assert.doesNotMatch(html, /走偏风险/)
   assert.doesNotMatch(html, /还要补的地方/)
-  assert.doesNotMatch(html, /这次复核发现的问题/)
-  assert.doesNotMatch(html, /下一步建议/)
+  assert.doesNotMatch(html, /这轮还卡在哪/)
+  assert.doesNotMatch(html, /下一步怎么改/)
+})
+
+test('legacy round card also humanizes hyphenated single-sample MVE placeholders', () => {
+  const html = renderToStaticMarkup(createElement(JobRoundCard, {
+    candidate: {
+      ...candidate,
+      mve: 'Run a single-sample judge validation.',
+    },
+    expanded: true,
+    onToggle: () => {},
+  }))
+
+  assert.match(html, /下一步最小验证/)
+  assert.match(html, /再抽 1 个样例快速复核/)
+  assert.doesNotMatch(html, /Run a single-sample judge validation\./)
 })

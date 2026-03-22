@@ -1,5 +1,6 @@
 import type { CandidateRecord } from '@/lib/server/types'
 import { useI18n, useLocaleText } from '@/lib/i18n'
+import { humanizePlaceholderMve } from '@/lib/prompt-text'
 
 export interface RoundRunView {
   id: string
@@ -20,6 +21,7 @@ export interface RoundRunView {
   judgeError: string | null
   passStreakAfter: number
   outputJudged: boolean
+  outputFinal?: boolean
   outputCandidate: CandidateRecord | null
   createdAt: string
 }
@@ -51,10 +53,12 @@ export function JobRoundRunCard({
     || round.driftLabels.length > 0
     || Boolean(round.driftExplanation.trim())
   const scoreLabel = round.displayScore === null
-    ? text('上一轮提示词还没评分', 'Previous prompt not scored yet')
-    : text(`上一轮提示词得分 ${round.displayScore.toFixed(2)}`, `Previous prompt score ${round.displayScore.toFixed(2)}`)
+    ? text('上轮提示词暂未评分', 'Previous prompt not scored yet')
+    : text(`上轮提示词评分 ${round.displayScore.toFixed(2)}`, `Previous prompt score ${round.displayScore.toFixed(2)}`)
   const handoffLabel = round.outputCandidate
-    ? round.outputJudged
+    ? round.outputFinal
+      ? text('这版已作为最终结果交付', 'This version was delivered as the final result')
+      : round.outputJudged
       ? text('这版后来已经评过分', 'This version was scored later')
       : text('这版要到下一轮才会评分', 'This version will be scored next round')
     : reviewPassed
@@ -140,7 +144,7 @@ export function JobRoundRunCard({
               </div>
               <div className="judge-card round-review-panel">
                 <div className="card-header round-review-header">
-                  <strong>{text('上一轮提示词复核结果', 'Previous prompt review')}</strong>
+                  <strong>{text('上轮提示词评分结果', 'Previous prompt review')}</strong>
                   <span className={`status ${round.hasMaterialIssues ? 'manual_review' : 'completed'}`}>
                     {round.displayScore === null ? '—' : round.displayScore}
                   </span>
@@ -158,7 +162,7 @@ export function JobRoundRunCard({
                 ) : null}
                 {findings.length > 0 ? (
                   <div className="round-review-section">
-                    <strong>{text('这次复核发现的问题', 'Issues found in this review')}</strong>
+                    <strong>{text('这轮还卡在哪', 'What is still blocking this round')}</strong>
                     <ul className="list compact-list">
                       {findings.map((item, index) => <li key={`${round.id}-finding-${index}`}>{item}</li>)}
                     </ul>
@@ -166,7 +170,7 @@ export function JobRoundRunCard({
                 ) : null}
                 {suggestedChanges.length > 0 ? (
                   <div className="round-review-section">
-                    <strong>{text('下一步建议', 'Next suggestions')}</strong>
+                    <strong>{text('下一步怎么改', 'How to revise next')}</strong>
                     <ul className="list compact-list">
                       {suggestedChanges.map((item, index) => <li key={`${round.id}-suggestion-${index}`}>{item}</li>)}
                     </ul>
@@ -186,19 +190,5 @@ function normalizeItems(items: string[]) {
 }
 
 function humanizeMve(value: string, locale: 'zh-CN' | 'en') {
-  const trimmed = value.trim()
-  if (!trimmed) {
-    return ''
-  }
-
-  if (isPlaceholderMve(trimmed)) {
-    return locale === 'zh-CN'
-      ? '再抽 1 个样例快速复核'
-      : 'Re-check with 1 quick sample'
-  }
-  return trimmed
-}
-
-function isPlaceholderMve(value: string) {
-  return /^(run a single sample|single run|mve)$/i.test(value.trim())
+  return humanizePlaceholderMve(value, locale)
 }

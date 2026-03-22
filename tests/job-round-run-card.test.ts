@@ -25,6 +25,7 @@ const roundRun: RoundRunView = {
   judgeError: null,
   passStreakAfter: 2,
   outputJudged: false,
+  outputFinal: false,
   outputCandidate: {
     id: 'candidate-r2',
     jobId: 'job-1',
@@ -51,7 +52,7 @@ test('input-judged round card states clearly that the displayed score belongs to
   }))
 
   assert.match(html, /第 2 轮/)
-  assert.match(html, /上一轮提示词得分 96\.00/)
+  assert.match(html, /上轮提示词评分 96\.00/)
   assert.match(html, /上面这个分数是上一轮提示词的，不是下面新版本的/)
   assert.match(html, /这版要到下一轮才会评分/)
   assert.doesNotMatch(html, /进入本轮前的提示词/)
@@ -72,6 +73,9 @@ test('input-judged round card reveals both the judged input and the handed-off o
   assert.match(html, /这版要到下一轮才会评分/)
   assert.match(html, /结构稳定。/)
   assert.match(html, /继续压缩少量冗余措辞。/)
+  assert.match(html, /这轮还卡在哪/)
+  assert.match(html, /下一步怎么改/)
+  assert.doesNotMatch(html, /发现的问题/)
 })
 
 test('input-judged round card marks outputs already reviewed by a later round', () => {
@@ -88,6 +92,24 @@ test('input-judged round card marks outputs already reviewed by a later round', 
   assert.doesNotMatch(html, /这版要到下一轮才会评分/)
 })
 
+test('input-judged round card marks the terminal handed-off output as the final delivered result', () => {
+  const html = renderToStaticMarkup(createElement(JobRoundRunCard, {
+    round: {
+      ...roundRun,
+      roundNumber: 16,
+      passStreakAfter: 3,
+      outputFinal: true,
+      summary: '这一轮已经满足停止条件，并把新版本作为最终结果交付。',
+    },
+    expanded: false,
+    onToggle: () => {},
+  }))
+
+  assert.match(html, /第 16 轮/)
+  assert.match(html, /这版已作为最终结果交付/)
+  assert.doesNotMatch(html, /这版要到下一轮才会评分/)
+})
+
 test('input-judged round card explains when review passed but no new output was generated', () => {
   const html = renderToStaticMarkup(createElement(JobRoundRunCard, {
     round: {
@@ -101,7 +123,7 @@ test('input-judged round card explains when review passed but no new output was 
     onToggle: () => {},
   }))
 
-  assert.match(html, /上一轮提示词得分 96\.00/)
+  assert.match(html, /上轮提示词评分 96\.00/)
   assert.match(html, /达标但未生成新版本/)
   assert.match(html, /这轮已经满足停止条件，但没生成新版本，系统会沿用上一版作为最终结果/)
 })
@@ -129,6 +151,24 @@ test('input-judged round card hides empty analysis panels and humanizes placehol
   assert.doesNotMatch(html, /这轮改了什么/)
   assert.doesNotMatch(html, /还要补的地方/)
   assert.doesNotMatch(html, /走偏风险/)
-  assert.doesNotMatch(html, /这次复核发现的问题/)
-  assert.doesNotMatch(html, /下一步建议/)
+  assert.doesNotMatch(html, /这轮还卡在哪/)
+  assert.doesNotMatch(html, /下一步怎么改/)
+})
+
+test('input-judged round card also humanizes hyphenated single-sample MVE placeholders', () => {
+  const html = renderToStaticMarkup(createElement(JobRoundRunCard, {
+    round: {
+      ...roundRun,
+      outputCandidate: {
+        ...roundRun.outputCandidate!,
+        mve: 'Run a single-sample judge validation.',
+      },
+    },
+    expanded: true,
+    onToggle: () => {},
+  }))
+
+  assert.match(html, /下一步最小验证/)
+  assert.match(html, /再抽 1 个样例快速复核/)
+  assert.doesNotMatch(html, /Run a single-sample judge validation\./)
 })

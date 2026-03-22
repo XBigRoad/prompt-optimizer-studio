@@ -60,7 +60,7 @@ export class CpamcModelAdapter implements ModelAdapter {
       strategy: payload.strategy === 'preserve' ? 'preserve' : 'rebuild',
       scoreBefore: normalizeNumericScore(payload.scoreBefore, 0),
       majorChanges: normalizeTextArray(payload.majorChanges),
-      mve: normalizeTextValue(payload.mve, 'Run a single-sample judge validation.'),
+      mve: normalizeTextValue(payload.mve, 'single run'),
       deadEndSignals: normalizeTextArray(payload.deadEndSignals),
       requestTelemetry,
     }

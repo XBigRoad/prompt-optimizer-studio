@@ -1,4 +1,5 @@
 import { useI18n, useLocaleText } from "@/lib/i18n"
+import { humanizePlaceholderMve } from "@/lib/prompt-text"
 import type { SteeringItem } from "@/lib/server/types"
 
 interface JudgeRun {
@@ -148,7 +149,7 @@ export function JobRoundCard({
                   ) : null}
                   {findings.length > 0 ? (
                     <div className="round-review-section">
-                      <strong>{text('这次复核发现的问题', 'Issues found in this review')}</strong>
+                      <strong>{text('这轮还卡在哪', 'What is still blocking this round')}</strong>
                       <ul className="list compact-list">
                         {findings.map((item, index) => <li key={`${review.id}-finding-${index}`}>{item}</li>)}
                       </ul>
@@ -156,7 +157,7 @@ export function JobRoundCard({
                   ) : null}
                   {suggestedChanges.length > 0 ? (
                     <div className="round-review-section">
-                      <strong>{text('下一步建议', 'Next suggestions')}</strong>
+                      <strong>{text('下一步怎么改', 'How to revise next')}</strong>
                       <ul className="list compact-list">
                         {suggestedChanges.map((item, index) => <li key={`${review.id}-suggestion-${index}`}>{item}</li>)}
                       </ul>
@@ -177,15 +178,5 @@ function normalizeItems(items: string[]) {
 }
 
 function humanizeMve(value: string, locale: 'zh-CN' | 'en') {
-  const trimmed = value.trim()
-  if (!trimmed || isPlaceholderMve(trimmed)) {
-    return locale === 'zh-CN'
-      ? '再抽 1 个样例快速复核'
-      : 'Re-check with 1 quick sample'
-  }
-  return trimmed
-}
-
-function isPlaceholderMve(value: string) {
-  return /^(run a single sample|single run|mve)$/i.test(value.trim())
+  return humanizePlaceholderMve(value, locale)
 }

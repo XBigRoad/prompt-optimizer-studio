@@ -634,3 +634,53 @@ test('adapter decodes double-escaped optimizer prompts into real multiline text'
     '# 角色\n你是一名提示词优化师。\n\n## 目标\n输出最终版本。',
   )
 })
+
+test('adapter falls back to the internal single-run MVE placeholder when optimizer omits MVE', async () => {
+  global.fetch = (async () => new Response(JSON.stringify({
+    choices: [
+      {
+        message: {
+          content: JSON.stringify({
+            optimizedPrompt: 'fallback mve prompt',
+            strategy: 'rebuild',
+            scoreBefore: 86,
+            majorChanges: ['trimmed placeholder leakage'],
+            deadEndSignals: [],
+          }),
+        },
+      },
+    ],
+  }), { status: 200 })) as typeof fetch
+
+  const adapter = new CpamcModelAdapter(
+    {
+      cpamcBaseUrl: 'http://localhost:8317/v1',
+      cpamcApiKey: 'secret',
+      scoreThreshold: 95,
+    },
+    {
+      id: 'pack-fallback-mve',
+      hash: 'hash-fallback-mve',
+      skillMd: 'skill',
+      rubricMd: 'rubric',
+      templateMd: 'template',
+      createdAt: new Date().toISOString(),
+    },
+    {
+      optimizerModel: 'gpt-4.1',
+      judgeModel: 'gpt-4.1',
+    },
+  )
+
+  const optimization = await adapter.optimizePrompt({
+    currentPrompt: 'draft',
+    goalAnchor: {
+      goal: 'Keep the original task.',
+      deliverable: 'Return the original requested deliverable.',
+      driftGuard: ['Do not drift away from the original task.'],
+    },
+    threshold: 95,
+  })
+
+  assert.equal(optimization.mve, 'single run')
+})

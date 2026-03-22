@@ -84,6 +84,7 @@ interface JobDetailPayload {
     maxRoundsOverride: number | null
     passStreak: number
     lastReviewScore: number
+    finalCandidateId: string | null
     customRubricMd: string | null
     errorMessage: string | null
     conversationPolicy: 'stateless' | 'pooled-3x'
@@ -274,6 +275,7 @@ export function JobDetailShell({ jobId }: { jobId: string }) {
       maxRoundsOverride: detail.job.maxRoundsOverride,
       passStreak: detail.job.passStreak,
       lastReviewScore: detail.job.lastReviewScore,
+      finalCandidateId: detail.job.finalCandidateId,
       customRubricMd: detail.job.customRubricMd,
       effectiveRubricMd,
       effectiveRubricSource,
@@ -283,7 +285,10 @@ export function JobDetailShell({ jobId }: { jobId: string }) {
       modelsLabel: getTaskModelLabel(detail.job.optimizerModel, detail.job.judgeModel, locale),
       effectiveMaxRounds: detail.job.maxRoundsOverride ?? settings.maxRounds,
       candidates: detail.candidates,
-      roundRuns: detail.roundRuns ?? [],
+      roundRuns: (detail.roundRuns ?? []).map((round) => ({
+        ...round,
+        outputFinal: Boolean(detail.job.finalCandidateId && round.outputCandidateId === detail.job.finalCandidateId),
+      })),
     }
   }, [detail, effectiveRubricMd, effectiveRubricSource, jobId, locale, settings.maxRounds])
 

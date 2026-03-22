@@ -1298,6 +1298,7 @@ function makeDetailModel(): JobDetailViewModel {
     maxRoundsOverride: 12,
     passStreak: 1,
     lastReviewScore: 94,
+    finalCandidateId: null,
     customRubricMd: null,
     effectiveRubricMd: '# 默认评分标准\n\n1. 目标一致性 (20)',
     effectiveRubricSource: 'default',
@@ -1359,6 +1360,7 @@ function makeRoundRun() {
     judgeError: null,
     passStreakAfter: 2,
     outputJudged: false,
+    outputFinal: false,
     outputCandidate: {
       id: 'candidate-r2',
       jobId: 'job-1',

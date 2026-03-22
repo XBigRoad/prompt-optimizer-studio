@@ -59,6 +59,7 @@ export type JobDetailViewModel = {
   maxRoundsOverride: number | null
   passStreak: number
   lastReviewScore: number
+  finalCandidateId: string | null
   customRubricMd: string | null
   effectiveRubricMd: string
   effectiveRubricSource: 'job' | 'settings' | 'default'
