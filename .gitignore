@@ -7,5 +7,5 @@ test-results
 tsconfig.tsbuildinfo
 data/*.db*
 .worktrees
-.agentdocs
+.agentdocs/
 .ops/*.db*

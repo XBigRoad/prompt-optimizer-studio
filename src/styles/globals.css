@@ -20,6 +20,7 @@
   --radius-xl: 32px;
   --radius-lg: 24px;
   --radius-md: 18px;
+  --surface-backdrop-filter: blur(12px);
   --motion-slow: 320ms;
   --motion-mid: 220ms;
   --motion-fast: 160ms;
@@ -278,7 +279,8 @@ html[data-locale="en"] .detail-hero .eyebrow {
   border: 1px solid var(--line);
   border-radius: var(--radius-xl);
   background: var(--surface);
-  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: var(--surface-backdrop-filter);
+  backdrop-filter: var(--surface-backdrop-filter);
   box-shadow: var(--shadow);
 }
 
@@ -1580,6 +1582,14 @@ html[data-locale="en"] .detail-hero .eyebrow {
 .settings-control-room {
   display: grid;
   gap: 24px;
+}
+
+.control-room,
+.detail-control-room {
+  --surface: rgba(255, 252, 246, 0.96);
+  --surface-strong: rgba(255, 249, 240, 0.98);
+  --surface-muted: rgba(248, 241, 230, 0.94);
+  --surface-backdrop-filter: none;
 }
 
 @media (min-width: 1101px) {
