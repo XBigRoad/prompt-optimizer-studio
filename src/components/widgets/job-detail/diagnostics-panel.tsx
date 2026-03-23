@@ -1,4 +1,3 @@
-import { motion } from 'framer-motion'
 import { RefreshCcw } from 'lucide-react'
 
 import { JobRoundRunCard } from '@/components/job-round-run-card'
@@ -33,7 +32,7 @@ export function DiagnosticsPanel({
       {model.candidates.length === 0 && model.roundRuns.length === 0
         ? <div className="notice">{text('还没有产出候选稿。', 'No candidates yet.')}</div>
         : null}
-      <motion.div layout className="shell">
+      <div className="shell">
         {model.roundRuns.length > 0
           ? model.roundRuns.map((round) => (
             <JobRoundRunCard
@@ -51,7 +50,7 @@ export function DiagnosticsPanel({
               onToggle={() => handlers.onToggleRound(candidate.id)}
             />
           ))}
-      </motion.div>
+      </div>
     </section>
   )
 }
