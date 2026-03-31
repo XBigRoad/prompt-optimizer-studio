@@ -38,25 +38,51 @@ Most prompt optimizers stop at showing diffs, patch fragments, or internal reaso
 | What you need | How Prompt Optimizer Studio helps |
 | --- | --- |
 | Stop reading patch fragments | It keeps the `latest full prompt` visible and copyable instead of only showing diffs |
-| Want automatic multi-round improvement | The optimizer and reviewer keep iterating until they pass or hit a stop rule |
-| Need steering when the run drifts | You can pause, add next-round guidance, continue one round, or resume auto, with `goalAnchor` + drift checks helping keep direction |
+| Want multi-round automation without a black box | It supports both `auto` and `step`, with visible pause points, stop rules, and manual-review handoff |
+| Need to change scoring mid-run | It supports global rubric overrides and job-level rubric overrides; structured rubrics automatically render per-dimension score bars |
+| Need history to stay interpretable | Older rounds prefer their own `rubric snapshot` and do not get retroactively polluted by a later rubric edit |
+| Want failure states that tell the truth | Request failures, no-output rounds, invalid summaries, and invalid structured scores are surfaced with root-cause-oriented copy instead of one generic error bucket |
+| Want to actually use review suggestions | Suggestions can be adopted into next-round steering or stable rules, and the latest panel can auto-adopt future rounds too |
 
 ## How It Works
 
-🔄 From the first draft to the final full prompt, the main path is just this:
+🔄 In the current public build, the main path from draft prompt to final full prompt is:
 
 ```mermaid
 flowchart LR
-    A[Draft prompt] --> B[Start automated optimization loop]
-    B --> C[Optimizer produces next full prompt]
-    C --> D[Reviewer scores quality and checks drift]
-    D --> E{Target reached or stop rule hit?}
-    E -- No --> F{Need human steering?}
-    F -- No --> B
-    F -- Yes --> G[Pause / add next-round guidance / resume]
-    G --> B
-    E -- Yes --> H[Copy the final full prompt]
+    A[Draft prompt] --> B[System derives goalAnchor and long-term guardrails]
+    B --> C[Judge scores the current input prompt first]
+    C --> D[Optimizer produces the next full prompt]
+    D --> E[Judge writes the round run against the current rubric]
+    E --> F{Has the same candidate reached a credible pass streak?}
+    F -- Yes --> G[Complete / copy final prompt / fork a new job from final]
+    F -- No --> H{Pause point, manual review, or operator takeover?}
+    H -- No --> D
+    H -- Yes --> I[Adjust steering, stable rules, task rubric, or run mode]
+    I --> D
 ```
+
+### Workflow Details
+
+1. A new job starts by deriving a `goalAnchor`: long-term goal, long-term deliverable, long-term boundaries, plus a readable explanation.
+2. Each round judges the current input prompt first, then passes de-scored structural feedback into the optimizer for the next rewrite.
+3. The public build exposes two run modes:
+   - `auto` keeps going until completion, `manual_review`, pause, or another stop rule.
+   - `step` runs exactly one full round, then lands in `paused`.
+4. `completed` does **not** mean “one passing review.” By default, the **same candidate must earn multiple credible passes in a row** (public default: 3) without material issues or drift.
+5. If the run hits the round cap, trips a strict no-output guard, or needs operator judgment, it lands in `manual_review`. That means “your decision is needed now,” not necessarily “the task is dead.”
+6. If an infra fault happens but the round still produced a usable result, the system tries to soft-land instead of hard-failing:
+   - `step` usually goes back to `paused`
+   - `auto` usually goes back to `pending`
+7. Every round writes a `round run`. Successful structured reviews keep both `dimensionScores` and `rubricDimensionsSnapshot`, so the Result Desk can render trustworthy per-dimension score bars.
+8. The latest review-suggestion panel supports two paths:
+   - adopt suggestions into next-round steering
+   - write them directly into stable rules
+   It can also auto-adopt future rounds.
+9. After completion, you can do more than copy the final prompt. You can also:
+   - continue the current job
+   - restart from the beginning
+   - `fork` a fresh job from the final prompt
 
 ## Start Here
 
@@ -78,9 +104,13 @@ More: [Configuration](#configuration) · [Screenshots](#screenshots)
 - **Operator in the loop**
   - Human intervention is a first-class control path, not an afterthought.
 - **Multi-round automation with visible stop logic**
-  - Runs keep going until they pass the target or hit the configured round limits.
+  - Runs can complete, pause, or land in `manual_review` under explicit rules instead of disappearing into a black box.
 - **Intent protection**
   - `goalAnchor`, drift labels, and reviewer isolation help reduce silent prompt drift.
+- **Structured scoring as a product surface**
+  - Structured rubrics render per-dimension score bars, and history prefers the round-local rubric snapshot instead of faking alignment later.
+- **Failure states that try to stay honest**
+  - No-output rounds, provider failures, invalid summaries, and invalid structured scores are surfaced as distinct causes instead of all collapsing into one vague message.
 
 ## Project Docs
 
@@ -93,7 +123,7 @@ More: [Configuration](#configuration) · [Screenshots](#screenshots)
 
 ## Screenshots
 
-The screenshots below are captured from the current public candidate running as a local self-hosted instance.
+The screenshots below are captured from a `v0.1.8` self-hosted instance.
 
 | Control Room | Result Desk | Config Desk |
 | --- | --- | --- |
@@ -125,6 +155,12 @@ http://localhost:3000
 npm run check
 ```
 
+That command runs:
+
+- `typecheck`
+- `test`
+- `build`
+
 ### Docker Self-Hosted
 
 ```bash
@@ -150,7 +186,7 @@ For full deployment instructions, see the [Docker self-hosted guide](docs/deploy
 
 The app is configured from the **Config Desk**.
 
-The Config Desk now exposes:
+The current public UI exposes these core controls:
 
 - `Base URL`
 - `API Key`
@@ -158,6 +194,7 @@ The Config Desk now exposes:
 - API protocol override
 - global scoring override
 - default task model alias
+- default reasoning effort
 - runtime defaults: `workerConcurrency`, `scoreThreshold`, `maxRounds`
 
 At the job level, the public build also supports:
@@ -165,6 +202,9 @@ At the job level, the public build also supports:
 - task-level scoring override during submission
 - current scoring preview inside the Result Desk
 - editing task-level scoring override from the job detail page
+- adjusting task model, reasoning effort, and max-round override from job detail
+- maintaining next-round steering and stable rules separately
+- adopting review suggestions manually or automatically from the latest panel
 
 Supported today:
 
@@ -195,6 +235,15 @@ Common `Base URL` examples:
 
 Official APIs work directly from their provider root. No custom proxy path is required.
 
+Additional notes:
+
+- The visible settings UI presents a unified “default task model + reasoning effort”; the public build applies that default to optimizer and judge together.
+- Job-level rubric overrides accept Markdown. Only **structured, parseable** rubrics render per-dimension score bars; free-form text is not guessed into fake dimensions.
+- If you edit a job-level rubric mid-run:
+  - new rounds score against the new rubric
+  - old rounds keep their old snapshot
+- Model or reasoning-effort edits made while a job is already running usually take effect on the next round, not by rewriting the round currently in flight.
+
 ## Deployment Model
 
 This repository currently ships the **Self-Hosted / Server Edition**.
@@ -224,10 +273,22 @@ PROMPT_OPTIMIZER_DB_PATH=/your/custom/path.db
   - A copy-ready full prompt produced by an automated multi-round optimization pipeline.
 - **Can I intervene during optimization?**
   - Yes. You can pause a task, add next-round steering, continue one round, or resume automatic execution.
+- **When is a job actually considered complete?**
+  - The public build does not stop on a single passing review. By default, the same candidate must earn multiple credible passes in a row (default: 3) with no material issues or drift before the job becomes `completed`.
+- **What puts a job into `manual_review`?**
+  - Common triggers include hitting the max-round cap, tripping the strict no-output guard, or reaching a point where the operator should decide what happens next.
 - **Which APIs does it support?**
   - The current public build supports OpenAI-compatible, Anthropic, Gemini, Mistral, and Cohere, with presets and protocol mapping for DeepSeek, Kimi, Qwen, GLM, and OpenRouter.
 - **Can I customize the scoring rubric?**
   - Yes. The Config Desk supports a global scoring override, and each job can also carry its own task-level scoring override in Markdown.
+- **Will editing the rubric mid-run break older rounds?**
+  - No. Older rounds prefer their own `rubricDimensionsSnapshot`, while new rounds use the rubric you saved later.
+- **Why do some rounds show score bars and others do not?**
+  - Score bars appear only when the round returned a credible structured review and the rubric can be aligned safely. Provider failures, invalid structured scores, or unstructured rubrics do not render fake bars.
+- **Can review suggestions flow into future rounds automatically?**
+  - Yes. You can adopt them manually into next-round steering or stable rules, and the latest panel can auto-adopt future suggestions too.
+- **Can I keep working after a job is completed?**
+  - Yes. Completed jobs can continue, restart, or fork a fresh job from the final prompt.
 - **Can I switch the interface to English?**
   - Yes. The current public build already includes an in-app `中文 / EN` toggle.
 - **Where is data stored?**
