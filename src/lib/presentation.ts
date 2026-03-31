@@ -1,4 +1,5 @@
 import type { ConversationPolicy } from "@/lib/engine/conversation-policy"
+import { normalizeEscapedMultilineText } from "@/lib/prompt-text"
 import type { JobStatus } from "@/lib/server/types"
 
 export type JobFailureKind = "infra" | "content"
@@ -12,15 +13,34 @@ function matchesInfraFailureMessage(errorMessage: string) {
   return /(fetch failed|timeout|timed out|gateway time-?out|bad gateway|the operation was aborted|etimedout|econnreset|econnrefused|socket hang up|cloudflare|upstream|network|\b50[234]\b|stream error|internal_error|received from peer|server_error)/i.test(errorMessage)
 }
 
+export function isStructuredResultFormatError(errorMessage: string | null) {
+  if (!errorMessage) {
+    return false
+  }
+
+  return (
+    /Model did not return valid JSON\. Payload:/i.test(errorMessage)
+    || /JSON at position \d+/i.test(errorMessage)
+    || /Unexpected end of JSON input/i.test(errorMessage)
+    || /after array element in JSON/i.test(errorMessage)
+  )
+}
+
 export function getJobScoreState(job: {
   currentRound: number
   candidateCount?: number | null
+  bestAverageScore?: number | null
+  lastReviewScore?: number | null
 }): JobScoreState {
   const hasCandidate = typeof job.candidateCount === "number"
     ? job.candidateCount > 0
     : job.currentRound > 0
+  const hasReviewScore = Math.max(
+    Number(job.bestAverageScore ?? 0),
+    Number(job.lastReviewScore ?? 0),
+  ) > 0
 
-  return hasCandidate ? "available" : "not_generated"
+  return hasCandidate || hasReviewScore ? "available" : "not_generated"
 }
 
 export function getJobFailureKind(job: {
@@ -45,16 +65,19 @@ export function getJobScoreDisplay(job: {
   bestAverageScore: number
   currentRound: number
   candidateCount?: number | null
+  lastReviewScore?: number | null
 }, locale: "zh-CN" | "en" = "zh-CN") {
   void locale
   return getJobScoreState(job) === "not_generated"
     ? "—"
-    : job.bestAverageScore.toFixed(2)
+    : Math.max(job.bestAverageScore, Number(job.lastReviewScore ?? 0)).toFixed(2)
 }
 
 export function getJobScoreMeta(job: {
   currentRound: number
   candidateCount?: number | null
+  bestAverageScore?: number | null
+  lastReviewScore?: number | null
 }, locale: "zh-CN" | "en" = "zh-CN") {
   if (getJobScoreState(job) !== "not_generated") {
     return null
@@ -108,11 +131,22 @@ export function resolveLatestFullPrompt(
   rawPrompt: string,
   candidates: Array<{ optimizedPrompt: string }>,
 ) {
-  return candidates[0]?.optimizedPrompt ?? rawPrompt
+  return normalizeEscapedMultilineText(candidates[0]?.optimizedPrompt ?? rawPrompt)
+}
+
+export function isDeliveredFinalRoundOutput(
+  jobStatus: JobStatus,
+  outputCandidateId: string | null,
+  finalCandidateId: string | null,
+) {
+  return jobStatus === 'completed'
+    && Boolean(outputCandidateId)
+    && Boolean(finalCandidateId)
+    && outputCandidateId === finalCandidateId
 }
 
 export function getPromptPreview(latestPrompt: string, maxLength: number = 180) {
-  const compact = latestPrompt.replace(/\s+/g, " ").trim()
+  const compact = normalizeEscapedMultilineText(latestPrompt).replace(/\s+/g, " ").trim()
   if (compact.length <= maxLength) {
     return compact
   }
@@ -121,10 +155,15 @@ export function getPromptPreview(latestPrompt: string, maxLength: number = 180) 
 
 export function getDashboardDecisionSummary(job: {
   status: JobStatus
+  currentRound?: number
+  candidateCount?: number | null
+  bestAverageScore?: number
   latestPrompt: string
   errorMessage: string | null
 }, locale: "zh-CN" | "en" = "zh-CN") {
-  const displayError = getJobDisplayError(job.errorMessage, locale)
+  const displayError = getJobDisplayError(job.errorMessage, locale, {
+    hasUsableResult: (job.currentRound ?? 0) > 0 || (job.candidateCount ?? 0) > 0 || (job.bestAverageScore ?? 0) > 0,
+  })
 
   switch (job.status) {
     case "manual_review":
@@ -284,7 +323,11 @@ function normalizeDashboardTitle(title: string) {
   return normalized || "untitled"
 }
 
-export function getJobDisplayError(errorMessage: string | null, locale: "zh-CN" | "en" = "zh-CN") {
+export function getJobDisplayError(
+  errorMessage: string | null,
+  locale: "zh-CN" | "en" = "zh-CN",
+  options: { hasUsableResult?: boolean } = {},
+) {
   if (!errorMessage) {
     return null
   }
@@ -301,17 +344,19 @@ export function getJobDisplayError(errorMessage: string | null, locale: "zh-CN" 
       : "模型本轮返回了无效分数，系统已拦截这次结果写入。请直接重试；若反复出现，建议更换模型或稍后再试。"
   }
 
-  if (
-    /JSON at position \d+/i.test(errorMessage)
-    || /Unexpected end of JSON input/i.test(errorMessage)
-    || /after array element in JSON/i.test(errorMessage)
-  ) {
+  if (isStructuredResultFormatError(errorMessage)) {
     return isEnglish(locale)
       ? 'The model returned an incomplete structured result, so this round could not be parsed. Retry directly; if it keeps happening, tighten the format requirement or switch models.'
       : '模型返回了格式不完整的结构化结果，系统没法继续解析这一轮。请直接重试；若反复出现，建议补充更明确的格式要求，或切换模型后再试。'
   }
 
   if (matchesInfraFailureMessage(errorMessage)) {
+    if (options.hasUsableResult) {
+      return isEnglish(locale)
+        ? "This run failed at the request/provider layer, but the current result and score were preserved. Retry directly; if it keeps happening, check the gateway, model availability, or network connectivity."
+        : "本次是请求层失败，但系统已保留当前结果与分数。可直接重试；若频繁出现，再看网关、模型可用性或网络连通性。"
+    }
+
     return isEnglish(locale)
       ? "This run failed at the request/provider layer, so no score was generated. Retry directly; if it keeps happening, check the gateway, model availability, or network connectivity."
       : "本次是请求层失败，系统尚未产生成绩。可直接重试；若频繁出现，再看网关、模型可用性或网络连通性。"

@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict'
+import fs from 'node:fs'
+import path from 'node:path'
 import test from 'node:test'
 
 import { createElement } from 'react'
@@ -14,11 +16,16 @@ import {
   getDetailNoticeItems,
   type JobDetailViewModel,
 } from '../src/components/job-detail-control-room'
+import { JobDetailShell } from '../src/components/job-detail-shell'
 import type { RoundCandidateView } from '../src/components/job-round-card'
 import { SettingsControlRoom } from '../src/components/settings-control-room'
 import { StudioFrame } from '../src/components/studio-frame'
 import { ModelAliasCombobox } from '../src/components/ui/model-alias-combobox'
 import { I18nProvider } from '../src/lib/i18n'
+
+const jobDetailControlRoomPath = path.join(process.cwd(), 'src/components/job-detail-control-room.tsx')
+const dashboardControlRoomPath = path.join(process.cwd(), 'src/components/dashboard-control-room.tsx')
+const globalsCssPath = path.join(process.cwd(), 'src/styles/globals.css')
 
 test('studio frame and control room can render fully in English', () => {
   const html = renderToStaticMarkup(createElement(I18nProvider, {
@@ -111,6 +118,8 @@ test('dashboard control room prioritizes attention, running, and latest results'
   assert.match(html, /任务控制室/)
   assert.doesNotMatch(html, /Prompt Optimizer Studio/)
   assert.match(html, /待你处理/)
+  assert.doesNotMatch(html, /data-ui="dashboard-endcap"/)
+  assert.doesNotMatch(html, /待你处理 → 自动运行 → 最新结果 → 历史任务/)
   assert.match(html, /自动运行中/)
   assert.match(html, /最新结果/)
   assert.match(html, /排队中/)
@@ -394,6 +403,35 @@ test('settings control room moves save action into one shared bar below the comp
   assert.equal((html.match(/>保存设置</g) ?? []).length, 1)
 })
 
+test('settings control room keeps the save-bar guidance in one dedicated copy line', () => {
+  const html = renderToStaticMarkup(createElement(SettingsControlRoom, {
+    form: {
+      cpamcBaseUrl: '',
+      cpamcApiKey: '',
+      apiProtocol: 'auto',
+      defaultTaskModel: '',
+      scoreThreshold: 95,
+      maxRounds: 8,
+      workerConcurrency: 2,
+      customRubricMd: '',
+    },
+    models: [],
+    loading: false,
+    saving: false,
+    testing: false,
+    loadingModels: false,
+    message: null,
+    error: null,
+    onSave: () => {},
+    onTestConnection: () => {},
+    onRefreshModels: () => {},
+    onFormChange: () => {},
+  }))
+
+  assert.match(html, /data-ui="settings-save-copy"/)
+  assert.match(html, /保存后会更新新的默认连接、模型、评分标准与运行策略；已在运行的任务不会被强行改写。/)
+})
+
 test('settings control room keeps Chinese-only rubric label by default', () => {
   const html = renderToStaticMarkup(createElement(SettingsControlRoom, {
     form: {
@@ -444,6 +482,14 @@ test('job detail control room keeps result before goal, controls, and diagnostic
   assert.ok(diagnosticIndex > controlIndex)
 })
 
+test('job detail shell keeps the studio frame chrome even before detail data arrives', () => {
+  const html = renderToStaticMarkup(createElement(JobDetailShell, { jobId: 'job-loading-shell' }))
+
+  assert.match(html, /Prompt Optimizer Studio/)
+  assert.match(html, /结果台/)
+  assert.match(html, /正在读取任务详情/)
+})
+
 test('job detail control room can render fully in English', () => {
   const html = renderToStaticMarkup(createElement(I18nProvider, {
     initialLocale: 'en',
@@ -465,6 +511,7 @@ test('job detail hero keeps a dedicated result-stage chip above the job title', 
   const html = renderToStaticMarkup(createElement(JobDetailControlRoom, makeDetailProps()))
 
   assert.match(html, /data-ui="detail-stage-chip"/)
+  assert.match(html, /class="detail-hero-title"/)
   assert.ok(html.indexOf('data-ui="detail-stage-chip"') < html.indexOf('<h1'))
   assert.equal(countOccurrences(html, '>结果台<'), 1)
 })
@@ -477,9 +524,25 @@ test('job detail summary replaces conversation with reasoning effort', () => {
     },
   })))
 
-  assert.match(html, /推理强度/)
-  assert.match(html, /xhigh \/ high/)
+  assert.match(html, /当前推理/)
+  assert.match(html, />xhigh</)
+  assert.doesNotMatch(html, /xhigh \/ high/)
   assert.doesNotMatch(html, />会话</)
+})
+
+test('job detail still shows the best score when only input-judged rounds exist', () => {
+  const html = renderToStaticMarkup(createElement(JobDetailControlRoom, makeDetailProps({
+    model: {
+      candidateCount: 0,
+      currentRound: 2,
+      bestAverageScore: 98,
+      lastReviewScore: 98,
+      errorMessage: '模型请求失败：request timeout after 239999ms',
+    },
+  })))
+
+  assert.match(html, />98\.00</)
+  assert.doesNotMatch(html, /未产生成绩/)
 })
 
 test('job detail keeps the task model editor as a searchable combobox', () => {
@@ -547,6 +610,15 @@ test('dashboard shell removes the submission body when the station is collapsed'
   assert.doesNotMatch(html, /推理强度/)
   assert.doesNotMatch(html, /初版提示词/)
   assert.doesNotMatch(html, /class="submission-body"/)
+  assert.doesNotMatch(html, /只看我现在要处理的/)
+  assert.doesNotMatch(html, /恢复完整看板/)
+})
+
+test('dashboard shell no longer keeps a hidden actionable-only mode after removing the hero toggle', () => {
+  const shellSource = fs.readFileSync(path.join(process.cwd(), 'src/components/dashboard-shell.tsx'), 'utf8')
+
+  assert.doesNotMatch(shellSource, /focusDashboardJobs/)
+  assert.doesNotMatch(shellSource, /const \[actionableOnly, setActionableOnly\]/)
 })
 
 test('dashboard shell exposes a reasoning effort selector in the submission station', () => {
@@ -557,6 +629,30 @@ test('dashboard shell exposes a reasoning effort selector in the submission stat
 
   assert.match(html, /推理强度/)
   assert.match(html, /初版提示词/)
+})
+
+test('decision lane grids stretch the final odd card across both columns to avoid a dangling empty slot', () => {
+  const css = fs.readFileSync(globalsCssPath, 'utf8')
+  assert.match(
+    css,
+    /@media \(min-width: 980px\) and \(max-width: 1499px\) \{\s*\.lane-grid\.decision-lane-grid > :last-child:nth-child\(odd\) \{\s*grid-column:\s*1 \/ -1;/s,
+  )
+})
+
+test('latest results columns do not reserve a fixed tall shell height when content is short', () => {
+  const css = fs.readFileSync(globalsCssPath, 'utf8')
+  assert.doesNotMatch(
+    css,
+    /\.latest-results-grid\s+\[data-ui="recent-results-column"\],\s*\.latest-results-grid\s+\[data-ui="history-results-column"\]\s*\{[^}]*height:\s*clamp\(560px,\s*72vh,\s*880px\)/s,
+  )
+})
+
+test('dashboard control room no longer force-resets the active lane whenever defaultLane changes', () => {
+  const source = fs.readFileSync(dashboardControlRoomPath, 'utf8')
+  assert.doesNotMatch(
+    source,
+    /useEffect\(\(\)\s*=>\s*\{\s*setActiveLane\(defaultLane\)\s*\}\s*,\s*\[defaultLane\]\s*\)/s,
+  )
 })
 
 test('dashboard cards show missing-score copy instead of 0.00 when no candidate was generated', () => {
@@ -627,6 +723,9 @@ test('job detail readonly goal fields avoid nested scroll in the primary stable-
       onSaveMaxRoundsOverride: () => {},
       onSaveCustomRubric: () => {},
       onAddPendingSteering: () => {},
+      onAddReviewSuggestions: () => {},
+      onReviewSuggestionTargetChange: () => {},
+      onToggleAutoApplyReviewSuggestions: () => {},
       onRemovePendingSteeringItem: () => {},
       onClearPendingSteering: () => {},
       onGenerateGoalAnchorDraft: () => {},
@@ -676,7 +775,7 @@ test('job detail uses disclosure for long stable-rule content instead of a neste
   assert.doesNotMatch(html, /active-goal-scroll/)
 })
 
-test('job detail long stable-rule fold header does not repeat the full guardrail copy', () => {
+test('job detail long stable-rule fold preview shows only part of the guardrails instead of mirroring the full list', () => {
   const longGuardModel = makeDetailModel()
   longGuardModel.goalAnchor = {
     ...longGuardModel.goalAnchor,
@@ -692,7 +791,9 @@ test('job detail long stable-rule fold header does not repeat the full guardrail
     model: longGuardModel,
   }))
 
-  assert.equal(countOccurrences(html, '不要改写用户的原始任务意图；任何补充都必须服务于原目标，而不是把任务扩展成泛泛的提示词教程。'), 1)
+  assert.match(html, /不要改写用户的原始任务意图；任何补充都必须服务于原目标，而不是把任务扩展成泛泛的提示词教程。/)
+  assert.match(html, /输出必须保持为可一键复制的完整提示词，不能退化成检查清单、点评摘要或纯建议列表。/)
+  assert.equal(countOccurrences(html, '如果需要加入约束、评分或示例，必须明确它们如何帮助用户得到更稳定的最终提示词，而不是增加阅读负担。'), 1)
 })
 
 test('job detail moves rationale into stable rules above the stable goal cards', () => {
@@ -795,7 +896,8 @@ test('job detail exposes pending steering cards and goal-anchor merge entry when
   assert.match(html, /待生效列表/)
   assert.match(html, /勾选后，生成草稿并保存，才会进入长期规则/)
   assert.match(html, /提炼依据/)
-  assert.match(html, /reviewer 不会看到这些引导原文/)
+  assert.match(html, /评分器不会看到这些引导原文/)
+  assert.doesNotMatch(html, /reviewer 不会看到这些引导原文/)
   assert.doesNotMatch(html, /待生效引导卡片/)
   assert.match(html, /取消任务/)
   assert.match(html, /清空待生效引导/)
@@ -820,6 +922,8 @@ test('job detail explanation removes duplicated source labels and keeps task sco
   assert.match(html, /# 默认评分标准/)
   assert.match(html, /评分标准预览/)
   assert.match(html, /编辑任务评分标准/)
+  assert.match(html, /想保留分项分数条，请继续使用“编号 \+ 维度名 \+ 分值”的结构化格式。/)
+  assert.match(html, /分项达标显示按每维满分的 90% 自动判断。/)
   assert.doesNotMatch(html, /只影响当前任务；留空则跟随配置台里的全局评分标准。支持 Markdown。/)
   assert.doesNotMatch(html, /单任务评分标准 · 跟随配置台/)
   assert.doesNotMatch(html, />展开评分标准</)
@@ -847,6 +951,55 @@ test('job detail hides stable-rule adjustment drawer after the job is completed'
   assert.doesNotMatch(html, /保存长期规则/)
 })
 
+test('completed job detail still exposes runtime controls and next-round steering, but keeps stable rules and task rubric read-only', () => {
+  const html = renderToStaticMarkup(createElement(JobDetailControlRoom, makeDetailProps({
+    model: {
+      status: 'completed',
+      candidates: [makeCandidate('cand-1')],
+      pendingSteeringItems: [{
+        id: 'steer-1',
+        text: '继续时补一条预算 fallback。',
+        createdAt: '2026-03-20T00:00:00.000Z',
+      }],
+    },
+  })))
+
+  assert.match(html, /继续一轮/)
+  assert.match(html, /恢复自动运行/)
+  assert.match(html, /保存运行配置/)
+  assert.match(html, /保存轮数/)
+  assert.match(html, /下一轮引导/)
+  assert.match(html, /加入待生效列表/)
+  assert.match(html, /任务已完成：这些待生效引导会在你重新继续当前任务，或基于当前最终版新建任务后生效。/)
+  assert.doesNotMatch(html, /编辑任务评分标准/)
+  assert.doesNotMatch(html, /调整长期规则/)
+  assert.doesNotMatch(html, /保存长期规则/)
+  assert.doesNotMatch(html, />重新开始</)
+})
+
+test('completed job detail shows a three-way continue picker before resuming', () => {
+  const html = renderToStaticMarkup(createElement(JobDetailControlRoom, makeDetailProps({
+    model: {
+      status: 'completed',
+      candidates: [makeCandidate('cand-1')],
+    },
+    ui: {
+      completedResumePickerOpen: true,
+      completedResumeTargetRunMode: 'step',
+    },
+  })))
+
+  assert.match(html, /继续已完成任务？/)
+  assert.match(html, /你刚点的是「继续一轮」/)
+  assert.match(html, /当前任务继续一轮/)
+  assert.match(html, /会清空已完成标记、旧连胜和最终结果标记，但保留历史轮次与候选稿。/)
+  assert.match(html, /基于当前最终版新建任务/)
+  assert.match(html, /保留旧任务归档，新建一条 fresh 任务，并从当前最终版继续一轮。/)
+  assert.match(html, /整任务重置/)
+  assert.match(html, /清空当前任务历史，从初版提示词重新继续一轮。/)
+  assert.doesNotMatch(html, /重新开始？/)
+})
+
 test('job detail keeps stable-rule adjustment available for editable states', () => {
   const html = renderToStaticMarkup(createElement(JobDetailControlRoom, makeDetailProps({
     model: {
@@ -858,6 +1011,81 @@ test('job detail keeps stable-rule adjustment available for editable states', ()
   assert.match(html, /保存长期规则/)
 })
 
+test('job detail keeps stable-rule adjustment available while the job is still running', () => {
+  const html = renderToStaticMarkup(createElement(JobDetailControlRoom, makeDetailProps({
+    model: {
+      status: 'running',
+    },
+  })))
+
+  assert.match(html, /调整长期规则/)
+  assert.match(html, /保存长期规则/)
+})
+
+test('job detail decodes escaped stable-rule text before rendering', () => {
+  const html = renderToStaticMarkup(createElement(JobDetailControlRoom, makeDetailProps({
+    model: {
+      goalAnchor: {
+        goal: '第一行\\\\n\\\\n第二行',
+        deliverable: '保持完整输出',
+        driftGuard: ['边界 A\\\\n\\\\n边界 B'],
+      },
+    },
+  })))
+
+  assert.match(html, /第一行\s*第二行/)
+  assert.match(html, /边界 A\s*边界 B/)
+  assert.doesNotMatch(html, /\\\\n/)
+})
+
+test('job detail diagnostics prefer input-judged round runs when they exist', () => {
+  const html = renderToStaticMarkup(createElement(JobDetailControlRoom, makeDetailProps({
+    model: {
+      candidates: [makeCandidate('legacy-candidate')],
+      roundRuns: [{
+        id: 'round-2',
+        roundNumber: 2,
+        semantics: 'input-judged-output-handed-off',
+        inputPrompt: 'ROUND 1 OUTPUT',
+        inputCandidateId: 'candidate-r1',
+        outputCandidateId: 'candidate-r2',
+        displayScore: 96,
+        hasMaterialIssues: false,
+        summary: '结构已经稳住。',
+        driftLabels: [],
+        driftExplanation: '',
+        findings: ['Still missing one concrete edge case.'],
+        suggestedChanges: ['Add one practical scenario.'],
+        outcome: 'settled',
+        optimizerError: null,
+        judgeError: null,
+        passStreakAfter: 1,
+        outputJudged: false,
+        outputCandidate: {
+          id: 'candidate-r2',
+          jobId: 'job-1',
+          roundNumber: 2,
+          optimizedPrompt: 'ROUND 2 OUTPUT',
+          strategy: 'rebuild',
+          scoreBefore: 94,
+          averageScore: 0,
+          majorChanges: ['Merged duplicate sections.'],
+          mve: 'Run one dry check.',
+          deadEndSignals: [],
+          aggregatedIssues: [],
+          appliedSteeringItems: [],
+          createdAt: '2026-03-20T00:01:00.000Z',
+        },
+        createdAt: '2026-03-20T00:01:10.000Z',
+      }],
+    },
+  })))
+
+  assert.match(html, /上轮提示词评分 96\.00/)
+  assert.match(html, /结构已经稳住。/)
+  assert.doesNotMatch(html, /这版提示词得分/)
+})
+
 
 test('job detail stable-rule cards stack vertically and avoid duplicate collapsed labels', () => {
   const html = renderToStaticMarkup(createElement(JobDetailControlRoom, makeDetailProps({
@@ -867,7 +1095,7 @@ test('job detail stable-rule cards stack vertically and avoid duplicate collapse
         goal: '这是一个需要被折叠展示的长期目标，因为内容足够长，且不应该在卡片标题和折叠头里重复出现同一段标签。',
         deliverable: '这是一份需要被折叠展示的长期交付物说明，应该保持单一标题层级，而不是在外层和内层各重复一次标签。',
         driftGuard: [
-          '第一条长期边界：保持 Review 模式和量化评分闭环，不要漂移成泛泛建议。',
+          '第一条长期边界：保持提示词评分与优化任务闭环，不要漂移成泛泛建议。',
           '第二条长期边界：保留阈值、死胡同判定与单一最终交付。',
           '第三条长期边界：保留 MVE 与边界压测，不得删改。',
         ],
@@ -879,6 +1107,80 @@ test('job detail stable-rule cards stack vertically and avoid duplicate collapse
   assert.equal(countOccurrences(html, '>长期目标<'), 1)
   assert.equal(countOccurrences(html, '>长期交付物<'), 1)
   assert.equal(countOccurrences(html, '>长期边界<'), 1)
+})
+
+test('job detail stable-rule previews use real content instead of generic collapsed copy', () => {
+  const html = renderToStaticMarkup(createElement(JobDetailControlRoom, makeDetailProps({
+    model: {
+      goalAnchor: {
+        goal: '这是一个需要被折叠展示的长期目标，因为内容足够长，所以预览应该显示真实内容，而不是统一的占位文案。',
+        deliverable: '这是一份需要被折叠展示的长期交付物说明，预览也应该保留真实前缀，方便肉眼快速判断。',
+        driftGuard: [
+          '第一条长期边界：不要改任务主题。',
+          '第二条长期边界：不要丢关键交付。',
+          '第三条长期边界：不要退化成空泛说明。',
+        ],
+      },
+    },
+  })))
+
+  assert.doesNotMatch(html, /内容较长，展开查看完整内容/)
+  assert.doesNotMatch(html, /共 3 条边界，展开查看完整内容/)
+  assert.match(html, /这是一个需要被折叠展示的长期目标/)
+  assert.match(html, /这是一份需要被折叠展示的长期交付物说明/)
+  assert.match(html, /第一条长期边界：不要改任务主题。/)
+})
+
+test('job detail stable-rule previews trim duplicated punctuation between guardrail items', () => {
+  const html = renderToStaticMarkup(createElement(JobDetailControlRoom, makeDetailProps({
+    model: {
+      goalAnchor: {
+        goal: '保持目标',
+        deliverable: '保持交付',
+        driftGuard: [
+          '第一条长期边界：不要改任务主题。',
+          '第二条长期边界：不要丢关键交付。',
+          '第三条长期边界：不要退化成空泛说明。',
+        ],
+      },
+    },
+  })))
+
+  assert.match(html, /第一条长期边界：不要改任务主题；第二条长期边界：不要丢关键交付（共 3 条）/)
+  assert.doesNotMatch(html, /。；/)
+})
+
+test('job detail renders stable guardrails as a readable list instead of one merged paragraph', () => {
+  const html = renderToStaticMarkup(createElement(JobDetailControlRoom, makeDetailProps({
+    model: {
+      goalAnchor: {
+        goal: '保持目标',
+        deliverable: '保持交付',
+        driftGuard: [
+          '第一条长期边界：不要改任务主题。',
+          '第二条长期边界：不要丢关键交付。',
+          '第三条长期边界：不要退化成空泛说明。',
+        ],
+      },
+    },
+  })))
+
+  assert.match(html, /class="list compact-list goal-value-list"/)
+  assert.match(html, /class="goal-value-list-item">第一条长期边界：不要改任务主题。<\/li>/)
+  assert.match(html, /class="goal-value-list-item">第二条长期边界：不要丢关键交付。<\/li>/)
+  assert.match(html, /class="goal-value-list-item">第三条长期边界：不要退化成空泛说明。<\/li>/)
+})
+
+test('job detail stable-rule previews are not clamped to two lines in css', () => {
+  const source = fs.readFileSync(globalsCssPath, 'utf8')
+  const blocks = Array.from(source.matchAll(/\.goal-value-preview\s*\{[\s\S]*?\}/g)).map((item) => item[0])
+  const match = blocks.find((block) => /display:|overflow:|white-space:/.test(block))
+
+  assert.ok(match)
+  assert.match(match, /display:\s*block;/)
+  assert.match(match, /overflow:\s*visible;/)
+  assert.match(match, /white-space:\s*normal;/)
+  assert.doesNotMatch(match, /-webkit-line-clamp:/)
 })
 
 test('job detail stable rules preview shows job-level scoring override when present', () => {
@@ -1053,6 +1355,7 @@ test('settings control room groups connection, defaults, and active runtime fiel
   assert.match(html, /Base URL/)
   assert.match(html, /API Key/)
   assert.match(html, /同时运行任务数/)
+  assert.doesNotMatch(html, /max="4"/)
   assert.match(html, /data-ui="select-field"/)
   assert.ok(countOccurrences(html, 'data-ui="select-field"') >= 2)
   assert.equal(countOccurrences(html, '>配置台<'), 1)
@@ -1105,7 +1408,57 @@ test('settings control room keeps rubric copy Chinese-only in zh view', () => {
   }))
 
   assert.match(html, /评分标准/)
+  assert.match(html, /自定义评分器打分依据/)
+  assert.match(html, /优化器 \/ 评分器对外共用同一别名/)
+  assert.match(html, /默认同步作用于优化器和评分器/)
   assert.doesNotMatch(html, /Rubric/)
+  assert.doesNotMatch(html, /复核器|reviewer/u)
+})
+
+test('settings section helper copy is not clamped to a narrow measure under panel headers', () => {
+  const source = fs.readFileSync(globalsCssPath, 'utf8')
+
+  assert.match(
+    source,
+    /\.settings-panel-compact\s+\.section-head\s+\.small\s*\{[\s\S]*max-width:\s*none;/s,
+  )
+})
+
+test('settings save bar keeps confirmation copy on one desktop row and falls back on mobile', () => {
+  const source = fs.readFileSync(globalsCssPath, 'utf8')
+
+  assert.match(
+    source,
+    /\.settings-save-bar\s*\{[\s\S]*display:\s*grid;[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s+auto;/s,
+  )
+  assert.match(
+    source,
+    /\.settings-save-bar\s+\.small\s*\{[\s\S]*white-space:\s*nowrap;/s,
+  )
+  assert.match(
+    source,
+    /@media\s+\(max-width:\s*720px\)\s*\{[\s\S]*\.settings-save-bar\s+\.small\s*\{[\s\S]*white-space:\s*normal;/s,
+  )
+})
+
+test('settings rubric panel stretches the textarea to balance the side column height', () => {
+  const source = fs.readFileSync(globalsCssPath, 'utf8')
+
+  assert.match(
+    source,
+    /\.settings-rubric-panel\s+\.section-body-stack\.compact\s*\{[\s\S]*align-content:\s*stretch;/s,
+  )
+  assert.match(
+    source,
+    /\.settings-rubric-panel\s+\.textarea\s*\{[\s\S]*min-height:\s*(4[2-9]\d|[5-9]\d\d)px;/s,
+  )
+})
+
+test('job detail diagnostics copy uses scoring semantics instead of review wording', () => {
+  const html = renderToStaticMarkup(createElement(JobDetailControlRoom, makeDetailProps()))
+
+  assert.match(html, /默认只露摘要。需要时再展开每一轮的完整诊断和评分细节。/)
+  assert.doesNotMatch(html, /复核细节|review details/u)
 })
 
 test('job detail SSR render avoids unstable radix ids and keeps section icons', () => {
@@ -1140,6 +1493,18 @@ test('job detail notices map known internal score errors into friendly copy', ()
   })
 
   assert.equal(notices[0]?.text, '模型本轮返回了无效分数，系统已拦截这次结果写入。请直接重试；若反复出现，建议更换模型或稍后再试。')
+})
+
+test('job detail notices dedupe raw and mapped errors when they collapse to the same friendly message', () => {
+  const notices = getDetailNoticeItems({
+    loading: false,
+    actionMessage: null,
+    error: 'fetch failed: ETIMEDOUT',
+    displayError: '本次是请求层失败，系统尚未产生成绩。可直接重试；若频繁出现，再看网关、模型可用性或网络连通性。',
+  })
+
+  assert.deepEqual(notices.map((item) => item.key), ['ui-error'])
+  assert.equal(notices[0]?.text, '本次是请求层失败，系统尚未产生成绩。可直接重试；若频繁出现，再看网关、模型可用性或网络连通性。')
 })
 
 
@@ -1188,8 +1553,11 @@ function makeDetailProps(overrides: {
       pausing: false,
       resumingStep: false,
       resumingAuto: false,
+      forkingFromFinal: false,
       copyingPrompt: false,
       compareMode: false,
+      completedResumePickerOpen: false,
+      completedResumeTargetRunMode: null,
       expandedRounds: {},
       ...overrides.ui,
     },
@@ -1219,6 +1587,9 @@ function makeDetailProps(overrides: {
       onPauseTask: () => {},
       onResumeStep: () => {},
       onResumeAuto: () => {},
+      onCloseCompletedResumePicker: () => {},
+      onResumeCompletedCurrentTask: () => {},
+      onForkFromFinalTask: () => {},
       onCancelTask: () => {},
       onCompleteTask: () => {},
       onCopyLatestPrompt: () => {},
@@ -1273,6 +1644,8 @@ function makeDetailModel(): JobDetailViewModel {
     passStreak: 1,
     lastReviewScore: 94,
     customRubricMd: null,
+    autoApplyReviewSuggestions: false,
+    autoApplyReviewSuggestionsToStableRules: true,
     effectiveRubricMd: '# 默认评分标准\n\n1. 目标一致性 (20)',
     effectiveRubricSource: 'default',
     errorMessage: null,
@@ -1281,6 +1654,7 @@ function makeDetailModel(): JobDetailViewModel {
     modelsLabel: 'gpt-5.2',
     effectiveMaxRounds: 12,
     candidates: [],
+    roundRuns: [],
   }
 }
 
@@ -1316,3 +1690,61 @@ function makeCandidate(id: string): RoundCandidateView {
 function countOccurrences(input: string, needle: string) {
   return input.split(needle).length - 1
 }
+
+test('jobs and detail control rooms disable heavy blur locally without changing the global surface token', () => {
+  const source = fs.readFileSync(globalsCssPath, 'utf8')
+
+  assert.match(
+    source,
+    /--surface-backdrop-filter:\s*blur\(12px\);/s,
+  )
+
+  assert.match(
+    source,
+    /backdrop-filter:\s*var\(--surface-backdrop-filter\)/s,
+  )
+
+  assert.match(
+    source,
+    /\.control-room,\s*\.detail-control-room\s*\{[\s\S]*--surface-backdrop-filter:\s*none;/s,
+  )
+})
+
+test('dashboard lanes and detail diagnostics avoid layout tweens on long scrolling pages', () => {
+  const detailSource = fs.readFileSync(jobDetailControlRoomPath, 'utf8')
+  const dashboardSource = fs.readFileSync(dashboardControlRoomPath, 'utf8')
+
+  assert.doesNotMatch(
+    detailSource,
+    /<motion\.div\s+layout\s+className="shell">/s,
+  )
+
+  assert.doesNotMatch(
+    dashboardSource,
+    /<motion\.div\s+layout\s+className=\{`lane-grid/s,
+  )
+})
+
+test('dashboard no longer renders the legacy current-rhythm endcap strip', () => {
+  const html = renderToStaticMarkup(createElement(DashboardControlRoom, {
+    actionableOnly: false,
+    loading: false,
+    groups: {
+      attention: [makeJob('manual', 'manual_review')],
+      running: [makeJob('running', 'running')],
+      queued: [],
+      recentCompleted: [],
+      history: [],
+    },
+    stats: { attention: 1, running: 1, queued: 0, recentCompleted: 0, history: 0 },
+    actionInFlight: null,
+    onToggleActionableOnly: () => {},
+    onCopyPrompt: async () => {},
+    onResumeStep: async () => {},
+    onResumeAuto: async () => {},
+  }))
+
+  assert.doesNotMatch(html, /data-ui="dashboard-endcap"/)
+  assert.doesNotMatch(html, /当前节奏/)
+  assert.doesNotMatch(html, /待你处理 → 自动运行 → 最新结果 → 历史任务/)
+})

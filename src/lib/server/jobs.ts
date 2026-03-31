@@ -7,6 +7,7 @@ import { normalizeReasoningEffort } from '@/lib/reasoning-effort'
 import { getDb } from '@/lib/server/db'
 import {
   deriveGoalAnchor,
+  isMalformedGoalAnchorForPrompt,
   LEGACY_GENERIC_DELIVERABLE,
   LEGACY_GENERIC_DRIFT_GUARD,
   normalizeGoalAnchor,
@@ -21,7 +22,9 @@ import {
 } from '@/lib/server/goal-anchor-explanation'
 import { generateGoalAnchorWithModel } from '@/lib/server/model-adapter'
 import { ensurePromptPackVersion } from '@/lib/server/prompt-pack'
+import { areEquivalentPromptTexts } from '@/lib/prompt-text'
 import { compactFeedback } from '@/lib/server/prompting'
+import type { RubricDimension } from '@/lib/server/rubric-dimensions'
 import { getSettings, validateCpamcConnection, validateTaskDefaults } from '@/lib/server/settings'
 import type {
   CandidateRecord,
@@ -32,10 +35,14 @@ import type {
   JobRunMode,
   JobRecord,
   JudgeRunRecord,
+  RubricDimensionSnapshot,
+  RoundRunRecord,
   SteeringItem,
 } from '@/lib/server/types'
 
 export { getJobDisplayError }
+
+const UNJUDGED_OUTPUT_AVERAGE_SCORE = 0
 
 const JOB_CLAIM_STALE_AFTER_MS = 30_000
 
@@ -56,6 +63,7 @@ export async function createJobs(inputs: JobInput[]) {
     }
 
     const models = resolveJobModels(input, settings)
+    const runMode = resolveJobRunMode(input.runMode)
     const normalizedCustomRubric = typeof input.customRubricMd === 'string' ? input.customRubricMd.trim() : ''
     const assignment = assignConversationGroup(settings.conversationPolicy, groups)
     if (assignment.group) {
@@ -93,6 +101,7 @@ export async function createJobs(inputs: JobInput[]) {
         next_round_instruction_updated_at,
         pending_steering_json,
         pass_streak,
+        pass_streak_candidate_id,
         last_review_score,
         last_review_patch_json,
         final_candidate_id,
@@ -104,7 +113,7 @@ export async function createJobs(inputs: JobInput[]) {
         error_message,
         created_at,
         updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL, 'pending', 'auto', ?, 0, 0, ?, ?, NULL, NULL, NULL, '[]', 0, 0, '[]', NULL, ?, ?, NULL, NULL, ?, NULL, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL, 'pending', ?, ?, 0, 0, ?, ?, NULL, NULL, NULL, '[]', 0, NULL, 0, '[]', NULL, ?, ?, NULL, NULL, ?, NULL, ?, ?)
     `).run(
       id,
       normalizeTitle(input.title, normalizedPrompt),
@@ -113,6 +122,7 @@ export async function createJobs(inputs: JobInput[]) {
       models.judgeModel,
       models.optimizerReasoningEffort,
       models.judgeReasoningEffort,
+      runMode,
       pack.id,
       serializeGoalAnchor(goalAnchor.goalAnchor),
       serializeGoalAnchorExplanation(goalAnchor.explanation),
@@ -161,7 +171,10 @@ export function listJobs() {
       jobs.next_round_instruction,
       jobs.next_round_instruction_updated_at,
       jobs.pending_steering_json,
+      jobs.auto_apply_review_suggestions,
+      jobs.auto_apply_review_suggestions_to_stable_rules,
       jobs.pass_streak,
+      jobs.pass_streak_candidate_id,
       jobs.last_review_score,
       jobs.last_review_patch_json,
       jobs.final_candidate_id,
@@ -222,7 +235,10 @@ export function getJobById(id: string) {
       jobs.next_round_instruction,
       jobs.next_round_instruction_updated_at,
       jobs.pending_steering_json,
+      jobs.auto_apply_review_suggestions,
+      jobs.auto_apply_review_suggestions_to_stable_rules,
       jobs.pass_streak,
+      jobs.pass_streak_candidate_id,
       jobs.last_review_score,
       jobs.last_review_patch_json,
       jobs.final_candidate_id,
@@ -283,6 +299,9 @@ export function getJobDetail(id: string): JobDetail | null {
       candidate_id,
       judge_index,
       score,
+      dimension_scores_json,
+      dimension_reasons_json,
+      rubric_dimensions_snapshot_json,
       has_material_issues,
       summary,
       drift_labels_json,
@@ -304,6 +323,39 @@ export function getJobDetail(id: string): JobDetail | null {
   }
 
   const collapsedCandidateRows = collapseCandidateRowsByRound(candidateRows)
+  const candidatesById = new Map<string, CandidateRecord>()
+  for (const row of candidateRows) {
+    const candidate = mapCandidateRow(row)
+    candidatesById.set(candidate.id, candidate)
+  }
+
+  const roundRunRows = db.prepare(`
+    SELECT
+      id,
+      job_id,
+      round_number,
+      input_prompt,
+      input_candidate_id,
+      output_candidate_id,
+      displayed_score,
+      has_material_issues,
+      dimension_scores_json,
+      dimension_reasons_json,
+      rubric_dimensions_snapshot_json,
+      summary,
+      drift_labels_json,
+      drift_explanation,
+      findings_json,
+      suggested_changes_json,
+      round_status,
+      optimizer_error,
+      judge_error,
+      pass_streak_after,
+      created_at
+    FROM round_runs
+    WHERE job_id = ?
+    ORDER BY round_number DESC, datetime(created_at) DESC
+  `).all(id) as Record<string, unknown>[]
 
   return {
     job,
@@ -314,6 +366,7 @@ export function getJobDetail(id: string): JobDetail | null {
         judges: judgesByCandidate.get(candidate.id) ?? [],
       }
     }),
+    roundRuns: roundRunRows.map((row) => mapRoundRunRow(row, candidatesById)),
   }
 }
 
@@ -335,10 +388,6 @@ export function updateJobModels(jobId: string, models: {
 
   if (!optimizerModel || !judgeModel) {
     throw new Error('请同时选择优化模型和裁判模型。')
-  }
-
-  if (job.status === 'completed') {
-    throw new Error('已完成任务不能直接修改模型。')
   }
 
   const db = getDb()
@@ -376,9 +425,6 @@ export function updateJobModels(jobId: string, models: {
 
 export function updateJobMaxRoundsOverride(jobId: string, maxRoundsOverride: number | null) {
   const job = requireJob(jobId)
-  if (job.status === 'completed') {
-    throw new Error('已完成任务不能修改任务级最大轮数。')
-  }
 
   const db = getDb()
   db.prepare(`
@@ -451,23 +497,168 @@ export function updateJobGoalAnchor(
   return requireJob(jobId)
 }
 
+export function updateJobReviewSuggestionAutomation(
+  jobId: string,
+  input: {
+    autoApplyReviewSuggestions?: boolean
+    autoApplyReviewSuggestionsToStableRules?: boolean
+  },
+) {
+  requireSteerableJob(jobId)
+
+  const nextAutoApplyReviewSuggestions = input.autoApplyReviewSuggestions
+  const nextAutoApplyReviewSuggestionsToStableRules = input.autoApplyReviewSuggestionsToStableRules
+
+  if (nextAutoApplyReviewSuggestions === undefined && nextAutoApplyReviewSuggestionsToStableRules === undefined) {
+    return requireJob(jobId)
+  }
+
+  const db = getDb()
+  db.prepare(`
+    UPDATE jobs
+    SET auto_apply_review_suggestions = COALESCE(?, auto_apply_review_suggestions),
+        auto_apply_review_suggestions_to_stable_rules = COALESCE(?, auto_apply_review_suggestions_to_stable_rules),
+        updated_at = ?
+    WHERE id = ?
+  `).run(
+    nextAutoApplyReviewSuggestions === undefined ? null : nextAutoApplyReviewSuggestions ? 1 : 0,
+    nextAutoApplyReviewSuggestionsToStableRules === undefined ? null : nextAutoApplyReviewSuggestionsToStableRules ? 1 : 0,
+    new Date().toISOString(),
+    jobId,
+  )
+
+  return requireJob(jobId)
+}
+
 export function addPendingSteeringItem(jobId: string, text: string) {
+  return addPendingSteeringItemsWithResult(jobId, [text]).job
+}
+
+export interface PendingSteeringAddResult {
+  job: JobRecord
+  addedTexts: string[]
+  skippedDuplicateTexts: string[]
+}
+
+export type ReviewSuggestionAdoptionTarget = 'pending' | 'stable'
+
+export function addPendingSteeringItems(
+  jobId: string,
+  texts: string[],
+  target: ReviewSuggestionAdoptionTarget = 'pending',
+) {
+  return addPendingSteeringItemsWithResult(jobId, texts, target).job
+}
+
+export function addPendingSteeringItemWithResult(jobId: string, text: string) {
+  return addPendingSteeringItemsWithResult(jobId, [text])
+}
+
+export function addPendingSteeringItemsWithResult(
+  jobId: string,
+  texts: string[],
+  target: ReviewSuggestionAdoptionTarget = 'pending',
+) {
   const job = requireSteerableJob(jobId)
-  const normalizedText = normalizeSteeringText(text)
-  if (!normalizedText) {
+  const normalizedTexts = texts
+    .map((item) => normalizeSteeringText(item))
+    .filter((item): item is string => Boolean(item))
+  if (normalizedTexts.length === 0) {
     throw new Error('请先输入一条人工引导。')
+  }
+
+  if (target === 'stable') {
+    return addStableReviewSuggestionsWithResult(job, normalizedTexts)
+  }
+
+  const existingTexts = new Set(job.pendingSteeringItems.map((item) => normalizeSteeringText(item.text)).filter(Boolean))
+  const seenRequestTexts = new Set<string>()
+  const addedTexts: string[] = []
+  const skippedDuplicateTexts: string[] = []
+
+  for (const item of normalizedTexts) {
+    if (seenRequestTexts.has(item) || existingTexts.has(item)) {
+      if (!skippedDuplicateTexts.includes(item)) {
+        skippedDuplicateTexts.push(item)
+      }
+      continue
+    }
+
+    seenRequestTexts.add(item)
+    addedTexts.push(item)
+  }
+
+  if (addedTexts.length === 0) {
+    return {
+      job,
+      addedTexts: [],
+      skippedDuplicateTexts,
+    }
   }
 
   const nextItems = [
     ...job.pendingSteeringItems,
-    {
+    ...addedTexts.map((item) => ({
       id: crypto.randomUUID(),
-      text: normalizedText,
+      text: item,
       createdAt: new Date().toISOString(),
-    },
+    })),
   ]
 
-  return setPendingSteeringItems(jobId, nextItems)
+  return {
+    job: setPendingSteeringItems(jobId, nextItems),
+    addedTexts,
+    skippedDuplicateTexts,
+  }
+}
+
+function addStableReviewSuggestionsWithResult(job: JobRecord, normalizedTexts: string[]): PendingSteeringAddResult {
+  const stableTexts = new Set(job.goalAnchor.driftGuard.map((item) => normalizeSteeringText(item)).filter(Boolean))
+  const seenRequestTexts = new Set<string>()
+  const addedTexts: string[] = []
+  const skippedDuplicateTexts: string[] = []
+
+  for (const item of normalizedTexts) {
+    if (seenRequestTexts.has(item) || stableTexts.has(item)) {
+      if (!skippedDuplicateTexts.includes(item)) {
+        skippedDuplicateTexts.push(item)
+      }
+      continue
+    }
+
+    seenRequestTexts.add(item)
+    addedTexts.push(item)
+  }
+
+  const representedStableTexts = new Set([...skippedDuplicateTexts, ...addedTexts])
+  const consumedPendingSteeringIds = job.pendingSteeringItems
+    .filter((item) => representedStableTexts.has(normalizeSteeringText(item.text) ?? ''))
+    .map((item) => item.id)
+
+  if (addedTexts.length === 0 && consumedPendingSteeringIds.length === 0) {
+    return {
+      job,
+      addedTexts: [],
+      skippedDuplicateTexts,
+    }
+  }
+
+  const nextJob = updateJobGoalAnchor(job.id, {
+    goal: job.goalAnchor.goal,
+    deliverable: job.goalAnchor.deliverable,
+    driftGuard: uniqueOrderedStrings([
+      ...job.goalAnchor.driftGuard,
+      ...addedTexts,
+    ]),
+  }, {
+    consumePendingSteeringIds: consumedPendingSteeringIds,
+  })
+
+  return {
+    job: nextJob,
+    addedTexts,
+    skippedDuplicateTexts,
+  }
 }
 
 export function removePendingSteeringItem(jobId: string, itemId: string) {
@@ -694,6 +885,27 @@ export function completeJob(jobId: string) {
     throw new Error('请先跑至少一轮生成候选稿；如果只是想归档，请直接取消任务。')
   }
 
+  const latestCandidateHasReview = db.prepare(`
+    SELECT 1
+    FROM (
+      SELECT candidate_id AS reviewed_candidate_id
+      FROM judge_runs
+      WHERE job_id = ?
+      UNION ALL
+      SELECT input_candidate_id AS reviewed_candidate_id
+      FROM round_runs
+      WHERE job_id = ?
+        AND displayed_score IS NOT NULL
+        AND input_candidate_id IS NOT NULL
+    )
+    WHERE reviewed_candidate_id = ?
+    LIMIT 1
+  `).get(jobId, jobId, String(latestCandidate.id))
+
+  if (!latestCandidateHasReview) {
+    throw new Error('最新候选稿还没有经过至少一轮复核，暂时不能直接完成。')
+  }
+
   const now = new Date().toISOString()
   db.prepare(`
     UPDATE jobs
@@ -746,6 +958,7 @@ export function applyPendingJobModels(jobId: string) {
 
 export function updateJobReviewState(jobId: string, input: {
   passStreak: number
+  passStreakCandidateId: string | null
   bestAverageScore: number
   lastReviewScore: number
   lastReviewPatch: string[]
@@ -758,6 +971,7 @@ export function updateJobReviewState(jobId: string, input: {
   db.prepare(`
     UPDATE jobs
     SET pass_streak = ?,
+        pass_streak_candidate_id = ?,
         best_average_score = ?,
         last_review_score = ?,
         last_review_patch_json = ?,
@@ -772,6 +986,7 @@ export function updateJobReviewState(jobId: string, input: {
     WHERE id = ?
   `).run(
     input.passStreak,
+    input.passStreakCandidateId,
     input.bestAverageScore,
     input.lastReviewScore,
     JSON.stringify(compactFeedback(input.lastReviewPatch, { maxItems: 5, maxItemLength: 180 })),
@@ -787,40 +1002,60 @@ export function updateJobReviewState(jobId: string, input: {
   )
 }
 
-export function resetJobForRetry(id: string) {
+export function resetJobForRetry(id: string, runMode: JobRunMode = 'auto') {
   const job = requireJob(id)
   if (job.status === 'running') {
     throw new Error('运行中的任务请先取消，或等待当前轮结束。')
   }
-  if (job.status === 'completed') {
-    throw new Error('已完成任务不能直接重新开始。')
-  }
 
   applyPendingJobModels(id)
   const db = getDb()
-  db.prepare('DELETE FROM judge_runs WHERE job_id = ?').run(id)
-  db.prepare('DELETE FROM candidates WHERE job_id = ?').run(id)
-  db.prepare(`
-    UPDATE jobs
-    SET status = 'pending',
-        run_mode = 'auto',
-        active_worker_id = NULL,
-        worker_heartbeat_at = NULL,
-        current_round = 0,
-        best_average_score = 0,
-        next_round_instruction = NULL,
-        next_round_instruction_updated_at = NULL,
-        pending_steering_json = '[]',
-        pass_streak = 0,
-        last_review_score = 0,
-        last_review_patch_json = '[]',
-        final_candidate_id = NULL,
-        cancel_requested_at = NULL,
-        pause_requested_at = NULL,
-        error_message = NULL,
-        updated_at = ?
-    WHERE id = ?
-  `).run(new Date().toISOString(), id)
+  const now = new Date().toISOString()
+  const resetGoalAnchor = deriveGoalAnchor(job.rawPrompt)
+  const resetGoalAnchorExplanation = deriveGoalAnchorExplanation(job.rawPrompt, resetGoalAnchor)
+  db.exec('BEGIN IMMEDIATE')
+  try {
+    db.prepare(`
+      UPDATE jobs
+      SET status = 'pending',
+          run_mode = ?,
+          active_worker_id = NULL,
+          worker_heartbeat_at = NULL,
+          current_round = 0,
+          best_average_score = 0,
+          next_round_instruction = NULL,
+          next_round_instruction_updated_at = NULL,
+          pending_steering_json = '[]',
+          pass_streak = 0,
+          pass_streak_candidate_id = NULL,
+          last_review_score = 0,
+          last_review_patch_json = '[]',
+          final_candidate_id = NULL,
+          goal_anchor_json = ?,
+          goal_anchor_explanation_json = ?,
+          cancel_requested_at = NULL,
+          pause_requested_at = NULL,
+          error_message = NULL,
+          updated_at = ?
+      WHERE id = ?
+    `).run(
+      resolveJobRunMode(runMode),
+      serializeGoalAnchor(resetGoalAnchor),
+      serializeGoalAnchorExplanation(resetGoalAnchorExplanation),
+      now,
+      id,
+    )
+    db.prepare('DELETE FROM round_runs WHERE job_id = ?').run(id)
+    db.prepare('DELETE FROM judge_runs WHERE job_id = ?').run(id)
+    db.prepare('DELETE FROM candidates WHERE job_id = ?').run(id)
+    db.exec('COMMIT')
+  } catch (error) {
+    try {
+      db.exec('ROLLBACK')
+    } catch {
+    }
+    throw error
+  }
 
   return requireJob(id)
 }
@@ -829,7 +1064,7 @@ export function getOptimizerSeed(jobId: string) {
   const job = requireJob(jobId)
   const db = getDb()
   const candidate = db.prepare(`
-    SELECT round_number, optimized_prompt
+    SELECT id, round_number, optimized_prompt
     FROM candidates
     WHERE job_id = ?
     ORDER BY round_number DESC, datetime(created_at) DESC
@@ -840,13 +1075,97 @@ export function getOptimizerSeed(jobId: string) {
 
   return {
     currentPrompt: candidate ? String(candidate.optimized_prompt) : job.rawPrompt,
+    currentCandidateId: candidate ? String(candidate.id) : null,
     latestRoundNumber: candidate ? Number(candidate.round_number ?? 0) : 0,
-    previousFeedback: job.lastReviewPatch,
     goalAnchor: job.goalAnchor,
     pendingSteeringItems: job.pendingSteeringItems,
     nextRoundInstruction: job.pendingSteeringItems[0]?.text ?? null,
     nextRoundInstructionUpdatedAt: legacyUpdatedAt,
   }
+}
+
+export function countConsecutiveStalledOptimizerRounds(jobId: string, input: {
+  currentCandidateId: string | null
+  currentPrompt: string
+  maxRows?: number
+}) {
+  const rows = getDb().prepare(`
+    SELECT
+      input_candidate_id,
+      input_prompt,
+      output_candidate_id,
+      optimizer_error
+    FROM round_runs
+    WHERE job_id = ?
+    ORDER BY round_number DESC, datetime(created_at) DESC
+    LIMIT ?
+  `).all(jobId, Math.max(1, input.maxRows ?? 12)) as Array<{
+    input_candidate_id?: string | null
+    input_prompt?: string | null
+    output_candidate_id?: string | null
+    optimizer_error?: string | null
+  }>
+
+  let count = 0
+
+  for (const row of rows) {
+    const sameSeed = input.currentCandidateId
+      ? String(row.input_candidate_id ?? '') === input.currentCandidateId
+      : !row.input_candidate_id && areEquivalentPromptTexts(String(row.input_prompt ?? ''), input.currentPrompt)
+
+    if (!sameSeed) {
+      break
+    }
+
+    if (row.output_candidate_id || !row.optimizer_error) {
+      break
+    }
+
+    count += 1
+  }
+
+  return count
+}
+
+export function countConsecutiveNoProgressRounds(jobId: string, input: {
+  currentCandidateId: string | null
+  currentPrompt: string
+  maxRows?: number
+}) {
+  const rows = getDb().prepare(`
+    SELECT
+      input_candidate_id,
+      input_prompt,
+      output_candidate_id
+    FROM round_runs
+    WHERE job_id = ?
+    ORDER BY round_number DESC, datetime(created_at) DESC
+    LIMIT ?
+  `).all(jobId, Math.max(1, input.maxRows ?? 12)) as Array<{
+    input_candidate_id?: string | null
+    input_prompt?: string | null
+    output_candidate_id?: string | null
+  }>
+
+  let count = 0
+
+  for (const row of rows) {
+    const sameSeed = input.currentCandidateId
+      ? String(row.input_candidate_id ?? '') === input.currentCandidateId
+      : !row.input_candidate_id && areEquivalentPromptTexts(String(row.input_prompt ?? ''), input.currentPrompt)
+
+    if (!sameSeed) {
+      break
+    }
+
+    if (row.output_candidate_id) {
+      break
+    }
+
+    count += 1
+  }
+
+  return count
 }
 
 export function createCandidateWithJudges(jobId: string, input: {
@@ -906,18 +1225,153 @@ export function createCandidateWithJudgesForActiveWorker(jobId: string, workerOw
       return null
     }
 
-    const maxRoundRow = db.prepare(`
-      SELECT COALESCE(MAX(round_number), 0) AS max_round
-      FROM candidates
-      WHERE job_id = ?
-    `).get(jobId) as { max_round?: number } | undefined
-
-    const nextRound = Math.max(Number(jobRow.current_round ?? 0), Number(maxRoundRow?.max_round ?? 0)) + 1
+    const nextRound = resolveNextRoundNumber(db, jobId, Number(jobRow.current_round ?? 0))
     insertCandidateAndJudgments(db, jobId, candidateId, nextRound, input, createdAt)
 
     db.exec('COMMIT')
     transactionOpen = false
     return { candidateId, roundNumber: nextRound }
+  } catch (error) {
+    if (transactionOpen) {
+      try {
+        db.exec('ROLLBACK')
+      } catch {
+      }
+    }
+    throw error
+  }
+}
+
+export function recordRoundRunForActiveWorker(jobId: string, workerOwnerId: string, input: {
+  currentPrompt: string
+  currentCandidateId?: string | null
+  optimization: {
+    optimizedPrompt: string
+    strategy: 'preserve' | 'rebuild'
+    scoreBefore: number
+    majorChanges: string[]
+    mve: string
+    deadEndSignals: string[]
+  } | null
+  review: {
+    score: number
+    hasMaterialIssues: boolean
+    dimensionScores?: Record<string, number> | null
+    dimensionReasons?: string[]
+    rubricDimensionsSnapshot?: RubricDimension[] | null
+    summary: string
+    driftLabels: string[]
+    driftExplanation: string
+    findings: string[]
+    suggestedChanges: string[]
+  } | null
+  aggregatedIssues?: string[]
+  appliedSteeringItems?: SteeringItem[]
+  outcome: RoundRunRecord['outcome']
+  optimizerError?: string | null
+  judgeError?: string | null
+  passStreakAfter?: number
+}) {
+  if (input.optimization) {
+    assertFiniteScore(input.optimization.scoreBefore, 'optimization.scoreBefore')
+  }
+  if (input.review) {
+    assertFiniteScore(input.review.score, 'review.score')
+  }
+
+  const db = getDb()
+  const roundRunId = crypto.randomUUID()
+  const createdAt = new Date().toISOString()
+  let transactionOpen = false
+
+  try {
+    db.exec('BEGIN IMMEDIATE')
+    transactionOpen = true
+
+    const jobRow = db.prepare(`
+      SELECT status, active_worker_id, current_round
+      FROM jobs
+      WHERE id = ?
+    `).get(jobId) as { status?: string; active_worker_id?: string | null; current_round?: number } | undefined
+
+    if (!jobRow || String(jobRow.status ?? '') !== 'running' || String(jobRow.active_worker_id ?? '') !== workerOwnerId) {
+      db.exec('ROLLBACK')
+      transactionOpen = false
+      return null
+    }
+
+    const nextRound = resolveNextRoundNumber(db, jobId, Number(jobRow.current_round ?? 0))
+    const materialOptimization = input.optimization && !areEquivalentPromptTexts(
+      input.currentPrompt,
+      input.optimization.optimizedPrompt,
+    )
+      ? input.optimization
+      : null
+    const outputCandidateId = materialOptimization
+      ? insertCandidateRecord(db, jobId, crypto.randomUUID(), nextRound, {
+        optimizedPrompt: materialOptimization.optimizedPrompt,
+        strategy: materialOptimization.strategy,
+        scoreBefore: materialOptimization.scoreBefore,
+        averageScore: UNJUDGED_OUTPUT_AVERAGE_SCORE,
+        majorChanges: materialOptimization.majorChanges,
+        mve: materialOptimization.mve,
+        deadEndSignals: materialOptimization.deadEndSignals,
+        aggregatedIssues: input.aggregatedIssues ?? [],
+        appliedSteeringItems: input.appliedSteeringItems ?? [],
+      }, createdAt)
+      : null
+
+    db.prepare(`
+      INSERT INTO round_runs (
+        id,
+        job_id,
+        round_number,
+        input_prompt,
+        input_candidate_id,
+        output_candidate_id,
+        displayed_score,
+        has_material_issues,
+        dimension_scores_json,
+        dimension_reasons_json,
+        rubric_dimensions_snapshot_json,
+        summary,
+        drift_labels_json,
+        drift_explanation,
+        findings_json,
+        suggested_changes_json,
+        round_status,
+        optimizer_error,
+        judge_error,
+        pass_streak_after,
+        created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      roundRunId,
+      jobId,
+      nextRound,
+      input.currentPrompt,
+      input.currentCandidateId ?? null,
+      outputCandidateId,
+      input.review?.score ?? null,
+      input.review === null ? null : input.review.hasMaterialIssues ? 1 : 0,
+      JSON.stringify(input.review?.dimensionScores ?? {}),
+      JSON.stringify(input.review?.dimensionReasons ?? []),
+      JSON.stringify(input.review?.rubricDimensionsSnapshot ?? []),
+      input.review?.summary ?? '',
+      JSON.stringify(compactFeedback(input.review?.driftLabels ?? [], { maxItems: 3, maxItemLength: 60 })),
+      input.review?.driftExplanation ?? '',
+      JSON.stringify(compactFeedback(input.review?.findings ?? [], { maxItems: 6, maxItemLength: 180 })),
+      JSON.stringify(compactFeedback(input.review?.suggestedChanges ?? [], { maxItems: 6, maxItemLength: 180 })),
+      input.outcome,
+      input.optimizerError ?? null,
+      input.judgeError ?? null,
+      input.passStreakAfter ?? 0,
+      createdAt,
+    )
+
+    db.exec('COMMIT')
+    transactionOpen = false
+    return { roundRunId, roundNumber: nextRound, outputCandidateId }
   } catch (error) {
     if (transactionOpen) {
       try {
@@ -1000,6 +1454,9 @@ function insertCandidateAndJudgments(
         candidate_id,
         judge_index,
         score,
+        dimension_scores_json,
+        dimension_reasons_json,
+        rubric_dimensions_snapshot_json,
         has_material_issues,
         summary,
         drift_labels_json,
@@ -1007,13 +1464,16 @@ function insertCandidateAndJudgments(
         findings_json,
         suggested_changes_json,
         created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       judgment.id,
       jobId,
       candidateId,
       judgment.judgeIndex,
       judgment.score,
+      JSON.stringify(judgment.dimensionScores ?? {}),
+      JSON.stringify(judgment.dimensionReasons ?? []),
+      JSON.stringify(judgment.rubricDimensionsSnapshot ?? []),
       judgment.hasMaterialIssues ? 1 : 0,
       judgment.summary,
       JSON.stringify(compactFeedback(judgment.driftLabels, { maxItems: 3, maxItemLength: 60 })),
@@ -1070,26 +1530,45 @@ export function heartbeatJobClaim(jobId: string, workerOwnerId: string) {
   `).run(new Date().toISOString(), jobId, workerOwnerId)
 }
 
+export function reapStaleRunningJobsOnStartup() {
+  const now = new Date().toISOString()
+  const staleBefore = new Date(Date.now() - JOB_CLAIM_STALE_AFTER_MS).toISOString()
+  const db = getDb()
+  const result = db.prepare(`
+    UPDATE jobs
+    SET status = CASE
+          WHEN cancel_requested_at IS NOT NULL THEN 'cancelled'
+          ELSE 'paused'
+        END,
+        active_worker_id = NULL,
+        worker_heartbeat_at = NULL,
+        error_message = CASE
+          WHEN cancel_requested_at IS NOT NULL THEN '任务已取消。'
+          ELSE '检测到服务重启，已暂停自动续跑，请手动继续。'
+        END,
+        updated_at = ?
+    WHERE status = 'running'
+      AND (
+        active_worker_id IS NULL
+        OR active_worker_id = ''
+        OR worker_heartbeat_at IS NULL
+        OR worker_heartbeat_at <= ?
+      )
+  `).run(now, staleBefore)
+
+  return result.changes
+}
+
 export function claimNextRunnableJob(workerOwnerId: string) {
   const db = getDb()
   const now = new Date().toISOString()
-  const staleBefore = new Date(Date.now() - JOB_CLAIM_STALE_AFTER_MS).toISOString()
   const row = db.prepare(`
     SELECT id
     FROM jobs
     WHERE status = 'pending'
-       OR (
-         status = 'running'
-         AND (
-           active_worker_id IS NULL
-           OR active_worker_id = ''
-           OR worker_heartbeat_at IS NULL
-           OR worker_heartbeat_at <= ?
-         )
-       )
-    ORDER BY CASE status WHEN 'running' THEN 0 ELSE 1 END, datetime(created_at) ASC
+    ORDER BY datetime(created_at) ASC
     LIMIT 1
-  `).get(staleBefore) as { id?: string } | undefined
+  `).get() as { id?: string } | undefined
 
   if (!row?.id) {
     return null
@@ -1100,21 +1579,11 @@ export function claimNextRunnableJob(workerOwnerId: string) {
     SET status = 'running',
         active_worker_id = ?,
         worker_heartbeat_at = ?,
+        error_message = NULL,
         updated_at = ?
     WHERE id = ?
-      AND (
-        status = 'pending'
-        OR (
-          status = 'running'
-          AND (
-            active_worker_id IS NULL
-            OR active_worker_id = ''
-            OR worker_heartbeat_at IS NULL
-            OR worker_heartbeat_at <= ?
-          )
-        )
-      )
-  `).run(workerOwnerId, now, now, row.id, staleBefore)
+      AND status = 'pending'
+  `).run(workerOwnerId, now, now, row.id)
 
   if (result.changes === 0) {
     return null
@@ -1130,10 +1599,6 @@ function resumeJob(jobId: string, runMode: JobRunMode) {
     throw new Error('任务正在运行中，无需重复继续。')
   }
 
-  if (job.status === 'completed') {
-    throw new Error('已完成任务不能继续运行。')
-  }
-
   if (job.status === 'cancelled') {
     throw new Error('已取消任务不能继续运行。')
   }
@@ -1144,6 +1609,29 @@ function resumeJob(jobId: string, runMode: JobRunMode) {
   }
 
   const db = getDb()
+  const now = new Date().toISOString()
+
+  if (job.status === 'completed') {
+    db.prepare(`
+      UPDATE jobs
+      SET status = 'pending',
+          run_mode = ?,
+          active_worker_id = NULL,
+          worker_heartbeat_at = NULL,
+          cancel_requested_at = NULL,
+          pause_requested_at = NULL,
+          pass_streak = 0,
+          pass_streak_candidate_id = NULL,
+          last_review_score = 0,
+          last_review_patch_json = '[]',
+          final_candidate_id = NULL,
+          error_message = NULL,
+          updated_at = ?
+      WHERE id = ?
+    `).run(runMode, now, jobId)
+    return requireJob(jobId)
+  }
+
   db.prepare(`
     UPDATE jobs
     SET status = 'pending',
@@ -1155,9 +1643,46 @@ function resumeJob(jobId: string, runMode: JobRunMode) {
         error_message = NULL,
         updated_at = ?
     WHERE id = ?
-  `).run(runMode, new Date().toISOString(), jobId)
+  `).run(runMode, now, jobId)
 
   return requireJob(jobId)
+}
+
+export async function forkJobFromFinal(jobId: string, runMode: JobRunMode) {
+  const job = requireJob(jobId)
+  if (job.status !== 'completed') {
+    throw new Error('只有已完成任务才能基于当前最终版新建任务。')
+  }
+
+  const sourcePrompt = resolveForkPrompt(job)
+  const [forkedJob] = await createJobs([{
+    title: buildForkedJobTitle(job.title),
+    rawPrompt: sourcePrompt,
+    optimizerModel: job.optimizerModel,
+    judgeModel: job.judgeModel,
+    optimizerReasoningEffort: job.optimizerReasoningEffort,
+    judgeReasoningEffort: job.judgeReasoningEffort,
+    customRubricMd: job.customRubricMd,
+    runMode,
+  }])
+
+  const now = new Date().toISOString()
+  getDb().prepare(`
+    UPDATE jobs
+    SET max_rounds_override = ?,
+        pending_steering_json = ?,
+        next_round_instruction = NULL,
+        next_round_instruction_updated_at = NULL,
+        updated_at = ?
+    WHERE id = ?
+  `).run(
+    job.maxRoundsOverride,
+    serializeSteeringItems(job.pendingSteeringItems),
+    now,
+    forkedJob.id,
+  )
+
+  return requireJob(forkedJob.id)
 }
 
 function resolveJobModels(input: JobInput, settings: ReturnType<typeof getSettings>) {
@@ -1184,19 +1709,28 @@ function resolveJobModels(input: JobInput, settings: ReturnType<typeof getSettin
   }
 }
 
+function resolveJobRunMode(runMode?: JobRunMode | null): JobRunMode {
+  return runMode === 'step' ? 'step' : 'auto'
+}
+
 async function resolveInitialGoalAnchor(
   settings: Pick<ReturnType<typeof getSettings>, 'cpamcBaseUrl' | 'cpamcApiKey' | 'defaultOptimizerReasoningEffort'>,
   optimizerModel: string,
   rawPrompt: string,
 ) {
   try {
-    return await generateGoalAnchorWithModel(settings, optimizerModel, rawPrompt)
-  } catch {
-    const goalAnchor = deriveGoalAnchor(rawPrompt)
-    return {
-      goalAnchor,
-      explanation: deriveGoalAnchorExplanation(rawPrompt, goalAnchor),
+    const generated = await generateGoalAnchorWithModel(settings, optimizerModel, rawPrompt)
+    if (!isMalformedGoalAnchorForPrompt(rawPrompt, generated.goalAnchor)) {
+      return generated
     }
+  } catch {
+    // Fall back to the local derivation below.
+  }
+
+  const goalAnchor = deriveGoalAnchor(rawPrompt)
+  return {
+    goalAnchor,
+    explanation: deriveGoalAnchorExplanation(rawPrompt, goalAnchor),
   }
 }
 
@@ -1236,7 +1770,15 @@ function shouldRepairLegacyGoalAnchor(
   goalAnchor: GoalAnchor,
   explanation: GoalAnchorExplanation,
 ) {
+  if (isMalformedGoalAnchorForPrompt(rawPrompt, goalAnchor)) {
+    return true
+  }
+
   if (shouldRepairMalformedStructuredPromptAnchor(rawPrompt, goalAnchor, explanation)) {
+    return true
+  }
+
+  if (shouldRepairUnderSpecifiedGenericAnchor(rawPrompt, goalAnchor)) {
     return true
   }
 
@@ -1258,6 +1800,17 @@ function shouldRepairLegacyGoalAnchor(
     || explanation.rationale.some((item) => item.includes('系统把任务理解为：'))
 
   return sourceLooksLegacy || rationaleLooksLegacy
+}
+
+function shouldRepairUnderSpecifiedGenericAnchor(rawPrompt: string, goalAnchor: GoalAnchor) {
+  if (!looksLikeGenericFallbackAnchor(goalAnchor) && !looksLikeRoleSetupFallbackAnchor(goalAnchor, rawPrompt)) {
+    return false
+  }
+
+  const derived = deriveGoalAnchor(rawPrompt)
+  return !looksLikeGenericFallbackAnchor(derived)
+    && !looksLikeRoleSetupFallbackAnchor(derived, rawPrompt)
+    && normalizeForCompare(derived.deliverable) !== normalizeForCompare(goalAnchor.deliverable)
 }
 
 function shouldRepairMalformedStructuredPromptAnchor(
@@ -1282,6 +1835,24 @@ function shouldRepairMalformedStructuredPromptAnchor(
   const rationaleLooksMalformed = explanation.rationale.some((item) => /(?:系统把任务理解为：#|做法指导|食材与注意事项)/u.test(item))
 
   return goalLooksMalformed || deliverableLooksMalformed || guardsLookMalformed || (sourceLooksRawPrompt && rationaleLooksMalformed)
+}
+
+function looksLikeGenericFallbackAnchor(goalAnchor: GoalAnchor) {
+  const deliverableLooksGeneric = /^围绕.+给出与原任务一致的完整结果。?$/u.test(goalAnchor.deliverable)
+  const guardsLookGeneric = goalAnchor.driftGuard.length === 3
+    && /^不要把“.+”改写成别的主题或更泛化的任务。?$/u.test(goalAnchor.driftGuard[0] ?? '')
+    && /^不要丢掉原任务要求的关键产出：.+。?$/u.test(goalAnchor.driftGuard[1] ?? '')
+    && /^不要退化成空泛说明、方法论或免责声明。?$/u.test(goalAnchor.driftGuard[2] ?? '')
+
+  return deliverableLooksGeneric && guardsLookGeneric
+}
+
+function looksLikeRoleSetupFallbackAnchor(goalAnchor: GoalAnchor, rawPrompt: string) {
+  const deliverableLooksRoleSetup = /角色与原任务要求的可执行助手设定。?$/u.test(goalAnchor.deliverable)
+  const promptWantsPromptArtifact = /提示词/u.test(rawPrompt)
+    || /\bprompt\b/iu.test(rawPrompt)
+
+  return deliverableLooksRoleSetup && promptWantsPromptArtifact
 }
 
 function listConversationGroups(db: DatabaseSync) {
@@ -1439,10 +2010,6 @@ function setPendingSteeringItems(jobId: string, items: SteeringItem[]) {
 
 function requireSteerableJob(jobId: string) {
   const job = requireJob(jobId)
-  if (job.status === 'completed') {
-    throw new Error('已完成任务不能再写入下一轮人工引导。')
-  }
-
   if (job.status === 'cancelled') {
     throw new Error('已取消任务不能再写入下一轮人工引导。')
   }
@@ -1458,6 +2025,47 @@ function readLegacyNextRoundInstructionUpdatedAt(jobId: string) {
   `).get(jobId) as { next_round_instruction_updated_at?: string | null } | undefined
 
   return row?.next_round_instruction_updated_at ? String(row.next_round_instruction_updated_at) : null
+}
+
+function buildForkedJobTitle(title: string) {
+  const normalizedTitle = title.trim()
+  if (!normalizedTitle) {
+    return '续跑任务'
+  }
+
+  return /最终版续跑/u.test(normalizedTitle)
+    ? normalizedTitle
+    : `${normalizedTitle} · 最终版续跑`
+}
+
+function resolveForkPrompt(job: JobRecord) {
+  const db = getDb()
+  const preferredCandidateId = job.finalCandidateId
+  const preferredCandidate = preferredCandidateId
+    ? db.prepare(`
+        SELECT optimized_prompt
+        FROM candidates
+        WHERE id = ?
+          AND job_id = ?
+        LIMIT 1
+      `).get(preferredCandidateId, job.id) as { optimized_prompt?: string } | undefined
+    : undefined
+
+  if (preferredCandidate?.optimized_prompt) {
+    return String(preferredCandidate.optimized_prompt)
+  }
+
+  const latestCandidate = db.prepare(`
+    SELECT optimized_prompt
+    FROM candidates
+    WHERE job_id = ?
+    ORDER BY round_number DESC, datetime(created_at) DESC
+    LIMIT 1
+  `).get(job.id) as { optimized_prompt?: string } | undefined
+
+  return latestCandidate?.optimized_prompt
+    ? String(latestCandidate.optimized_prompt)
+    : job.latestPrompt || job.rawPrompt
 }
 
 function createNextInstructionUpdatedAt(previousUpdatedAt: string | null) {
@@ -1559,7 +2167,12 @@ function mapJobRow(row: Record<string, unknown>): JobRecord {
       row.next_round_instruction ? String(row.next_round_instruction) : null,
       row.next_round_instruction_updated_at ? String(row.next_round_instruction_updated_at) : null,
     ),
+    autoApplyReviewSuggestions: Boolean(row.auto_apply_review_suggestions),
+    autoApplyReviewSuggestionsToStableRules: row.auto_apply_review_suggestions_to_stable_rules === undefined
+      ? true
+      : Boolean(row.auto_apply_review_suggestions_to_stable_rules),
     passStreak: Number(row.pass_streak ?? 0),
+    passStreakCandidateId: row.pass_streak_candidate_id ? String(row.pass_streak_candidate_id) : null,
     lastReviewScore: Number(row.last_review_score ?? 0),
     lastReviewPatch: parseJsonArray(row.last_review_patch_json),
     finalCandidateId: row.final_candidate_id ? String(row.final_candidate_id) : null,
@@ -1591,6 +2204,77 @@ function collapseCandidateRowsByRound(rows: Record<string, unknown>[]) {
   return result
 }
 
+function resolveNextRoundNumber(db: DatabaseSync, jobId: string, currentRound: number) {
+  const maxCandidateRow = db.prepare(`
+    SELECT COALESCE(MAX(round_number), 0) AS max_round
+    FROM candidates
+    WHERE job_id = ?
+  `).get(jobId) as { max_round?: number } | undefined
+  const maxRoundRunRow = db.prepare(`
+    SELECT COALESCE(MAX(round_number), 0) AS max_round
+    FROM round_runs
+    WHERE job_id = ?
+  `).get(jobId) as { max_round?: number } | undefined
+
+  return Math.max(
+    currentRound,
+    Number(maxCandidateRow?.max_round ?? 0),
+    Number(maxRoundRunRow?.max_round ?? 0),
+  ) + 1
+}
+
+function insertCandidateRecord(
+  db: DatabaseSync,
+  jobId: string,
+  candidateId: string,
+  roundNumber: number,
+  input: {
+    optimizedPrompt: string
+    strategy: 'preserve' | 'rebuild'
+    scoreBefore: number
+    averageScore: number
+    majorChanges: string[]
+    mve: string
+    deadEndSignals: string[]
+    aggregatedIssues: string[]
+    appliedSteeringItems: SteeringItem[]
+  },
+  createdAt: string,
+) {
+  db.prepare(`
+    INSERT INTO candidates (
+      id,
+      job_id,
+      round_number,
+      optimized_prompt,
+      strategy,
+      score_before,
+      average_score,
+      major_changes_json,
+      mve,
+      dead_end_signals_json,
+      aggregated_issues_json,
+      applied_steering_json,
+      created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    candidateId,
+    jobId,
+    roundNumber,
+    input.optimizedPrompt,
+    input.strategy,
+    input.scoreBefore,
+    input.averageScore,
+    JSON.stringify(compactFeedback(input.majorChanges, { maxItems: 6, maxItemLength: 180 })),
+    input.mve,
+    JSON.stringify(compactFeedback(input.deadEndSignals, { maxItems: 6, maxItemLength: 140 })),
+    JSON.stringify(compactFeedback(input.aggregatedIssues, { maxItems: 8, maxItemLength: 180 })),
+    JSON.stringify(input.appliedSteeringItems),
+    createdAt,
+  )
+  return candidateId
+}
+
 function mapCandidateRow(row: Record<string, unknown>): CandidateRecord {
   return {
     id: String(row.id),
@@ -1616,12 +2300,54 @@ function mapJudgeRow(row: Record<string, unknown>): JudgeRunRecord {
     candidateId: String(row.candidate_id),
     judgeIndex: Number(row.judge_index),
     score: Number(row.score),
+    dimensionScores: parseJsonNumberRecord(row.dimension_scores_json),
+    rubricDimensionsSnapshot: parseJsonRubricDimensions(row.rubric_dimensions_snapshot_json),
     hasMaterialIssues: Boolean(row.has_material_issues),
     summary: String(row.summary),
     driftLabels: parseJsonArray(row.drift_labels_json),
     driftExplanation: row.drift_explanation ? String(row.drift_explanation) : '',
     findings: parseJsonArray(row.findings_json),
     suggestedChanges: parseJsonArray(row.suggested_changes_json),
+    dimensionReasons: parseJsonArray(row.dimension_reasons_json),
+    createdAt: String(row.created_at),
+  }
+}
+
+function mapRoundRunRow(
+  row: Record<string, unknown>,
+  candidatesById: Map<string, CandidateRecord>,
+): RoundRunRecord {
+  const outputCandidateId = row.output_candidate_id ? String(row.output_candidate_id) : null
+  const outputCandidate = outputCandidateId ? candidatesById.get(outputCandidateId) ?? null : null
+
+  return {
+    id: String(row.id),
+    jobId: String(row.job_id),
+    roundNumber: Number(row.round_number),
+    semantics: 'input-judged-output-handed-off',
+    inputPrompt: String(row.input_prompt ?? ''),
+    inputCandidateId: row.input_candidate_id ? String(row.input_candidate_id) : null,
+    outputCandidateId,
+    displayScore: row.displayed_score === null || row.displayed_score === undefined
+      ? null
+      : Number(row.displayed_score),
+    hasMaterialIssues: row.has_material_issues === null || row.has_material_issues === undefined
+      ? null
+      : Boolean(row.has_material_issues),
+    dimensionScores: parseJsonNumberRecord(row.dimension_scores_json),
+    dimensionReasons: parseJsonArray(row.dimension_reasons_json),
+    rubricDimensionsSnapshot: parseJsonRubricDimensions(row.rubric_dimensions_snapshot_json),
+    summary: String(row.summary ?? ''),
+    driftLabels: parseJsonArray(row.drift_labels_json),
+    driftExplanation: row.drift_explanation ? String(row.drift_explanation) : '',
+    findings: parseJsonArray(row.findings_json),
+    suggestedChanges: parseJsonArray(row.suggested_changes_json),
+    outcome: (row.round_status ?? 'settled') as RoundRunRecord['outcome'],
+    optimizerError: row.optimizer_error ? String(row.optimizer_error) : null,
+    judgeError: row.judge_error ? String(row.judge_error) : null,
+    passStreakAfter: Number(row.pass_streak_after ?? 0),
+    outputJudged: Boolean(outputCandidate && outputCandidate.averageScore > UNJUDGED_OUTPUT_AVERAGE_SCORE),
+    outputCandidate,
     createdAt: String(row.created_at),
   }
 }
@@ -1636,4 +2362,67 @@ function parseJsonArray(value: unknown) {
   } catch {
     return []
   }
+}
+
+function parseJsonNumberRecord(value: unknown): Record<string, number> | null {
+  if (typeof value !== 'string' || !value) {
+    return null
+  }
+
+  try {
+    const parsed = JSON.parse(value)
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return null
+    }
+
+    const result: Record<string, number> = {}
+    for (const [key, raw] of Object.entries(parsed as Record<string, unknown>)) {
+      const numeric = typeof raw === 'number' ? raw : Number(raw)
+      if (Number.isFinite(numeric)) {
+        result[key] = numeric
+      }
+    }
+
+    return Object.keys(result).length > 0 ? result : null
+  } catch {
+    return null
+  }
+}
+
+function parseJsonRubricDimensions(value: unknown): RubricDimensionSnapshot[] | null {
+  if (typeof value !== 'string' || !value) {
+    return null
+  }
+
+  try {
+    const parsed = JSON.parse(value)
+    if (!Array.isArray(parsed)) {
+      return null
+    }
+
+    const dimensions = parsed
+      .map((item) => normalizeRubricDimension(item))
+      .filter((item): item is RubricDimensionSnapshot => Boolean(item))
+
+    return dimensions.length > 0 ? dimensions : null
+  } catch {
+    return null
+  }
+}
+
+function normalizeRubricDimension(value: unknown): RubricDimensionSnapshot | null {
+  if (!value || typeof value !== 'object') {
+    return null
+  }
+
+  const record = value as Partial<RubricDimensionSnapshot>
+  const id = typeof record.id === 'string' ? record.id.trim() : ''
+  const label = typeof record.label === 'string' ? record.label.trim() : ''
+  const max = typeof record.max === 'number' ? record.max : Number(record.max)
+
+  if (!id || !label || !Number.isFinite(max) || max <= 0) {
+    return null
+  }
+
+  return { id, label, max }
 }

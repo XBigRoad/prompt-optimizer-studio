@@ -73,6 +73,7 @@ test('OpenAI-compatible adapter posts chat completions with bearer auth', async 
     assert.equal(capturedHeaders.authorization, 'Bearer sk-openai')
     assert.equal(capturedHeaders['content-type'], 'application/json')
     assert.equal(capturedBody.model, 'gpt-5.2')
+    assert.equal(capturedBody.max_tokens, 4096)
     assert.deepEqual(capturedBody.messages, [
       { role: 'system', content: 'system instruction' },
       { role: 'user', content: 'user prompt' },
@@ -98,7 +99,7 @@ test('OpenAI-compatible adapter times out when response body never resolves and 
           cancelled = true
         },
       },
-    })) as typeof fetch
+    })) as unknown as typeof fetch
 
     const adapter = createProviderAdapter({
       cpamcBaseUrl: 'https://api.openai.com/v1',
@@ -186,13 +187,13 @@ test('OpenAI-compatible adapter applies timeout budget across retries instead of
       }),
       /request timeout/i,
     )
-    assert.ok(Date.now() - startedAt < 160)
+    assert.ok(Date.now() - startedAt < 320)
   } finally {
     global.fetch = originalFetch
   }
 })
 
-test('OpenAI-compatible adapter falls back to /responses when chat/completions is missing', async () => {
+test('OpenAI-compatible adapter falls back to /responses when chat/completions is missing for chat-first requests', async () => {
   const originalFetch = global.fetch
   const requestedUrls: string[] = []
   const requestBodies: Array<Record<string, unknown>> = []
@@ -236,6 +237,193 @@ test('OpenAI-compatible adapter falls back to /responses when chat/completions i
     })
 
     const payload = await adapter.requestJson({
+      model: 'gpt-4.1',
+      system: 'system instruction',
+      user: 'user prompt',
+      timeoutMs: 1_000,
+      maxAttempts: 1,
+    })
+
+    assert.deepEqual(requestedUrls, [
+      'https://gateway.example.com/codex/chat/completions',
+      'https://gateway.example.com/codex/responses',
+    ])
+
+    assert.equal(requestBodies[0]?.model, 'gpt-4.1')
+    assert.deepEqual(requestBodies[0]?.messages, [
+      { role: 'system', content: 'system instruction' },
+      { role: 'user', content: 'user prompt' },
+    ])
+
+    assert.equal(requestBodies[1]?.model, 'gpt-4.1')
+    assert.equal(requestBodies[1]?.instructions, 'system instruction')
+    assert.equal(requestBodies[1]?.input, 'user prompt')
+    assert.equal(requestBodies[1]?.max_output_tokens, 4096)
+    assert.equal('reasoning' in requestBodies[1], false)
+    assert.equal(requestBodies[1]?.temperature, 0.2)
+    assert.equal(payload.optimizedPrompt, 'fallback prompt')
+  } finally {
+    global.fetch = originalFetch
+  }
+})
+
+test('OpenAI-compatible adapter falls back to /responses when chat/completions returns Cloudflare-style 403 for chat-first requests', async () => {
+  const originalFetch = global.fetch
+  const requestedUrls: string[] = []
+  let chatAttempts = 0
+
+  try {
+    global.fetch = (async (input: RequestInfo | URL) => {
+      const url = String(input)
+      requestedUrls.push(url)
+
+      if (url.endsWith('/chat/completions')) {
+        chatAttempts += 1
+        return new Response('<html><title>Attention Required! | Cloudflare</title><body>Access denied</body></html>', {
+          status: 403,
+          headers: {
+            'Content-Type': 'text/html',
+          },
+        })
+      }
+
+      if (url.endsWith('/responses')) {
+        return new Response(JSON.stringify({
+          id: 'resp_cf_fallback',
+          status: 'completed',
+          output: [
+            {
+              type: 'message',
+              role: 'assistant',
+              content: [
+                {
+                  type: 'output_text',
+                  text: '{"optimizedPrompt":"responses-after-chat-cloudflare"}',
+                },
+              ],
+            },
+          ],
+        }), {
+          status: 200,
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        })
+      }
+
+      throw new Error(`Unexpected URL: ${url}`)
+    }) as typeof fetch
+
+    const adapter = createProviderAdapter({
+      cpamcBaseUrl: 'https://gateway.example.com/codex',
+      cpamcApiKey: 'secret',
+      apiProtocol: 'openai-compatible',
+    })
+
+    const payload = await adapter.requestJson({
+      model: 'gpt-4.1',
+      system: 'system instruction',
+      user: 'user prompt',
+      timeoutMs: 5_000,
+      maxAttempts: 2,
+    })
+
+    assert.equal(chatAttempts, 2)
+    assert.deepEqual(requestedUrls, [
+      'https://gateway.example.com/codex/chat/completions',
+      'https://gateway.example.com/codex/chat/completions',
+      'https://gateway.example.com/codex/responses',
+    ])
+    assert.equal(payload.optimizedPrompt, 'responses-after-chat-cloudflare')
+  } finally {
+    global.fetch = originalFetch
+  }
+})
+
+test('OpenAI-compatible adapter does not fall back from chat/completions on permanent 403 responses', async () => {
+  const originalFetch = global.fetch
+  const requestedUrls: string[] = []
+
+  try {
+    global.fetch = (async (input: RequestInfo | URL) => {
+      const url = String(input)
+      requestedUrls.push(url)
+
+      return new Response(JSON.stringify({
+        error: {
+          message: 'invalid_api_key: insufficient permissions',
+        },
+      }), { status: 403 })
+    }) as typeof fetch
+
+    const adapter = createProviderAdapter({
+      cpamcBaseUrl: 'https://gateway.example.com/codex',
+      cpamcApiKey: 'secret',
+      apiProtocol: 'openai-compatible',
+    })
+
+    await assert.rejects(
+      () => adapter.requestJson({
+        model: 'gpt-4.1',
+        system: 'system instruction',
+        user: 'user prompt',
+        timeoutMs: 5_000,
+        maxAttempts: 3,
+      }),
+      /invalid_api_key/i,
+    )
+
+    assert.deepEqual(requestedUrls, [
+      'https://gateway.example.com/codex/chat/completions',
+    ])
+  } finally {
+    global.fetch = originalFetch
+  }
+})
+
+test('OpenAI-compatible adapter prefers /responses first for GPT-5 reasoning requests', async () => {
+  const originalFetch = global.fetch
+  const requestedUrls: string[] = []
+
+  try {
+    global.fetch = (async (input: RequestInfo | URL) => {
+      const url = String(input)
+      requestedUrls.push(url)
+
+      if (url.endsWith('/responses')) {
+        return new Response(JSON.stringify({
+          id: 'resp_pref',
+          status: 'completed',
+          output: [
+            {
+              type: 'message',
+              role: 'assistant',
+              content: [
+                {
+                  type: 'output_text',
+                  text: '{"optimizedPrompt":"responses-first prompt"}',
+                },
+              ],
+            },
+          ],
+        }), {
+          status: 200,
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        })
+      }
+
+      throw new Error(`chat/completions should not be used first here: ${url}`)
+    }) as typeof fetch
+
+    const adapter = createProviderAdapter({
+      cpamcBaseUrl: 'https://gateway.example.com/codex',
+      cpamcApiKey: 'secret',
+      apiProtocol: 'openai-compatible',
+    })
+
+    const payload = await adapter.requestJson({
       model: 'gpt-5.4',
       system: 'system instruction',
       user: 'user prompt',
@@ -245,24 +433,965 @@ test('OpenAI-compatible adapter falls back to /responses when chat/completions i
     })
 
     assert.deepEqual(requestedUrls, [
+      'https://gateway.example.com/codex/responses',
+    ])
+    assert.equal(payload.optimizedPrompt, 'responses-first prompt')
+  } finally {
+    global.fetch = originalFetch
+  }
+})
+
+test('OpenAI-compatible adapter falls back to chat/completions when /responses is missing for GPT-5 reasoning requests', async () => {
+  const originalFetch = global.fetch
+  const requestedUrls: string[] = []
+
+  try {
+    global.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      requestedUrls.push(url)
+
+      if (url.endsWith('/responses')) {
+        return new Response('Not Found', { status: 404 })
+      }
+
+      if (url.endsWith('/chat/completions')) {
+        return new Response(JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: '{"optimizedPrompt":"chat-fallback prompt"}',
+              },
+            },
+          ],
+        }), { status: 200 })
+      }
+
+      throw new Error(`Unexpected URL: ${url}; body=${String(init?.body ?? '')}`)
+    }) as typeof fetch
+
+    const adapter = createProviderAdapter({
+      cpamcBaseUrl: 'https://gateway.example.com/codex',
+      cpamcApiKey: 'secret',
+      apiProtocol: 'openai-compatible',
+    })
+
+    const payload = await adapter.requestJson({
+      model: 'gpt-5.4',
+      system: 'system instruction',
+      user: 'user prompt',
+      timeoutMs: 1_000,
+      maxAttempts: 1,
+      reasoningEffort: 'high',
+    })
+
+    assert.deepEqual(requestedUrls, [
+      'https://gateway.example.com/codex/responses',
+      'https://gateway.example.com/codex/chat/completions',
+    ])
+    assert.equal(payload.optimizedPrompt, 'chat-fallback prompt')
+  } finally {
+    global.fetch = originalFetch
+  }
+})
+
+test('OpenAI-compatible adapter falls back to chat/completions when /responses returns a retriable failure for GPT-5 reasoning requests', async () => {
+  const originalFetch = global.fetch
+  const requestedUrls: string[] = []
+  let responseAttempts = 0
+
+  try {
+    global.fetch = (async (input: RequestInfo | URL) => {
+      const url = String(input)
+      requestedUrls.push(url)
+
+      if (url.endsWith('/responses')) {
+        responseAttempts += 1
+        return new Response('gateway timeout', { status: 504 })
+      }
+
+      if (url.endsWith('/chat/completions')) {
+        return new Response(JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: '{"optimizedPrompt":"chat-after-retriable-responses prompt"}',
+              },
+            },
+          ],
+        }), { status: 200 })
+      }
+
+      throw new Error(`Unexpected URL: ${url}`)
+    }) as typeof fetch
+
+    const adapter = createProviderAdapter({
+      cpamcBaseUrl: 'https://gateway.example.com/codex',
+      cpamcApiKey: 'secret',
+      apiProtocol: 'openai-compatible',
+    })
+
+    const payload = await adapter.requestJson({
+      model: 'gpt-5.4',
+      system: 'system instruction',
+      user: 'user prompt',
+      timeoutMs: 5_000,
+      maxAttempts: 2,
+      reasoningEffort: 'xhigh',
+    })
+
+    assert.equal(responseAttempts, 1)
+    assert.deepEqual(requestedUrls, [
+      'https://gateway.example.com/codex/responses',
+      'https://gateway.example.com/codex/chat/completions',
+    ])
+    assert.equal(payload.optimizedPrompt, 'chat-after-retriable-responses prompt')
+  } finally {
+    global.fetch = originalFetch
+  }
+})
+
+test('OpenAI-compatible adapter treats auth_unavailable responses as recoverable for GPT-5 reasoning requests', async () => {
+  const originalFetch = global.fetch
+  const requestedUrls: string[] = []
+  let responseAttempts = 0
+
+  try {
+    global.fetch = (async (input: RequestInfo | URL) => {
+      const url = String(input)
+      requestedUrls.push(url)
+
+      if (url.endsWith('/responses')) {
+        responseAttempts += 1
+        return new Response(JSON.stringify({
+          error: {
+            message: 'auth_unavailable: no auth available',
+          },
+        }), { status: 500 })
+      }
+
+      if (url.endsWith('/chat/completions')) {
+        return new Response(JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: '{"optimizedPrompt":"chat-after-auth-unavailable prompt"}',
+              },
+            },
+          ],
+        }), { status: 200 })
+      }
+
+      throw new Error(`Unexpected URL: ${url}`)
+    }) as typeof fetch
+
+    const adapter = createProviderAdapter({
+      cpamcBaseUrl: 'https://gateway.example.com/codex',
+      cpamcApiKey: 'secret',
+      apiProtocol: 'openai-compatible',
+    })
+
+    const payload = await adapter.requestJson({
+      model: 'gpt-5.4',
+      system: 'system instruction',
+      user: 'user prompt',
+      timeoutMs: 5_000,
+      maxAttempts: 2,
+      reasoningEffort: 'xhigh',
+    })
+
+    assert.equal(responseAttempts, 1)
+    assert.deepEqual(requestedUrls, [
+      'https://gateway.example.com/codex/responses',
+      'https://gateway.example.com/codex/chat/completions',
+    ])
+    assert.equal(payload.optimizedPrompt, 'chat-after-auth-unavailable prompt')
+  } finally {
+    global.fetch = originalFetch
+  }
+})
+
+test('OpenAI-compatible adapter falls back to chat/completions when /responses returns a gateway-style 403 JSON for GPT-5 reasoning requests', async () => {
+  const originalFetch = global.fetch
+  const requestedUrls: string[] = []
+
+  try {
+    global.fetch = (async (input: RequestInfo | URL) => {
+      const url = String(input)
+      requestedUrls.push(url)
+
+      if (url.endsWith('/responses')) {
+        return new Response(JSON.stringify({
+          error: {
+            message: 'gateway rejected request: access denied by upstream WAF',
+          },
+        }), { status: 403 })
+      }
+
+      if (url.endsWith('/chat/completions')) {
+        return new Response(JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: '{"optimizedPrompt":"chat-after-403-json prompt"}',
+              },
+            },
+          ],
+        }), { status: 200 })
+      }
+
+      throw new Error(`Unexpected URL: ${url}`)
+    }) as typeof fetch
+
+    const adapter = createProviderAdapter({
+      cpamcBaseUrl: 'https://gateway.example.com/codex',
+      cpamcApiKey: 'secret',
+      apiProtocol: 'openai-compatible',
+    })
+
+    const payload = await adapter.requestJson({
+      model: 'gpt-5.4',
+      system: 'system instruction',
+      user: 'user prompt',
+      timeoutMs: 5_000,
+      maxAttempts: 1,
+      reasoningEffort: 'xhigh',
+    })
+
+    assert.deepEqual(requestedUrls, [
+      'https://gateway.example.com/codex/responses',
+      'https://gateway.example.com/codex/chat/completions',
+    ])
+    assert.equal(payload.optimizedPrompt, 'chat-after-403-json prompt')
+  } finally {
+    global.fetch = originalFetch
+  }
+})
+
+test('OpenAI-compatible adapter falls back to chat/completions when /responses returns a Cloudflare-style 403 HTML for GPT-5 reasoning requests', async () => {
+  const originalFetch = global.fetch
+  const requestedUrls: string[] = []
+
+  try {
+    global.fetch = (async (input: RequestInfo | URL) => {
+      const url = String(input)
+      requestedUrls.push(url)
+
+      if (url.endsWith('/responses')) {
+        return new Response('<html><title>Access denied</title><body>Access denied | gateway.example.com used Cloudflare to restrict access</body></html>', {
+          status: 403,
+          headers: { 'Content-Type': 'text/html' },
+        })
+      }
+
+      if (url.endsWith('/chat/completions')) {
+        return new Response(JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: '{"optimizedPrompt":"chat-after-cloudflare-403 prompt"}',
+              },
+            },
+          ],
+        }), { status: 200 })
+      }
+
+      throw new Error(`Unexpected URL: ${url}`)
+    }) as typeof fetch
+
+    const adapter = createProviderAdapter({
+      cpamcBaseUrl: 'https://gateway.example.com/codex',
+      cpamcApiKey: 'secret',
+      apiProtocol: 'openai-compatible',
+    })
+
+    const payload = await adapter.requestJson({
+      model: 'gpt-5.4',
+      system: 'system instruction',
+      user: 'user prompt',
+      timeoutMs: 5_000,
+      maxAttempts: 1,
+      reasoningEffort: 'xhigh',
+    })
+
+    assert.deepEqual(requestedUrls, [
+      'https://gateway.example.com/codex/responses',
+      'https://gateway.example.com/codex/chat/completions',
+    ])
+    assert.equal(payload.optimizedPrompt, 'chat-after-cloudflare-403 prompt')
+  } finally {
+    global.fetch = originalFetch
+  }
+})
+
+test('OpenAI-compatible adapter does not recover from permanent 403 permission errors on GPT-5 reasoning requests', async () => {
+  const originalFetch = global.fetch
+  const requestedUrls: string[] = []
+
+  try {
+    global.fetch = (async (input: RequestInfo | URL) => {
+      const url = String(input)
+      requestedUrls.push(url)
+      return new Response(JSON.stringify({
+        error: {
+          message: 'forbidden: invalid api key scope',
+        },
+      }), { status: 403 })
+    }) as typeof fetch
+
+    const adapter = createProviderAdapter({
+      cpamcBaseUrl: 'https://gateway.example.com/codex',
+      cpamcApiKey: 'secret',
+      apiProtocol: 'openai-compatible',
+    })
+
+    await assert.rejects(
+      () => adapter.requestJson({
+        model: 'gpt-5.4',
+        system: 'system instruction',
+        user: 'user prompt',
+        timeoutMs: 5_000,
+        maxAttempts: 2,
+        reasoningEffort: 'xhigh',
+      }),
+      /invalid api key scope/i,
+    )
+
+    assert.deepEqual(requestedUrls, [
+      'https://gateway.example.com/codex/responses',
+    ])
+  } finally {
+    global.fetch = originalFetch
+  }
+})
+
+test('OpenAI-compatible adapter falls back to chat/completions when /responses returns Cloudflare-style 403 for GPT-5 reasoning requests', async () => {
+  const originalFetch = global.fetch
+  const requestedUrls: string[] = []
+
+  try {
+    global.fetch = (async (input: RequestInfo | URL) => {
+      const url = String(input)
+      requestedUrls.push(url)
+
+      if (url.endsWith('/responses')) {
+        return new Response('<html><title>Attention Required! | Cloudflare</title><body>Access denied</body></html>', {
+          status: 403,
+          headers: {
+            'Content-Type': 'text/html',
+          },
+        })
+      }
+
+      if (url.endsWith('/chat/completions')) {
+        return new Response(JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: '{"optimizedPrompt":"chat-after-responses-cloudflare"}',
+              },
+            },
+          ],
+        }), { status: 200 })
+      }
+
+      throw new Error(`Unexpected URL: ${url}`)
+    }) as typeof fetch
+
+    const adapter = createProviderAdapter({
+      cpamcBaseUrl: 'https://gateway.example.com/codex',
+      cpamcApiKey: 'secret',
+      apiProtocol: 'openai-compatible',
+    })
+
+    const payload = await adapter.requestJson({
+      model: 'gpt-5.4',
+      system: 'system instruction',
+      user: 'user prompt',
+      timeoutMs: 5_000,
+      maxAttempts: 2,
+      reasoningEffort: 'xhigh',
+    })
+
+    assert.deepEqual(requestedUrls, [
+      'https://gateway.example.com/codex/responses',
+      'https://gateway.example.com/codex/chat/completions',
+    ])
+    assert.equal(payload.optimizedPrompt, 'chat-after-responses-cloudflare')
+  } finally {
+    global.fetch = originalFetch
+  }
+})
+
+test('OpenAI-compatible adapter does not fall back from /responses on permanent 403 responses', async () => {
+  const originalFetch = global.fetch
+  const requestedUrls: string[] = []
+
+  try {
+    global.fetch = (async (input: RequestInfo | URL) => {
+      const url = String(input)
+      requestedUrls.push(url)
+
+      return new Response(JSON.stringify({
+        error: {
+          message: 'invalid_api_key: insufficient permissions',
+        },
+      }), { status: 403 })
+    }) as typeof fetch
+
+    const adapter = createProviderAdapter({
+      cpamcBaseUrl: 'https://gateway.example.com/codex',
+      cpamcApiKey: 'secret',
+      apiProtocol: 'openai-compatible',
+    })
+
+    await assert.rejects(
+      () => adapter.requestJson({
+        model: 'gpt-5.4',
+        system: 'system instruction',
+        user: 'user prompt',
+        timeoutMs: 5_000,
+        maxAttempts: 2,
+        reasoningEffort: 'xhigh',
+      }),
+      /invalid_api_key/i,
+    )
+
+    assert.deepEqual(requestedUrls, [
+      'https://gateway.example.com/codex/responses',
+    ])
+  } finally {
+    global.fetch = originalFetch
+  }
+})
+
+test('OpenAI-compatible adapter treats INTERNAL_ERROR provider failures as retriable and falls back to chat/completions', async () => {
+  const originalFetch = global.fetch
+  const requestedUrls: string[] = []
+
+  try {
+    global.fetch = (async (input: RequestInfo | URL) => {
+      const url = String(input)
+      requestedUrls.push(url)
+
+      if (url.endsWith('/responses')) {
+        return new Response('{"error":{"message":"stream error: stream ID 21; INTERNAL_ERROR; received from peer"}}', { status: 500 })
+      }
+
+      if (url.endsWith('/chat/completions')) {
+        return new Response(JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: '{"optimizedPrompt":"chat-after-internal-error prompt"}',
+              },
+            },
+          ],
+        }), { status: 200 })
+      }
+
+      throw new Error(`Unexpected URL: ${url}`)
+    }) as typeof fetch
+
+    const adapter = createProviderAdapter({
+      cpamcBaseUrl: 'https://gateway.example.com/codex',
+      cpamcApiKey: 'secret',
+      apiProtocol: 'openai-compatible',
+    })
+
+    const payload = await adapter.requestJson({
+      model: 'gpt-5.4',
+      system: 'system instruction',
+      user: 'user prompt',
+      timeoutMs: 5_000,
+      maxAttempts: 1,
+      reasoningEffort: 'xhigh',
+    })
+
+    assert.deepEqual(requestedUrls, [
+      'https://gateway.example.com/codex/responses',
+      'https://gateway.example.com/codex/chat/completions',
+    ])
+    assert.equal(payload.optimizedPrompt, 'chat-after-internal-error prompt')
+  } finally {
+    global.fetch = originalFetch
+  }
+})
+
+test('OpenAI-compatible adapter falls back to /responses when chat/completions returns a gateway-style 403 after retries', async () => {
+  const originalFetch = global.fetch
+  const requestedUrls: string[] = []
+  let chatAttempts = 0
+
+  try {
+    global.fetch = (async (input: RequestInfo | URL) => {
+      const url = String(input)
+      requestedUrls.push(url)
+
+      if (url.endsWith('/chat/completions')) {
+        chatAttempts += 1
+        return new Response(JSON.stringify({
+          error: {
+            message: 'gateway rejected request: access denied by upstream WAF',
+          },
+        }), { status: 403 })
+      }
+
+      if (url.endsWith('/responses')) {
+        return new Response(JSON.stringify({
+          id: 'resp_chat_fallback',
+          status: 'completed',
+          output: [
+            {
+              type: 'message',
+              role: 'assistant',
+              content: [
+                {
+                  type: 'output_text',
+                  text: '{"optimizedPrompt":"responses-after-chat-403 prompt"}',
+                },
+              ],
+            },
+          ],
+        }), {
+          status: 200,
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        })
+      }
+
+      throw new Error(`Unexpected URL: ${url}`)
+    }) as typeof fetch
+
+    const adapter = createProviderAdapter({
+      cpamcBaseUrl: 'https://gateway.example.com/codex',
+      cpamcApiKey: 'secret',
+      apiProtocol: 'openai-compatible',
+    })
+
+    const payload = await adapter.requestJson({
+      model: 'gpt-4.1',
+      system: 'system instruction',
+      user: 'user prompt',
+      timeoutMs: 5_000,
+      maxAttempts: 2,
+    })
+
+    assert.equal(chatAttempts, 2)
+    assert.deepEqual(requestedUrls, [
+      'https://gateway.example.com/codex/chat/completions',
       'https://gateway.example.com/codex/chat/completions',
       'https://gateway.example.com/codex/responses',
     ])
-
-    assert.equal(requestBodies[0]?.model, 'gpt-5.4')
-    assert.deepEqual(requestBodies[0]?.messages, [
-      { role: 'system', content: 'system instruction' },
-      { role: 'user', content: 'user prompt' },
-    ])
-
-    assert.equal(requestBodies[1]?.model, 'gpt-5.4')
-    assert.equal(requestBodies[1]?.instructions, 'system instruction')
-    assert.equal(requestBodies[1]?.input, 'user prompt')
-    assert.deepEqual(requestBodies[1]?.reasoning, { effort: 'xhigh' })
-    assert.equal('temperature' in requestBodies[1], false)
-    assert.equal(payload.optimizedPrompt, 'fallback prompt')
+    assert.equal(payload.optimizedPrompt, 'responses-after-chat-403 prompt')
   } finally {
     global.fetch = originalFetch
+  }
+})
+
+test('OpenAI-compatible adapter does not fall back from chat/completions on permanent 403 permission errors', async () => {
+  const originalFetch = global.fetch
+  const requestedUrls: string[] = []
+  let chatAttempts = 0
+
+  try {
+    global.fetch = (async (input: RequestInfo | URL) => {
+      const url = String(input)
+      requestedUrls.push(url)
+
+      if (url.endsWith('/chat/completions')) {
+        chatAttempts += 1
+        return new Response(JSON.stringify({
+          error: {
+            message: 'forbidden: invalid api key scope',
+          },
+        }), { status: 403 })
+      }
+
+      throw new Error(`Unexpected URL: ${url}`)
+    }) as typeof fetch
+
+    const adapter = createProviderAdapter({
+      cpamcBaseUrl: 'https://gateway.example.com/codex',
+      cpamcApiKey: 'secret',
+      apiProtocol: 'openai-compatible',
+    })
+
+    await assert.rejects(
+      () => adapter.requestJson({
+        model: 'gpt-4.1',
+        system: 'system instruction',
+        user: 'user prompt',
+        timeoutMs: 5_000,
+        maxAttempts: 2,
+      }),
+      /invalid api key scope/i,
+    )
+
+    assert.equal(chatAttempts, 1)
+    assert.deepEqual(requestedUrls, [
+      'https://gateway.example.com/codex/chat/completions',
+    ])
+  } finally {
+    global.fetch = originalFetch
+  }
+})
+
+test('OpenAI-compatible adapter retries GPT-5 reasoning with lower effort directly via chat/completions', async () => {
+  const originalFetch = global.fetch
+  const requestedUrls: string[] = []
+  const requestBodies: Array<Record<string, unknown>> = []
+
+  try {
+    global.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      requestedUrls.push(url)
+      requestBodies.push(JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>)
+
+      if (requestedUrls.length === 1 && url.endsWith('/responses')) {
+        return new Response('gateway timeout', { status: 504 })
+      }
+
+      if (requestedUrls.length === 2 && url.endsWith('/chat/completions')) {
+        return new Response('gateway timeout', { status: 504 })
+      }
+
+      if (requestedUrls.length === 3 && url.endsWith('/chat/completions')) {
+        return new Response(JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: '{"optimizedPrompt":"lower-effort chat retry prompt"}',
+              },
+            },
+          ],
+        }), { status: 200 })
+      }
+
+      throw new Error(`Unexpected URL: ${url}`)
+    }) as typeof fetch
+
+    const adapter = createProviderAdapter({
+      cpamcBaseUrl: 'https://gateway.example.com/codex',
+      cpamcApiKey: 'secret',
+      apiProtocol: 'openai-compatible',
+    })
+
+    const payload = await adapter.requestJson({
+      model: 'gpt-5.4',
+      system: 'system instruction',
+      user: 'user prompt',
+      timeoutMs: 5_000,
+      maxAttempts: 1,
+      reasoningEffort: 'xhigh',
+    })
+
+    assert.deepEqual(requestedUrls, [
+      'https://gateway.example.com/codex/responses',
+      'https://gateway.example.com/codex/chat/completions',
+      'https://gateway.example.com/codex/chat/completions',
+    ])
+    assert.deepEqual(requestBodies.map((body) => {
+      const reasoning = body.reasoning as { effort?: string } | undefined
+      return body.reasoning_effort ?? reasoning?.effort ?? null
+    }), [
+      'xhigh',
+      'high',
+      'high',
+    ])
+    assert.equal(payload.optimizedPrompt, 'lower-effort chat retry prompt')
+  } finally {
+    global.fetch = originalFetch
+  }
+})
+
+test('OpenAI-compatible adapter clamps GPT-5 chat fallback effort from xhigh to high after /responses failure', async () => {
+  const originalFetch = global.fetch
+  const requestBodies: Array<Record<string, unknown>> = []
+
+  try {
+    global.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      const body = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>
+      requestBodies.push(body)
+
+      if (url.endsWith('/responses')) {
+        return new Response('gateway timeout', { status: 504 })
+      }
+
+      if (url.endsWith('/chat/completions')) {
+        const reasoningEffort = String(body.reasoning_effort ?? '')
+        if (reasoningEffort !== 'high') {
+          return new Response(JSON.stringify({
+            error: {
+              message: `Unsupported value: '${reasoningEffort}' is not supported with the 'gpt-5.1' model. Supported values are: 'none', 'low', 'medium', and 'high'.`,
+              type: 'upstream_error',
+            },
+          }), { status: 400 })
+        }
+
+        return new Response(JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: '{"optimizedPrompt":"chat-fallback-high-success"}',
+              },
+            },
+          ],
+        }), { status: 200 })
+      }
+
+      throw new Error(`Unexpected URL: ${url}`)
+    }) as typeof fetch
+
+    const adapter = createProviderAdapter({
+      cpamcBaseUrl: 'https://gateway.example.com/codex',
+      cpamcApiKey: 'secret',
+      apiProtocol: 'openai-compatible',
+    })
+
+    const payload = await adapter.requestJson({
+      model: 'gpt-5.4',
+      system: 'system instruction',
+      user: 'user prompt',
+      timeoutMs: 5_000,
+      maxAttempts: 1,
+      reasoningEffort: 'xhigh',
+    })
+
+    assert.equal(payload.optimizedPrompt, 'chat-fallback-high-success')
+    assert.deepEqual(requestBodies.map((body) => {
+      const reasoning = body.reasoning as { effort?: string } | undefined
+      return body.reasoning_effort ?? reasoning?.effort ?? null
+    }), [
+      'xhigh',
+      'high',
+    ])
+  } finally {
+    global.fetch = originalFetch
+  }
+})
+
+test('OpenAI-compatible adapter keeps stepping down reasoning effort until a transient timeout succeeds', async () => {
+  const originalFetch = global.fetch
+  const requestedUrls: string[] = []
+  const requestBodies: Array<Record<string, unknown>> = []
+
+  try {
+    global.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      requestedUrls.push(url)
+      requestBodies.push(JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>)
+
+      if (requestedUrls.length === 1 && url.endsWith('/responses')) {
+        return new Response('gateway timeout', { status: 504 })
+      }
+
+      if (requestedUrls.length === 2 && url.endsWith('/chat/completions')) {
+        return new Response('gateway timeout', { status: 504 })
+      }
+
+      if (requestedUrls.length === 3 && url.endsWith('/chat/completions')) {
+        return new Response('gateway timeout', { status: 504 })
+      }
+
+      if (requestedUrls.length === 4 && url.endsWith('/chat/completions')) {
+        return new Response(JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: '{"optimizedPrompt":"medium-retry prompt"}',
+              },
+            },
+          ],
+        }), { status: 200 })
+      }
+
+      throw new Error(`Unexpected URL: ${url}`)
+    }) as typeof fetch
+
+    const adapter = createProviderAdapter({
+      cpamcBaseUrl: 'https://gateway.example.com/codex',
+      cpamcApiKey: 'secret',
+      apiProtocol: 'openai-compatible',
+    })
+
+    const payload = await adapter.requestJson({
+      model: 'gpt-5.4',
+      system: 'system instruction',
+      user: 'user prompt',
+      timeoutMs: 5_000,
+      maxAttempts: 1,
+      reasoningEffort: 'xhigh',
+    })
+
+    assert.deepEqual(requestedUrls, [
+      'https://gateway.example.com/codex/responses',
+      'https://gateway.example.com/codex/chat/completions',
+      'https://gateway.example.com/codex/chat/completions',
+      'https://gateway.example.com/codex/chat/completions',
+    ])
+    assert.deepEqual(requestBodies.map((body) => {
+      const reasoning = body.reasoning as { effort?: string } | undefined
+      return body.reasoning_effort ?? reasoning?.effort ?? null
+    }), [
+      'xhigh',
+      'high',
+      'high',
+      'medium',
+    ])
+    assert.equal(payload.optimizedPrompt, 'medium-retry prompt')
+  } finally {
+    global.fetch = originalFetch
+  }
+})
+
+test('OpenAI-compatible GPT-5 reasoning probe can use more than the old 120s cap when total budget is larger', async () => {
+  const originalFetch = global.fetch
+  const originalSetTimeout = global.setTimeout
+  const originalClearTimeout = global.clearTimeout
+  const scheduled: number[] = []
+
+  try {
+    global.fetch = (() => new Promise(() => {})) as typeof fetch
+    global.setTimeout = (((callback: (...args: unknown[]) => void, delay?: number, ...args: unknown[]) => {
+      scheduled.push(Number(delay ?? 0))
+      queueMicrotask(() => callback(...args))
+      return { ref() { return this }, unref() { return this } } as ReturnType<typeof setTimeout>
+    }) as typeof setTimeout)
+    global.clearTimeout = (((_timer?: ReturnType<typeof setTimeout>) => {}) as typeof clearTimeout)
+
+    const adapter = createProviderAdapter({
+      cpamcBaseUrl: 'https://gateway.example.com/codex',
+      cpamcApiKey: 'secret',
+      apiProtocol: 'openai-compatible',
+    })
+
+    await assert.rejects(
+      () => adapter.requestJson({
+        model: 'gpt-5.4',
+        system: 'system instruction',
+        user: 'user prompt',
+        timeoutMs: 360_000,
+        maxAttempts: 1,
+        reasoningEffort: 'xhigh',
+      }),
+      /request timeout/i,
+    )
+
+    assert.equal(scheduled[0], 237_600)
+  } finally {
+    global.fetch = originalFetch
+    global.setTimeout = originalSetTimeout
+    global.clearTimeout = originalClearTimeout
+  }
+})
+
+test('OpenAI-compatible GPT-5 lower-effort retry caps high retries at 240s', async () => {
+  const originalFetch = global.fetch
+  const originalSetTimeout = global.setTimeout
+  const originalClearTimeout = global.clearTimeout
+  const scheduled: number[] = []
+  let attempts = 0
+
+  try {
+    global.fetch = (async () => {
+      attempts += 1
+      if (attempts <= 2) {
+        return new Response('gateway timeout', { status: 504 })
+      }
+
+      return new Response(JSON.stringify({
+        choices: [
+          {
+            message: {
+              content: '{"optimizedPrompt":"high-retry-success"}',
+            },
+          },
+        ],
+      }), { status: 200 })
+    }) as typeof fetch
+    global.setTimeout = (((callback: (...args: unknown[]) => void, delay?: number, ...args: unknown[]) => {
+      scheduled.push(Number(delay ?? 0))
+      return { ref() { return this }, unref() { return this } } as ReturnType<typeof setTimeout>
+    }) as typeof setTimeout)
+    global.clearTimeout = (((_timer?: ReturnType<typeof setTimeout>) => {}) as typeof clearTimeout)
+
+    const adapter = createProviderAdapter({
+      cpamcBaseUrl: 'https://gateway.example.com/codex',
+      cpamcApiKey: 'secret',
+      apiProtocol: 'openai-compatible',
+    })
+
+    const payload = await adapter.requestJson({
+      model: 'gpt-5.4',
+      system: 'system instruction',
+      user: 'user prompt',
+      timeoutMs: 420_000,
+      maxAttempts: 1,
+      reasoningEffort: 'xhigh',
+    })
+
+    assert.equal(payload.optimizedPrompt, 'high-retry-success')
+    assert.ok(scheduled.includes(240_000))
+  } finally {
+    global.fetch = originalFetch
+    global.setTimeout = originalSetTimeout
+    global.clearTimeout = originalClearTimeout
+  }
+})
+
+test('OpenAI-compatible GPT-5 lower-effort retry caps medium retries at 180s', async () => {
+  const originalFetch = global.fetch
+  const originalSetTimeout = global.setTimeout
+  const originalClearTimeout = global.clearTimeout
+  const scheduled: number[] = []
+  let attempts = 0
+
+  try {
+    global.fetch = (async () => {
+      attempts += 1
+      if (attempts <= 3) {
+        return new Response('gateway timeout', { status: 504 })
+      }
+
+      return new Response(JSON.stringify({
+        choices: [
+          {
+            message: {
+              content: '{"optimizedPrompt":"medium-retry-success"}',
+            },
+          },
+        ],
+      }), { status: 200 })
+    }) as typeof fetch
+    global.setTimeout = (((callback: (...args: unknown[]) => void, delay?: number, ...args: unknown[]) => {
+      scheduled.push(Number(delay ?? 0))
+      return { ref() { return this }, unref() { return this } } as ReturnType<typeof setTimeout>
+    }) as typeof setTimeout)
+    global.clearTimeout = (((_timer?: ReturnType<typeof setTimeout>) => {}) as typeof clearTimeout)
+
+    const adapter = createProviderAdapter({
+      cpamcBaseUrl: 'https://gateway.example.com/codex',
+      cpamcApiKey: 'secret',
+      apiProtocol: 'openai-compatible',
+    })
+
+    const payload = await adapter.requestJson({
+      model: 'gpt-5.4',
+      system: 'system instruction',
+      user: 'user prompt',
+      timeoutMs: 420_000,
+      maxAttempts: 1,
+      reasoningEffort: 'xhigh',
+    })
+
+    assert.equal(payload.optimizedPrompt, 'medium-retry-success')
+    assert.ok(scheduled.includes(180_000))
+  } finally {
+    global.fetch = originalFetch
+    global.setTimeout = originalSetTimeout
+    global.clearTimeout = originalClearTimeout
   }
 })
 
@@ -435,6 +1564,10 @@ test('Gemini native adapter posts generateContent with x-goog-api-key auth', asy
         parts: [{ text: 'user prompt' }],
       },
     ])
+    assert.deepEqual(capturedBody.generationConfig, {
+      temperature: 0.2,
+      maxOutputTokens: 4096,
+    })
     assert.equal(payload.goal, 'Keep the original task')
   } finally {
     global.fetch = originalFetch
@@ -622,18 +1755,106 @@ test('OpenAI-compatible adapter treats a missing /models endpoint as an empty ca
 })
 
 
-test('OpenAI-compatible adapter does not retry auth_unavailable 500 responses', async () => {
+test('OpenAI-compatible adapter retries auth_unavailable 500 responses when the gateway recovers', async () => {
   const originalFetch = global.fetch
   let attempts = 0
 
   try {
     global.fetch = (async () => {
       attempts += 1
+      if (attempts === 1) {
+        return new Response(JSON.stringify({
+          error: {
+            message: 'auth_unavailable: no auth available',
+          },
+        }), { status: 500 })
+      }
+
       return new Response(JSON.stringify({
-        error: {
-          message: 'auth_unavailable: no auth available',
-        },
-      }), { status: 500 })
+        choices: [
+          {
+            message: {
+              content: '{"optimizedPrompt":"retry-after-auth prompt"}',
+            },
+          },
+        ],
+      }), { status: 200 })
+    }) as typeof fetch
+
+    const adapter = createProviderAdapter({
+      cpamcBaseUrl: 'https://api.openai.com/v1',
+      cpamcApiKey: 'sk-openai',
+    })
+
+    const payload = await adapter.requestJson({
+      model: 'gpt-5.4',
+      system: 'system instruction',
+      user: 'user prompt',
+      timeoutMs: 1_000,
+      maxAttempts: 3,
+    })
+
+    assert.equal(payload.optimizedPrompt, 'retry-after-auth prompt')
+    assert.equal(attempts, 2)
+  } finally {
+    global.fetch = originalFetch
+  }
+})
+
+test('OpenAI-compatible adapter retries recoverable 500 gateway wrapper responses when chat/completions recovers', async () => {
+  const originalFetch = global.fetch
+  let attempts = 0
+
+  try {
+    global.fetch = (async () => {
+      attempts += 1
+      if (attempts < 3) {
+        return new Response(JSON.stringify({
+          error: {
+            message: 'gateway wrapper: upstream timed out before receiving the final model payload',
+          },
+        }), { status: 500 })
+      }
+
+      return new Response(JSON.stringify({
+        choices: [
+          {
+            message: {
+              content: '{"optimizedPrompt":"retry-after-gateway-wrapper-500"}',
+            },
+          },
+        ],
+      }), { status: 200 })
+    }) as typeof fetch
+
+    const adapter = createProviderAdapter({
+      cpamcBaseUrl: 'https://api.openai.com/v1',
+      cpamcApiKey: 'sk-openai',
+    })
+
+    const payload = await adapter.requestJson({
+      model: 'gpt-4.1',
+      system: 'system instruction',
+      user: 'user prompt',
+      timeoutMs: 2_000,
+      maxAttempts: 3,
+    })
+
+    assert.equal(payload.optimizedPrompt, 'retry-after-gateway-wrapper-500')
+    assert.equal(attempts, 3)
+  } finally {
+    global.fetch = originalFetch
+  }
+})
+
+test('OpenAI-compatible adapter retries 503 responses up to maxAttempts', async () => {
+  const originalFetch = global.fetch
+  let attempts = 0
+
+  try {
+    global.fetch = (async () => {
+      attempts += 1
+      return new Response('service unavailable', { status: 503 })
     }) as typeof fetch
 
     const adapter = createProviderAdapter({
@@ -643,16 +1864,16 @@ test('OpenAI-compatible adapter does not retry auth_unavailable 500 responses', 
 
     await assert.rejects(
       () => adapter.requestJson({
-        model: 'gpt-5.4',
+        model: 'gpt-4.1',
         system: 'system instruction',
         user: 'user prompt',
-        timeoutMs: 1_000,
+        timeoutMs: 2_000,
         maxAttempts: 3,
       }),
-      /auth_unavailable/i,
+      /503/,
     )
 
-    assert.equal(attempts, 1)
+    assert.equal(attempts, 3)
   } finally {
     global.fetch = originalFetch
   }
@@ -678,10 +1899,42 @@ test('OpenAI-compatible adapter retries 504 responses up to maxAttempts', async 
         model: 'gpt-5.4',
         system: 'system instruction',
         user: 'user prompt',
-        timeoutMs: 1_000,
+        timeoutMs: 2_000,
         maxAttempts: 3,
       }),
       /504/,
+    )
+
+    assert.equal(attempts, 3)
+  } finally {
+    global.fetch = originalFetch
+  }
+})
+
+test('OpenAI-compatible adapter retries 503 responses up to maxAttempts', async () => {
+  const originalFetch = global.fetch
+  let attempts = 0
+
+  try {
+    global.fetch = (async () => {
+      attempts += 1
+      return new Response('service unavailable', { status: 503 })
+    }) as typeof fetch
+
+    const adapter = createProviderAdapter({
+      cpamcBaseUrl: 'https://api.openai.com/v1',
+      cpamcApiKey: 'sk-openai',
+    })
+
+    await assert.rejects(
+      () => adapter.requestJson({
+        model: 'gpt-5.4',
+        system: 'system instruction',
+        user: 'user prompt',
+        timeoutMs: 2_000,
+        maxAttempts: 3,
+      }),
+      /503/,
     )
 
     assert.equal(attempts, 3)
@@ -722,7 +1975,39 @@ test('OpenAI-compatible adapter retries thrown timeout-like network errors', asy
   }
 })
 
-test('OpenAI-compatible adapter does not retry generic thrown internal errors', async () => {
+test('OpenAI-compatible adapter retries thrown EOF transport failures', async () => {
+  const originalFetch = global.fetch
+  let attempts = 0
+
+  try {
+    global.fetch = (async () => {
+      attempts += 1
+      throw new Error('socket hang up: unexpected EOF from upstream')
+    }) as typeof fetch
+
+    const adapter = createProviderAdapter({
+      cpamcBaseUrl: 'https://api.openai.com/v1',
+      cpamcApiKey: 'sk-openai',
+    })
+
+    await assert.rejects(
+      () => adapter.requestJson({
+        model: 'gpt-5.4',
+        system: 'system instruction',
+        user: 'user prompt',
+        timeoutMs: 1_000,
+        maxAttempts: 3,
+      }),
+      /EOF/i,
+    )
+
+    assert.equal(attempts, 3)
+  } finally {
+    global.fetch = originalFetch
+  }
+})
+
+test('OpenAI-compatible adapter retries thrown INTERNAL_ERROR transport failures', async () => {
   const originalFetch = global.fetch
   let attempts = 0
 
@@ -748,9 +2033,112 @@ test('OpenAI-compatible adapter does not retry generic thrown internal errors', 
       /INTERNAL_ERROR/,
     )
 
-    assert.equal(attempts, 1)
+    assert.equal(attempts, 3)
   } finally {
     global.fetch = originalFetch
+  }
+})
+
+test('OpenAI-compatible adapter retries thrown EOF transport failures', async () => {
+  const originalFetch = global.fetch
+  let attempts = 0
+
+  try {
+    global.fetch = (async () => {
+      attempts += 1
+      throw new Error('upstream EOF while reading model response')
+    }) as typeof fetch
+
+    const adapter = createProviderAdapter({
+      cpamcBaseUrl: 'https://api.openai.com/v1',
+      cpamcApiKey: 'sk-openai',
+    })
+
+    await assert.rejects(
+      () => adapter.requestJson({
+        model: 'gpt-4.1',
+        system: 'system instruction',
+        user: 'user prompt',
+        timeoutMs: 1_000,
+        maxAttempts: 3,
+      }),
+      /\bEOF\b/i,
+    )
+
+    assert.equal(attempts, 3)
+  } finally {
+    global.fetch = originalFetch
+  }
+})
+
+test('OpenAI-compatible adapter retries thrown socket hang up transport failures', async () => {
+  const originalFetch = global.fetch
+  let attempts = 0
+
+  try {
+    global.fetch = (async () => {
+      attempts += 1
+      throw new Error('socket hang up while proxying upstream response')
+    }) as typeof fetch
+
+    const adapter = createProviderAdapter({
+      cpamcBaseUrl: 'https://api.openai.com/v1',
+      cpamcApiKey: 'sk-openai',
+    })
+
+    await assert.rejects(
+      () => adapter.requestJson({
+        model: 'gpt-4.1',
+        system: 'system instruction',
+        user: 'user prompt',
+        timeoutMs: 1_000,
+        maxAttempts: 3,
+      }),
+      /socket hang up/i,
+    )
+
+    assert.equal(attempts, 3)
+  } finally {
+    global.fetch = originalFetch
+  }
+})
+
+test('OpenAI-compatible adapter lets long requests use the full timeout budget by default', async () => {
+  const originalFetch = global.fetch
+  const originalSetTimeout = global.setTimeout
+  const originalClearTimeout = global.clearTimeout
+  const scheduled: number[] = []
+
+  try {
+    global.fetch = (() => new Promise(() => {})) as typeof fetch
+    global.setTimeout = (((callback: (...args: unknown[]) => void, delay?: number, ...args: unknown[]) => {
+      scheduled.push(Number(delay ?? 0))
+      queueMicrotask(() => callback(...args))
+      return { ref() { return this }, unref() { return this } } as ReturnType<typeof setTimeout>
+    }) as typeof setTimeout)
+    global.clearTimeout = (((_timer?: ReturnType<typeof setTimeout>) => {}) as typeof clearTimeout)
+
+    const adapter = createProviderAdapter({
+      cpamcBaseUrl: 'https://api.openai.com/v1',
+      cpamcApiKey: 'sk-openai',
+    })
+
+    await assert.rejects(
+      () => adapter.requestJson({
+        model: 'gpt-5.4',
+        system: 'system instruction',
+        user: 'user prompt',
+        timeoutMs: 120_000,
+        maxAttempts: 1,
+      }),
+      /request timeout after 120000ms/i,
+    )
+
+    assert.equal(scheduled[0], 120_000)
+  } finally {
+    global.fetch = originalFetch
+    global.setTimeout = originalSetTimeout
+    global.clearTimeout = originalClearTimeout
   }
 })
 

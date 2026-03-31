@@ -183,7 +183,7 @@ export function SettingsControlRoom({
                       </span>
                       {text("评分标准", "Scoring standard")}
                     </h2>
-                    <p className="small">{text("自定义复核打分依据。留空则使用内置默认标准；支持 Markdown。", "Customize how the reviewer scores prompts. Leave it empty to use the built-in default. Markdown is supported.")}</p>
+                    <p className="small">{text("自定义评分器打分依据。留空则使用内置默认标准；支持 Markdown。", "Customize how the judge scores prompts. Leave it empty to use the built-in default. Markdown is supported.")}</p>
                   </div>
                 </div>
                 <div className="section-body-stack compact">
@@ -223,7 +223,7 @@ export function SettingsControlRoom({
                       </span>
                       {text("默认模型", "Default model")}
                     </h2>
-                    <p className="small">{text("统一默认任务模型。优化器 / 复核器对外共用同一别名。", "Keep one default task model. Optimizer and reviewer share the same visible alias.")}</p>
+                    <p className="small">{text("统一默认任务模型。优化器 / 评分器对外共用同一别名。", "Keep one default task model. Optimizer and judge share the same visible alias.")}</p>
                   </div>
                 </div>
                 <div className="section-body-stack">
@@ -245,8 +245,8 @@ export function SettingsControlRoom({
                     />
                     <p className="small">
                       {text(
-                        "默认同步作用于优化器和复核器。不同模型 / 网关的支持范围可能不同。",
-                        "This default applies to optimizer and reviewer together. Support varies by model and gateway.",
+                        "默认同步作用于优化器和评分器。不同模型 / 网关的支持范围可能不同。",
+                        "This default applies to optimizer and judge together. Support varies by model and gateway.",
                       )}
                     </p>
                   </div>
@@ -276,7 +276,6 @@ export function SettingsControlRoom({
                         className="input"
                         type="number"
                         min={1}
-                        max={4}
                         value={form.workerConcurrency}
                         onChange={(event) => onFormChange("workerConcurrency", Number(event.target.value))}
                       />
@@ -297,7 +296,7 @@ export function SettingsControlRoom({
         </div>
 
         <div className="settings-save-bar" data-ui="settings-save-bar">
-          <p className="small">
+          <p className="small" data-ui="settings-save-copy">
             {text(
               "保存后会更新新的默认连接、模型、评分标准与运行策略；已在运行的任务不会被强行改写。",
               "Saving updates the defaults for connection, model, scoring, and runtime policy without force-rewriting jobs that are already running.",

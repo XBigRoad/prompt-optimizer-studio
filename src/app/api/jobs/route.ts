@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 
-import { createJobs, listJobs } from '@/lib/server/jobs'
+import { createJobs, getJobById, listJobs } from '@/lib/server/jobs'
 import { ensureWorkerStarted } from '@/lib/server/worker'
 import type { JobInput } from '@/lib/server/types'
 
@@ -21,7 +21,9 @@ export async function POST(request: Request) {
 
     const created = await createJobs(jobs)
     ensureWorkerStarted()
-    return NextResponse.json({ jobs: created }, { status: 201 })
+    return NextResponse.json({
+      jobs: created.map((job) => getJobById(job.id) ?? job),
+    }, { status: 201 })
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Failed to create jobs.' },

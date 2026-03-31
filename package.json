@@ -1,6 +1,6 @@
 {
   "name": "prompt-optimizer-studio",
-  "version": "0.1.6",
+  "version": "0.1.8",
   "private": true,
   "engines": {
     "node": "22.22.x"

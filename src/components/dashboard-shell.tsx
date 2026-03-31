@@ -9,7 +9,7 @@ import { ModelAliasCombobox } from '@/components/ui/model-alias-combobox'
 import { SelectField } from '@/components/ui/select-field'
 import { StudioFrame } from '@/components/studio-frame'
 import { useI18n, useLocaleText } from '@/lib/i18n'
-import { focusDashboardJobs, getJobDisplayError, partitionDashboardJobs } from '@/lib/presentation'
+import { getJobDisplayError, partitionDashboardJobs } from '@/lib/presentation'
 import { createRandomId } from '@/lib/random-id'
 import { buildReasoningEffortOptions, type ReasoningEffort } from '@/lib/reasoning-effort'
 
@@ -83,7 +83,6 @@ export function DashboardShell({ initialSubmissionExpanded = true }: DashboardSh
   })
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
-  const [actionableOnly, setActionableOnly] = useState(false)
   const [submissionExpanded, setSubmissionExpanded] = useState(initialSubmissionExpanded)
   const [actionInFlight, setActionInFlight] = useState<string | null>(null)
   const [actionMessage, setActionMessage] = useState<string | null>(null)
@@ -152,14 +151,13 @@ export function DashboardShell({ initialSubmissionExpanded = true }: DashboardSh
   }, [text])
 
   const groupedJobs = useMemo(() => partitionDashboardJobs(jobs), [jobs])
-  const visibleGroups = useMemo(() => focusDashboardJobs(groupedJobs, actionableOnly), [groupedJobs, actionableOnly])
   const controlRoomGroups = useMemo(() => ({
-    attention: visibleGroups.active.filter((job) => job.status === 'manual_review' || job.status === 'paused'),
-    running: visibleGroups.active.filter((job) => job.status === 'running'),
-    queued: visibleGroups.queued,
-    recentCompleted: visibleGroups.recentCompleted,
-    history: visibleGroups.history,
-  }), [visibleGroups])
+    attention: groupedJobs.active.filter((job) => job.status === 'manual_review' || job.status === 'paused'),
+    running: groupedJobs.active.filter((job) => job.status === 'running'),
+    queued: groupedJobs.queued,
+    recentCompleted: groupedJobs.recentCompleted,
+    history: groupedJobs.history,
+  }), [groupedJobs])
   const controlRoomStats = useMemo(() => ({
     attention: groupedJobs.active.filter((job) => job.status === 'manual_review' || job.status === 'paused').length,
     running: groupedJobs.active.filter((job) => job.status === 'running').length,
@@ -287,7 +285,7 @@ export function DashboardShell({ initialSubmissionExpanded = true }: DashboardSh
         throw new Error(payload.error ?? text('重新开始失败。', 'Restart failed.'))
       }
       setJobs((current) => current.map((item) => (item.id === job.id ? payload.job : item)))
-      setActionMessage(text(`「${job.title}」已重新开始。`, `"${job.title}" restarted from the beginning.`))
+      setActionMessage(text(`「${job.title}」已重置并重新排队。`, `"${job.title}" was reset and queued again.`))
       setError(null)
     } catch (retryError) {
       setError(retryError instanceof Error ? retryError.message : text('重新开始失败。', 'Restart failed.'))
@@ -310,24 +308,24 @@ export function DashboardShell({ initialSubmissionExpanded = true }: DashboardSh
 	                ) : null}
 	              </div>
 	              <div className="button-row">
-	                {submissionExpanded ? (
-	                  <>
-	                    <button className="button ghost" type="button" onClick={() => setSubmissionExpanded(false)}>
-	                      <ChevronDown size={16} className="rotate-180" />
-	                      {text('收起投递台', 'Collapse submission')}
-	                    </button>
+	                <button
+                    className="button primary-action submission-toggle"
+                    type="button"
+                    onClick={() => setSubmissionExpanded((current) => !current)}
+                  >
+                    {submissionExpanded ? <ChevronDown size={16} className="rotate-180" /> : <Plus size={16} />}
+                    {submissionExpanded ? text('收起投递台', 'Collapse submission') : text('新增任务', 'New job')}
+                  </button>
+                  {submissionExpanded ? (
+                    <>
 	                    <button className="button ghost" type="button" onClick={() => setDrafts((current) => [...current, createEmptyDraft(settings)])}>
 	                      {text('新增一条', 'Add another')}
 	                    </button>
 	                    <button className="button primary-action" type="button" onClick={submitJobs} disabled={submitting}>
 	                      <SendHorizontal size={16} /> {submitting ? text('提交中...', 'Submitting...') : text('提交到队列', 'Send to queue')}
 	                    </button>
-	                  </>
-	                ) : (
-	                  <button className="button primary-action" type="button" onClick={() => setSubmissionExpanded(true)}>
-	                    <Plus size={16} /> {text('新增任务', 'New job')}
-	                  </button>
-	                )}
+                    </>
+                  ) : null}
 	              </div>
 	            </div>
 
@@ -406,13 +404,13 @@ export function DashboardShell({ initialSubmissionExpanded = true }: DashboardSh
           transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
         >
           <DashboardControlRoom
-            actionableOnly={actionableOnly}
+            actionableOnly={false}
             loading={loading}
             middleSlot={submissionStation}
             groups={controlRoomGroups}
             stats={controlRoomStats}
             actionInFlight={actionInFlight}
-            onToggleActionableOnly={() => setActionableOnly((current) => !current)}
+            onToggleActionableOnly={() => {}}
             onCopyPrompt={copyLatestPrompt}
             onCompleteTask={completeTask}
             onResumeStep={resumeStep}

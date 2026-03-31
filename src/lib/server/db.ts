@@ -77,7 +77,10 @@ export function getDb() {
       next_round_instruction TEXT,
       next_round_instruction_updated_at TEXT,
       pending_steering_json TEXT NOT NULL DEFAULT '[]',
+      auto_apply_review_suggestions INTEGER NOT NULL DEFAULT 0,
+      auto_apply_review_suggestions_to_stable_rules INTEGER NOT NULL DEFAULT 1,
       pass_streak INTEGER NOT NULL DEFAULT 0,
+      pass_streak_candidate_id TEXT,
       last_review_score REAL NOT NULL DEFAULT 0,
       last_review_patch_json TEXT NOT NULL DEFAULT '[]',
       final_candidate_id TEXT,
@@ -116,6 +119,9 @@ export function getDb() {
       candidate_id TEXT NOT NULL,
       judge_index INTEGER NOT NULL,
       score REAL NOT NULL,
+      dimension_scores_json TEXT NOT NULL DEFAULT '{}',
+      dimension_reasons_json TEXT NOT NULL DEFAULT '[]',
+      rubric_dimensions_snapshot_json TEXT NOT NULL DEFAULT '[]',
       has_material_issues INTEGER NOT NULL,
       summary TEXT NOT NULL,
       drift_labels_json TEXT NOT NULL DEFAULT '[]',
@@ -127,9 +133,38 @@ export function getDb() {
       FOREIGN KEY (candidate_id) REFERENCES candidates(id)
     );
 
+    CREATE TABLE IF NOT EXISTS round_runs (
+      id TEXT PRIMARY KEY,
+      job_id TEXT NOT NULL,
+      round_number INTEGER NOT NULL,
+      input_prompt TEXT NOT NULL,
+      input_candidate_id TEXT,
+      output_candidate_id TEXT,
+      displayed_score REAL,
+      has_material_issues INTEGER,
+      dimension_scores_json TEXT NOT NULL DEFAULT '{}',
+      dimension_reasons_json TEXT NOT NULL DEFAULT '[]',
+      rubric_dimensions_snapshot_json TEXT NOT NULL DEFAULT '[]',
+      summary TEXT NOT NULL DEFAULT '',
+      drift_labels_json TEXT NOT NULL DEFAULT '[]',
+      drift_explanation TEXT NOT NULL DEFAULT '',
+      findings_json TEXT NOT NULL DEFAULT '[]',
+      suggested_changes_json TEXT NOT NULL DEFAULT '[]',
+      round_status TEXT NOT NULL DEFAULT 'settled',
+      optimizer_error TEXT,
+      judge_error TEXT,
+      pass_streak_after INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (job_id) REFERENCES jobs(id),
+      FOREIGN KEY (input_candidate_id) REFERENCES candidates(id),
+      FOREIGN KEY (output_candidate_id) REFERENCES candidates(id)
+    );
+
     CREATE INDEX IF NOT EXISTS idx_jobs_status_created_at ON jobs(status, created_at);
     CREATE INDEX IF NOT EXISTS idx_candidates_job_round ON candidates(job_id, round_number);
     CREATE INDEX IF NOT EXISTS idx_judge_runs_candidate_idx ON judge_runs(candidate_id, judge_index);
+    CREATE INDEX IF NOT EXISTS idx_round_runs_job_round ON round_runs(job_id, round_number);
+    CREATE INDEX IF NOT EXISTS idx_round_runs_output_candidate ON round_runs(output_candidate_id);
   `)
 
   ensureColumn(db, 'settings', 'api_protocol', "TEXT NOT NULL DEFAULT 'auto'")
@@ -152,16 +187,34 @@ export function getDb() {
   ensureColumn(db, 'jobs', 'next_round_instruction', 'TEXT')
   ensureColumn(db, 'jobs', 'next_round_instruction_updated_at', 'TEXT')
   ensureColumn(db, 'jobs', 'pending_steering_json', "TEXT NOT NULL DEFAULT '[]'")
+  ensureColumn(db, 'jobs', 'auto_apply_review_suggestions', 'INTEGER NOT NULL DEFAULT 0')
+  ensureColumn(db, 'jobs', 'auto_apply_review_suggestions_to_stable_rules', 'INTEGER NOT NULL DEFAULT 1')
   ensureColumn(db, 'jobs', 'active_worker_id', 'TEXT')
   ensureColumn(db, 'jobs', 'worker_heartbeat_at', 'TEXT')
   ensureColumn(db, 'jobs', 'cancel_requested_at', 'TEXT')
   ensureColumn(db, 'jobs', 'pause_requested_at', 'TEXT')
   ensureColumn(db, 'jobs', 'pass_streak', 'INTEGER NOT NULL DEFAULT 0')
+  ensureColumn(db, 'jobs', 'pass_streak_candidate_id', 'TEXT')
   ensureColumn(db, 'jobs', 'last_review_score', 'REAL NOT NULL DEFAULT 0')
   ensureColumn(db, 'jobs', 'last_review_patch_json', "TEXT NOT NULL DEFAULT '[]'")
   ensureColumn(db, 'candidates', 'applied_steering_json', "TEXT NOT NULL DEFAULT '[]'")
   ensureColumn(db, 'judge_runs', 'drift_labels_json', "TEXT NOT NULL DEFAULT '[]'")
   ensureColumn(db, 'judge_runs', 'drift_explanation', "TEXT NOT NULL DEFAULT ''")
+  ensureColumn(db, 'judge_runs', 'dimension_scores_json', "TEXT NOT NULL DEFAULT '{}'")
+  ensureColumn(db, 'judge_runs', 'dimension_reasons_json', "TEXT NOT NULL DEFAULT '[]'")
+  ensureColumn(db, 'judge_runs', 'rubric_dimensions_snapshot_json', "TEXT NOT NULL DEFAULT '[]'")
+  ensureColumn(db, 'round_runs', 'summary', "TEXT NOT NULL DEFAULT ''")
+  ensureColumn(db, 'round_runs', 'drift_labels_json', "TEXT NOT NULL DEFAULT '[]'")
+  ensureColumn(db, 'round_runs', 'drift_explanation', "TEXT NOT NULL DEFAULT ''")
+  ensureColumn(db, 'round_runs', 'findings_json', "TEXT NOT NULL DEFAULT '[]'")
+  ensureColumn(db, 'round_runs', 'suggested_changes_json', "TEXT NOT NULL DEFAULT '[]'")
+  ensureColumn(db, 'round_runs', 'dimension_scores_json', "TEXT NOT NULL DEFAULT '{}'")
+  ensureColumn(db, 'round_runs', 'dimension_reasons_json', "TEXT NOT NULL DEFAULT '[]'")
+  ensureColumn(db, 'round_runs', 'rubric_dimensions_snapshot_json', "TEXT NOT NULL DEFAULT '[]'")
+  ensureColumn(db, 'round_runs', 'round_status', "TEXT NOT NULL DEFAULT 'settled'")
+  ensureColumn(db, 'round_runs', 'optimizer_error', 'TEXT')
+  ensureColumn(db, 'round_runs', 'judge_error', 'TEXT')
+  ensureColumn(db, 'round_runs', 'pass_streak_after', 'INTEGER NOT NULL DEFAULT 0')
   ensureColumn(db, 'settings', 'custom_rubric_md', "TEXT NOT NULL DEFAULT ''")
   ensureColumn(db, 'jobs', 'custom_rubric_md', 'TEXT')
   const existingSettings = db.prepare('SELECT id FROM settings WHERE id = 1').get() as { id?: number } | undefined

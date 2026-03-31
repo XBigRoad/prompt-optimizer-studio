@@ -216,7 +216,7 @@ test('settings models POST degrades a missing OpenAI-compatible /models endpoint
   }
 })
 
-test('settings route defaults worker concurrency to 2 and persists updates', async () => {
+test('settings route defaults worker concurrency to 2 and persists updates without an upper cap', async () => {
   const originalCwd = process.cwd()
   const originalDbPath = process.env.PROMPT_OPTIMIZER_DB_PATH
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'po-settings-concurrency-'))
@@ -237,18 +237,56 @@ test('settings route defaults worker concurrency to 2 and persists updates', asy
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        workerConcurrency: 4,
+        workerConcurrency: 50,
       }),
     }))
 
     assert.equal(saveResponse.status, 200)
     const savePayload = (await saveResponse.json()) as { settings: { workerConcurrency: number } }
-    assert.equal(savePayload.settings.workerConcurrency, 4)
+    assert.equal(savePayload.settings.workerConcurrency, 50)
 
     const getResponse = await settingsRoute.GET()
     assert.equal(getResponse.status, 200)
     const getPayload = (await getResponse.json()) as { settings: { workerConcurrency: number } }
-    assert.equal(getPayload.settings.workerConcurrency, 4)
+    assert.equal(getPayload.settings.workerConcurrency, 50)
+  } finally {
+    process.chdir(originalCwd)
+    if (originalDbPath === undefined) {
+      delete process.env.PROMPT_OPTIMIZER_DB_PATH
+    } else {
+      process.env.PROMPT_OPTIMIZER_DB_PATH = originalDbPath
+    }
+  }
+})
+
+test('settings route preserves maxRounds values above 20 when explicitly configured', async () => {
+  const originalCwd = process.cwd()
+  const originalDbPath = process.env.PROMPT_OPTIMIZER_DB_PATH
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'po-settings-max-rounds-'))
+  process.env.PROMPT_OPTIMIZER_DB_PATH = path.join(tempDir, 'test.db')
+  process.chdir(tempDir)
+
+  try {
+    const { resetDbForTests } = await import('../src/lib/server/db')
+    resetDbForTests()
+    const settingsRoute = await import('../src/app/api/settings/route')
+
+    const saveResponse = await settingsRoute.POST(new Request('http://localhost/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        maxRounds: 25,
+      }),
+    }))
+
+    assert.equal(saveResponse.status, 200)
+    const savePayload = (await saveResponse.json()) as { settings: { maxRounds: number } }
+    assert.equal(savePayload.settings.maxRounds, 25)
+
+    const getResponse = await settingsRoute.GET()
+    assert.equal(getResponse.status, 200)
+    const getPayload = (await getResponse.json()) as { settings: { maxRounds: number } }
+    assert.equal(getPayload.settings.maxRounds, 25)
   } finally {
     process.chdir(originalCwd)
     if (originalDbPath === undefined) {

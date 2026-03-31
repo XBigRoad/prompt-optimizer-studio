@@ -22,8 +22,13 @@ export interface ProviderAdapter {
 
 type ProviderConnectionSettings = Pick<AppSettings, 'cpamcBaseUrl' | 'cpamcApiKey'> & Partial<Pick<AppSettings, 'apiProtocol'>>
 
-const DEFAULT_MODEL_REQUEST_ATTEMPT_TIMEOUT_CAP_MS = 60_000
 const DEFAULT_MODEL_REQUEST_MAX_ATTEMPTS = 2
+const GPT5_RESPONSES_PROBE_TIMEOUT_MS = 180_000
+const DEFAULT_JSON_RESPONSE_MAX_TOKENS = 4_096
+
+function resolveAttemptTimeoutCapMs(input: Pick<ProviderJsonRequest, 'attemptTimeoutCapMs' | 'timeoutMs'>) {
+  return input.attemptTimeoutCapMs ?? input.timeoutMs
+}
 
 interface OpenAiModelListResponse {
   data?: Array<{
@@ -207,6 +212,7 @@ class OpenAiStyleProviderAdapter implements ProviderAdapter {
     input: ProviderJsonRequest,
     reasoningEffort: ReasoningEffort,
   ) {
+    const chatReasoningEffort = resolveChatCompletionsReasoningEffort(input.model, reasoningEffort)
     const endpoint = appendToBasePath(this.settings.cpamcBaseUrl, 'chat/completions')
     const body = {
       model: input.model,
@@ -214,8 +220,9 @@ class OpenAiStyleProviderAdapter implements ProviderAdapter {
         { role: 'system', content: input.system },
         { role: 'user', content: input.user },
       ],
-      ...(reasoningEffort !== 'default' ? { reasoning_effort: reasoningEffort } : {}),
-      ...(shouldSendTemperature(input.model, reasoningEffort) ? { temperature: 0.2 } : {}),
+      max_tokens: DEFAULT_JSON_RESPONSE_MAX_TOKENS,
+      ...(chatReasoningEffort !== 'default' ? { reasoning_effort: chatReasoningEffort } : {}),
+      ...(shouldSendTemperature(input.model, chatReasoningEffort) ? { temperature: 0.2 } : {}),
     }
 
     const response = await requestWithRetry((attemptTimeoutMs) => (
@@ -234,7 +241,7 @@ class OpenAiStyleProviderAdapter implements ProviderAdapter {
       })
     ), {
       maxAttempts: input.maxAttempts ?? DEFAULT_MODEL_REQUEST_MAX_ATTEMPTS,
-      attemptTimeoutCapMs: input.attemptTimeoutCapMs ?? DEFAULT_MODEL_REQUEST_ATTEMPT_TIMEOUT_CAP_MS,
+      attemptTimeoutCapMs: resolveAttemptTimeoutCapMs(input),
       timeoutMs: input.timeoutMs,
       actionLabel: '模型请求',
     })
@@ -251,6 +258,7 @@ class OpenAiStyleProviderAdapter implements ProviderAdapter {
       model: input.model,
       instructions: input.system,
       input: input.user,
+      max_output_tokens: DEFAULT_JSON_RESPONSE_MAX_TOKENS,
       ...(reasoningEffort !== 'default' ? { reasoning: { effort: reasoningEffort } } : {}),
       ...(shouldSendTemperature(input.model, reasoningEffort) ? { temperature: 0.2 } : {}),
     }
@@ -271,7 +279,7 @@ class OpenAiStyleProviderAdapter implements ProviderAdapter {
       })
     ), {
       maxAttempts: input.maxAttempts ?? DEFAULT_MODEL_REQUEST_MAX_ATTEMPTS,
-      attemptTimeoutCapMs: input.attemptTimeoutCapMs ?? DEFAULT_MODEL_REQUEST_ATTEMPT_TIMEOUT_CAP_MS,
+      attemptTimeoutCapMs: resolveAttemptTimeoutCapMs(input),
       timeoutMs: input.timeoutMs,
       actionLabel: '模型请求',
     })
@@ -312,6 +320,25 @@ function shouldSendTemperature(model: string, reasoningEffort: ReasoningEffort) 
   return true
 }
 
+function shouldPreferResponsesApi(model: string, reasoningEffort: ReasoningEffort) {
+  return isGpt5FamilyModel(model) && (reasoningEffort === 'high' || reasoningEffort === 'xhigh')
+}
+
+function resolveResponsesProbeTimeoutMs(totalTimeoutMs: number) {
+  return Math.min(
+    totalTimeoutMs,
+    Math.max(GPT5_RESPONSES_PROBE_TIMEOUT_MS, Math.round(totalTimeoutMs * 0.66)),
+  )
+}
+
+function resolveChatCompletionsReasoningEffort(model: string, reasoningEffort: ReasoningEffort) {
+  if (isGpt5FamilyModel(model) && reasoningEffort === 'xhigh') {
+    return 'high' as const
+  }
+
+  return reasoningEffort
+}
+
 class OpenAiCompatibleProviderAdapter extends OpenAiStyleProviderAdapter {
   constructor(settings: ProviderConnectionSettings) {
     super(settings, 'openai-compatible')
@@ -321,14 +348,100 @@ class OpenAiCompatibleProviderAdapter extends OpenAiStyleProviderAdapter {
     const reasoningEffort = normalizeReasoningEffort(input.reasoningEffort)
 
     try {
+      return await this.requestJsonWithTransportStrategy(input, reasoningEffort)
+    } catch (error) {
+      if (!shouldRetryWithLowerReasoning(error)) {
+        throw error
+      }
+
+      let downgradedEffort = nextLowerReasoningEffort(reasoningEffort)
+      let lastError = error
+
+      while (downgradedEffort) {
+        try {
+          return await this.requestJsonViaChatCompletions({
+            ...input,
+            timeoutMs: Math.min(input.timeoutMs, resolveLowerReasoningRetryTimeoutMs(downgradedEffort)),
+            maxAttempts: 1,
+            attemptTimeoutCapMs: undefined,
+          }, downgradedEffort)
+        } catch (retryError) {
+          lastError = retryError
+          if (!shouldRetryWithLowerReasoning(retryError)) {
+            throw retryError
+          }
+          downgradedEffort = nextLowerReasoningEffort(downgradedEffort)
+        }
+      }
+
+      throw lastError
+    }
+  }
+
+  private async requestJsonWithTransportStrategy(
+    input: ProviderJsonRequest,
+    reasoningEffort: ReasoningEffort,
+  ) {
+    
+    if (shouldPreferResponsesApi(input.model, reasoningEffort)) {
+      const startedAt = Date.now()
+      const probeTimeoutMs = resolveResponsesProbeTimeoutMs(input.timeoutMs)
+      try {
+        return await this.requestJsonViaResponsesApi({
+          ...input,
+          timeoutMs: probeTimeoutMs,
+          maxAttempts: 1,
+          attemptTimeoutCapMs: input.attemptTimeoutCapMs === undefined
+            ? undefined
+            : Math.min(input.attemptTimeoutCapMs, probeTimeoutMs),
+        }, reasoningEffort)
+      } catch (error) {
+        if (!shouldFallbackFromResponses(error)) {
+          throw error
+        }
+
+        const remainingTimeoutMs = Math.max(1, input.timeoutMs - (Date.now() - startedAt))
+        return this.requestJsonViaChatCompletions({
+          ...input,
+          timeoutMs: remainingTimeoutMs,
+          attemptTimeoutCapMs: input.attemptTimeoutCapMs === undefined
+            ? undefined
+            : Math.min(input.attemptTimeoutCapMs, remainingTimeoutMs),
+        }, reasoningEffort)
+      }
+    }
+
+    try {
       return await this.requestJsonViaChatCompletions(input, reasoningEffort)
     } catch (error) {
-      if (!isMissingChatCompletionsEndpoint(error)) {
+      if (!shouldFallbackFromChatCompletions(error)) {
         throw error
       }
 
       return this.requestJsonViaResponsesApi(input, reasoningEffort)
     }
+  }
+}
+
+function nextLowerReasoningEffort(reasoningEffort: ReasoningEffort): ReasoningEffort | null {
+  switch (reasoningEffort) {
+    case 'xhigh':
+      return 'high'
+    case 'high':
+      return 'medium'
+    default:
+      return null
+  }
+}
+
+function resolveLowerReasoningRetryTimeoutMs(reasoningEffort: ReasoningEffort) {
+  switch (reasoningEffort) {
+    case 'high':
+      return 240_000
+    case 'medium':
+      return 180_000
+    default:
+      return 120_000
   }
 }
 
@@ -380,7 +493,7 @@ class AnthropicNativeProviderAdapter implements ProviderAdapter {
       })
     ), {
       maxAttempts: input.maxAttempts ?? DEFAULT_MODEL_REQUEST_MAX_ATTEMPTS,
-      attemptTimeoutCapMs: input.attemptTimeoutCapMs ?? DEFAULT_MODEL_REQUEST_ATTEMPT_TIMEOUT_CAP_MS,
+      attemptTimeoutCapMs: resolveAttemptTimeoutCapMs(input),
       timeoutMs: input.timeoutMs,
       actionLabel: 'Anthropic 请求',
     })
@@ -429,6 +542,7 @@ class GeminiNativeProviderAdapter implements ProviderAdapter {
       ],
       generationConfig: {
         temperature: 0.2,
+        maxOutputTokens: DEFAULT_JSON_RESPONSE_MAX_TOKENS,
       },
     }
 
@@ -448,7 +562,7 @@ class GeminiNativeProviderAdapter implements ProviderAdapter {
       })
     ), {
       maxAttempts: input.maxAttempts ?? DEFAULT_MODEL_REQUEST_MAX_ATTEMPTS,
-      attemptTimeoutCapMs: input.attemptTimeoutCapMs ?? DEFAULT_MODEL_REQUEST_ATTEMPT_TIMEOUT_CAP_MS,
+      attemptTimeoutCapMs: resolveAttemptTimeoutCapMs(input),
       timeoutMs: input.timeoutMs,
       actionLabel: 'Gemini 请求',
     })
@@ -485,6 +599,7 @@ class CohereNativeProviderAdapter implements ProviderAdapter {
         { role: 'system', content: input.system },
         { role: 'user', content: input.user },
       ],
+      max_tokens: DEFAULT_JSON_RESPONSE_MAX_TOKENS,
       temperature: 0.2,
     }
 
@@ -504,7 +619,7 @@ class CohereNativeProviderAdapter implements ProviderAdapter {
       })
     ), {
       maxAttempts: input.maxAttempts ?? DEFAULT_MODEL_REQUEST_MAX_ATTEMPTS,
-      attemptTimeoutCapMs: input.attemptTimeoutCapMs ?? DEFAULT_MODEL_REQUEST_ATTEMPT_TIMEOUT_CAP_MS,
+      attemptTimeoutCapMs: resolveAttemptTimeoutCapMs(input),
       timeoutMs: input.timeoutMs,
       actionLabel: 'Cohere 请求',
     })
@@ -861,6 +976,10 @@ function isRetriableHttpFailure(status: number, bodyText: string) {
     return true
   }
 
+  if (status === 403) {
+    return isRecoverableGatewayForbiddenMessage(bodyText)
+  }
+
   if (status !== 500) {
     return false
   }
@@ -868,8 +987,12 @@ function isRetriableHttpFailure(status: number, bodyText: string) {
   return isRetriableTransientMessage(bodyText)
 }
 
+function isRecoverableGatewayForbiddenMessage(message: string) {
+  return /((cloudflare|gateway|proxy|waf|security).*(forbidden|access denied|blocked))|((forbidden|access denied|blocked).*(cloudflare|gateway|proxy|waf|security))|attention required|request blocked/i.test(message)
+}
+
 function isRetriableTransientMessage(message: string) {
-  return /(fetch failed|timeout|timed out|gateway time-?out|bad gateway|service unavailable|the operation was aborted|aborterror|etimedout|econnreset|econnrefused|socket hang up|\beof\b|upstream connect|upstream timed out|network|\bhttp 000\b)/i.test(message)
+  return /(fetch failed|timeout|timed out|gateway time-?out|bad gateway|service unavailable|the operation was aborted|aborterror|etimedout|econnreset|econnrefused|socket hang up|\beof\b|upstream connect|upstream timed out|network|\bhttp 000\b|stream error|internal[_ ]error|server[_ ]error|received from peer|cloudflare|auth_unavailable|no auth available|authentication unavailable)/i.test(message)
 }
 
 function appendToBasePath(baseUrl: string, tail: string) {
@@ -941,6 +1064,36 @@ function isMissingChatCompletionsEndpoint(error: unknown) {
     && 'status' in error
     && (error as { status?: number }).status === 404,
   )
+}
+
+function isMissingResponsesEndpoint(error: unknown) {
+  return Boolean(
+    error
+    && typeof error === 'object'
+    && 'status' in error
+    && (error as { status?: number }).status === 404,
+  )
+}
+
+function isRecoverableGatewayForbiddenError(error: unknown) {
+  if (!error || typeof error !== 'object' || !('status' in error) || (error as { status?: number }).status !== 403) {
+    return false
+  }
+
+  const message = error instanceof Error ? error.message : String(error ?? '')
+  return isRecoverableGatewayForbiddenMessage(message)
+}
+
+function shouldFallbackFromResponses(error: unknown) {
+  return isMissingResponsesEndpoint(error) || isRetriableRequestError(error)
+}
+
+function shouldFallbackFromChatCompletions(error: unknown) {
+  return isMissingChatCompletionsEndpoint(error) || isRecoverableGatewayForbiddenError(error)
+}
+
+function shouldRetryWithLowerReasoning(error: unknown) {
+  return isRetriableRequestError(error)
 }
 
 function appendVersionedPath(baseUrl: string, versionSegment: string, tail: string) {

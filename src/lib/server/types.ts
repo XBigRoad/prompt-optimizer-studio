@@ -1,9 +1,12 @@
 import type { ConversationPolicy } from '@/lib/engine/conversation-policy'
 import type { RoundJudgment } from '@/lib/engine/optimization-cycle'
 import type { ReasoningEffort } from '@/lib/reasoning-effort'
+import type { RubricDimension } from '@/lib/server/rubric-dimensions'
 
 export type JobStatus = 'pending' | 'running' | 'paused' | 'completed' | 'failed' | 'manual_review' | 'cancelled'
 export type JobRunMode = 'auto' | 'step'
+export type RoundSemantics = 'legacy-output-judged' | 'input-judged-output-handed-off'
+export type RoundRunOutcome = 'settled' | 'judge_failed' | 'optimizer_failed' | 'both_failed' | 'legacy'
 export type ApiProtocol =
   | 'auto'
   | 'openai-compatible'
@@ -11,6 +14,8 @@ export type ApiProtocol =
   | 'gemini-native'
   | 'mistral-native'
   | 'cohere-native'
+
+export type RubricDimensionSnapshot = RubricDimension
 
 export interface SteeringItem {
   id: string
@@ -79,7 +84,10 @@ export interface JobRecord {
   goalAnchorExplanation: GoalAnchorExplanation
   maxRoundsOverride: number | null
   pendingSteeringItems: SteeringItem[]
+  autoApplyReviewSuggestions: boolean
+  autoApplyReviewSuggestionsToStableRules: boolean
   passStreak: number
+  passStreakCandidateId: string | null
   lastReviewScore: number
   lastReviewPatch: string[]
   finalCandidateId: string | null
@@ -117,9 +125,37 @@ export interface JudgeRunRecord extends RoundJudgment {
   createdAt: string
 }
 
+export interface RoundRunRecord {
+  id: string
+  jobId: string
+  roundNumber: number
+  semantics: RoundSemantics
+  inputPrompt: string
+  inputCandidateId: string | null
+  outputCandidateId: string | null
+  displayScore: number | null
+  hasMaterialIssues: boolean | null
+  dimensionScores: Record<string, number> | null
+  dimensionReasons: string[]
+  rubricDimensionsSnapshot: RubricDimensionSnapshot[] | null
+  summary: string
+  driftLabels: string[]
+  driftExplanation: string
+  findings: string[]
+  suggestedChanges: string[]
+  outcome: RoundRunOutcome
+  optimizerError: string | null
+  judgeError: string | null
+  passStreakAfter: number
+  outputJudged: boolean
+  outputCandidate: CandidateRecord | null
+  createdAt: string
+}
+
 export interface JobDetail {
   job: JobRecord
   candidates: Array<CandidateRecord & { judges: JudgeRunRecord[] }>
+  roundRuns: RoundRunRecord[]
 }
 
 export interface JobInput {
@@ -130,6 +166,7 @@ export interface JobInput {
   optimizerReasoningEffort?: ReasoningEffort
   judgeReasoningEffort?: ReasoningEffort
   customRubricMd?: string | null
+  runMode?: JobRunMode
 }
 
 export interface ModelCatalogItem {

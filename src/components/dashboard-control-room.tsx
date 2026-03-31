@@ -55,12 +55,12 @@ type HistoryGroupView = ReturnType<typeof groupHistoryJobsByTitle<DashboardJobVi
 const noopDashboardAction = async (_job: DashboardJobView) => {}
 
 export function DashboardControlRoom({
-  actionableOnly,
+  actionableOnly: _actionableOnly,
   loading,
   groups,
   stats,
   actionInFlight,
-  onToggleActionableOnly,
+  onToggleActionableOnly: _onToggleActionableOnly,
   onCopyPrompt,
   onCompleteTask = noopDashboardAction,
   onResumeStep,
@@ -149,10 +149,8 @@ export function DashboardControlRoom({
       },
     ]
 
-    return actionableOnly
-      ? available.filter((item) => item.key === 'attention' || item.key === 'running')
-      : available
-  }, [actionableOnly, groups.attention, groups.queued, groups.recentCompleted, groups.running])
+    return available
+  }, [groups.attention, groups.queued, groups.recentCompleted, groups.running])
 
   const defaultLane = useMemo(() => {
     if (lanes.some((lane) => lane.key === 'attention' && lane.jobs.length > 0)) {
@@ -173,9 +171,22 @@ export function DashboardControlRoom({
 
   const [activeLane, setActiveLane] = useState<LaneKey>(defaultLane)
 
+  const laneHasVisibleContent = (laneKey: LaneKey) => {
+    const lane = lanes.find((item) => item.key === laneKey)
+    if (!lane) {
+      return false
+    }
+
+    if (laneKey === 'recent-completed') {
+      return lane.jobs.length > 0 || historyGroups.length > 0
+    }
+
+    return lane.jobs.length > 0
+  }
+
   useEffect(() => {
-    setActiveLane(defaultLane)
-  }, [defaultLane])
+    setActiveLane((current) => (laneHasVisibleContent(current) ? current : defaultLane))
+  }, [defaultLane, historyGroups.length, lanes])
 
   const activeLaneView = lanes.find((lane) => lane.key === activeLane) ?? lanes[0]
 
@@ -232,15 +243,6 @@ export function DashboardControlRoom({
           <p className="hero-lead">
             {text('先处理要你决策的任务，再观察自动运行中的任务，然后查看最新结果或翻出同标题历史运行。', 'Handle the jobs that need your decision first, then watch the running jobs, then review results or grouped history.')}
           </p>
-          <div className="button-row">
-            <button
-              className={`button control-toggle${actionableOnly ? ' active' : ''}`}
-              type="button"
-              onClick={onToggleActionableOnly}
-            >
-              {actionableOnly ? text('恢复完整看板', 'Show full board') : text('只看我现在要处理的', 'Only show what needs me now')}
-            </button>
-          </div>
         </div>
         <div className="summary-cluster">
           <SummaryCard icon={<AlertTriangle size={18} />} label={text('待你处理', 'Need your decision')} value={stats.attention} tone="manual_review" />
@@ -352,7 +354,7 @@ function DashboardLane({
           <p className="small">{description}</p>
         </div>
       </div>
-      <motion.div layout className={`lane-grid${decisionQueue ? ' decision-lane-grid' : ''}`}>
+      <div className={`lane-grid${decisionQueue ? ' decision-lane-grid' : ''}`}>
         {jobs.length === 0 ? <div className="notice">{emptyMessage}</div> : null}
         {jobs.map((job) => (
           <DashboardJobCard
@@ -366,7 +368,7 @@ function DashboardLane({
             onRetry={onRetry}
           />
         ))}
-      </motion.div>
+      </div>
     </section>
   )
 }
@@ -644,6 +646,9 @@ function DashboardJobCard({
   const decisionSummary = isDecisionCard ? getDashboardDecisionSummary(job, locale) : null
   const bestScoreDisplay = getJobScoreDisplay(job, locale)
   const bestScoreMeta = getJobScoreMeta(job, locale)
+  const displayError = getJobDisplayError(job.errorMessage, locale, {
+    hasUsableResult: job.currentRound > 0 || job.candidateCount > 0 || job.bestAverageScore > 0,
+  })
 
   if (isDecisionCard && decisionSummary) {
     return (
@@ -712,7 +717,7 @@ function DashboardJobCard({
                   {canRestart ? (
                     <ConfirmDialog
                       title={text('重新开始？', 'Restart from the beginning?')}
-                      description={text('这会清空当前候选稿与历史轮次，从初版提示词重新跑。', 'This clears the current candidates and round history, then restarts from the initial prompt.')}
+                      description={text('这会清空当前候选稿、历史轮次和待生效引导，并基于初版提示词与重建后的长期规则重新跑。模型配置会按当前设置生效。', 'This clears current candidates, round history, and pending steering, then reruns from the initial prompt with rebuilt stable rules. The current model settings still apply.')}
                       confirmText={text('确认重新开始', 'Confirm restart')}
                       tone="danger"
                       disabled={actionInFlight === `${job.id}:retry`}
@@ -759,7 +764,7 @@ function DashboardJobCard({
         <span>{text('模型', 'Model')} {job.optimizerModel}</span>
         <span>{getConversationPolicyLabel(job.conversationPolicy, locale)}</span>
       </div>
-      {getJobDisplayError(job.errorMessage, locale) ? <div className="notice error">{getJobDisplayError(job.errorMessage, locale)}</div> : null}
+      {displayError ? <div className="notice error">{displayError}</div> : null}
       <div className="card-actions">
         {primary.kind === 'link' ? (
           <Link href={primary.href as Route} className="button primary-action">
@@ -799,7 +804,7 @@ function DashboardJobCard({
             {canRestart ? (
               <ConfirmDialog
                 title={text('重新开始？', 'Restart from the beginning?')}
-                description={text('这会清空当前候选稿与历史轮次，从初版提示词重新跑。', 'This clears the current candidates and round history, then restarts from the initial prompt.')}
+                description={text('这会清空当前候选稿、历史轮次和待生效引导，并基于初版提示词与重建后的长期规则重新跑。模型配置会按当前设置生效。', 'This clears current candidates, round history, and pending steering, then reruns from the initial prompt with rebuilt stable rules. The current model settings still apply.')}
                 confirmText={text('确认重新开始', 'Confirm restart')}
                 tone="danger"
                 disabled={actionInFlight === `${job.id}:retry`}

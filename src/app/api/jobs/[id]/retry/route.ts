@@ -1,12 +1,13 @@
 import { NextResponse } from 'next/server'
 
 import { getJobById, resetJobForRetry } from '@/lib/server/jobs'
+import type { JobRunMode } from '@/lib/server/types'
 import { ensureWorkerStarted } from '@/lib/server/worker'
 
 export const runtime = 'nodejs'
 
 export async function POST(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
   const { id } = await context.params
@@ -16,7 +17,9 @@ export async function POST(
   }
 
   try {
-    const reset = resetJobForRetry(id)
+    const body = await request.json().catch(() => null) as { runMode?: JobRunMode } | null
+    const runMode = body?.runMode === 'step' ? 'step' : 'auto'
+    const reset = resetJobForRetry(id, runMode)
     ensureWorkerStarted()
     return NextResponse.json({ job: reset })
   } catch (error) {

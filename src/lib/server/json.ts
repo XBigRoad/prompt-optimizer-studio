@@ -4,13 +4,34 @@ export function extractJsonObject(payload: string) {
     throw new Error('Model returned an empty response.')
   }
 
-  try {
-    return JSON.parse(trimmed)
-  } catch {
-    const match = trimmed.match(/\{[\s\S]*\}/)
-    if (!match) {
-      throw new Error(`Model did not return valid JSON. Payload: ${trimmed.slice(0, 400)}`)
+  for (const candidate of getJsonCandidates(trimmed)) {
+    try {
+      return JSON.parse(candidate)
+    } catch {
     }
-    return JSON.parse(match[0])
   }
+
+  throw new Error(`Model did not return valid JSON. Payload: ${trimmed.slice(0, 400)}`)
+}
+
+function getJsonCandidates(payload: string) {
+  const candidates = new Set<string>([
+    payload,
+    normalizeLooseJson(payload),
+  ])
+  const match = payload.match(/\{[\s\S]*\}/)
+  if (match?.[0]) {
+    candidates.add(match[0])
+    candidates.add(normalizeLooseJson(match[0]))
+  }
+
+  return [...candidates]
+}
+
+function normalizeLooseJson(payload: string) {
+  return payload
+    .replace(/[\u201C\u201D]/g, '"')
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/\u00A0/g, ' ')
+    .replace(/\uFEFF/g, '')
 }

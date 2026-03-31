@@ -9,11 +9,12 @@ export const LEGACY_GENERIC_SOURCE_SUMMARIES = [
 export function deriveGoalAnchorExplanation(rawPrompt: string, goalAnchor: GoalAnchor): GoalAnchorExplanation {
   const analysis = analyzeGoalAnchorPrompt(rawPrompt)
   const sourceSummary = summarizeSource(analysis.prompt)
+  const rationaleFocus = analysis.directiveSummary?.objective || analysis.focus
 
   return normalizeGoalAnchorExplanation({
     sourceSummary,
     rationale: [
-      buildGoalRationale(analysis.focus),
+      buildGoalRationale(rationaleFocus),
       `从原始表达可判断，最终交付应是：${goalAnchor.deliverable}`,
       '这些边界用于防止多轮优化后偏离主题、丢掉关键产出，或退化成更空泛的说明。',
     ],

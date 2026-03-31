@@ -263,3 +263,52 @@ test('candidate history exposes applied steering items for the consumed round', 
     }
   }
 })
+
+
+test('pending steering items can append a selected edited batch in order', async () => {
+  const originalCwd = process.cwd()
+  const originalDbPath = process.env.PROMPT_OPTIMIZER_DB_PATH
+  const originalFetch = global.fetch
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'po-steering-batch-'))
+  process.env.PROMPT_OPTIMIZER_DB_PATH = path.join(tempDir, 'test.db')
+  process.chdir(tempDir)
+
+  try {
+    const { resetDbForTests } = await import('../src/lib/server/db')
+    resetDbForTests()
+    const { saveSettings } = await import('../src/lib/server/settings')
+    const { addPendingSteeringItems, createJobs } = await import('../src/lib/server/jobs')
+
+    saveSettings({
+      cpamcBaseUrl: 'http://localhost:8317/v1',
+      cpamcApiKey: 'secret',
+      defaultOptimizerModel: 'gpt-5.2',
+      defaultJudgeModel: 'gpt-5.2',
+    })
+
+    global.fetch = stubGoalAnchorFetch()
+
+    const [job] = await createJobs([
+      { title: 'Batch steering job', rawPrompt: 'E', optimizerModel: 'gpt-5.2', judgeModel: 'gpt-5.2' },
+    ])
+
+    const updated = addPendingSteeringItems(job.id, [
+      '  先补一条预算兜底。  ',
+      '',
+      '把采购缺货时的替代规则写具体。',
+    ])
+
+    assert.deepEqual(updated.pendingSteeringItems.map((item) => item.text), [
+      '先补一条预算兜底。',
+      '把采购缺货时的替代规则写具体。',
+    ])
+  } finally {
+    process.chdir(originalCwd)
+    global.fetch = originalFetch
+    if (originalDbPath === undefined) {
+      delete process.env.PROMPT_OPTIMIZER_DB_PATH
+    } else {
+      process.env.PROMPT_OPTIMIZER_DB_PATH = originalDbPath
+    }
+  }
+})

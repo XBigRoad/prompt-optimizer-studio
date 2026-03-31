@@ -6,6 +6,8 @@ export interface WorkerRuntimeState {
   heartbeatIntervalId: ReturnType<typeof setInterval> | null
   activeCount: number
   activeJobIds: Set<string>
+  isPumping: boolean
+  repumpRequested: boolean
 }
 
 export function createWorkerRuntimeState(ownerId: string, runtimeVersion: string): WorkerRuntimeState {
@@ -17,6 +19,8 @@ export function createWorkerRuntimeState(ownerId: string, runtimeVersion: string
     heartbeatIntervalId: null,
     activeCount: 0,
     activeJobIds: new Set(),
+    isPumping: false,
+    repumpRequested: false,
   }
 }
 
@@ -25,7 +29,19 @@ export function shouldReplaceWorkerRuntime(
   ownerId: string,
   runtimeVersion: string,
 ) {
-  return !state || state.ownerId !== ownerId || state.runtimeVersion !== runtimeVersion
+  if (!state) {
+    return true
+  }
+
+  if (state.ownerId !== ownerId) {
+    return true
+  }
+
+  if (!state.started && state.runtimeVersion !== runtimeVersion) {
+    return true
+  }
+
+  return false
 }
 
 export function resolveStableWorkerOwnerId(

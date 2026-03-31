@@ -1,18 +1,18 @@
 ---
 name: prompt-optimizer
-description: Use when the user asks to evaluate, score, debug, rewrite, or generate prompts; especially for prompt quality review, Prompt Architect style outputs, and vibe-coding plan prompt checks.
+description: Use when the user asks to score, diagnose, optimize, rewrite, or generate prompts; especially for prompt quality scoring, prompt optimization, Prompt Architect style outputs, and vibe-coding plan prompt checks.
 ---
 
 # Prompt Optimizer (提示词优化)
 
 ## Overview
 
-将“提示词优化”当作工程审计任务：先判定任务类型，再基于证据评分，最后选择“最小改造”或“统一重构”。
+将“提示词优化”当作工程审计任务：先锁任务模式，再提高完整度与可执行性，最后只交付 1 个能直接用的版本。
 
 核心原则：
 - 先审计后改写，避免直接重写导致目标漂移。
-- 低分提示词优先重构，避免在坏结构上修补。
-- 输出必须可执行、可压测、可迭代。
+- 优先补足真正影响结果的逻辑、约束、边界和输出契约，不为了“更短”牺牲完整度。
+- 合理扩写是允许的；只有重复、空壳、假完整度才需要收掉。
 
 ## Language Rule
 
@@ -23,46 +23,44 @@ description: Use when the user asks to evaluate, score, debug, rewrite, or gener
 
 先判定输入属于哪类：
 
-1. `Review`：用户给了现有提示词，要求打分/评审/优化。
-2. `Create`：用户给需求，让你从零生成提示词。
-3. `Debug`：用户给失败样例，要求定位逻辑断层并修复。
+1. `现有提示词优化`：用户给了现有提示词，要求评分、诊断或优化。
+2. `从需求生成提示词`：用户给需求，让你从零生成提示词。
+3. `失败样例修复`：用户给失败样例，要求定位逻辑断层并修复。
 
-## Scoring-Driven Strategy
+## Optimization Strategy
 
-当任务为 `Review` 时，先使用 [references/rubric.md](references/rubric.md) 打分（0-100）：
+- `Preserve`：原 prompt 主模式正确、主交付正确、只是逻辑不够完整或结构还能更稳时使用。
+- `Rebuild`：原 prompt 主模式已经错位、结构断裂严重、或缺少最基本的输入/输出契约时使用。
+- 不要因为 prompt 变长就默认判定为失败；当复杂任务确实需要更多约束、例外处理和执行细节时，可以变长。
+- 不要把用户 prompt 改写成迎合评分器的话术；优化目标始终是让 prompt 更完整、更稳定、更可执行。
+- 当 prompt 已经有了整齐结构，不要停在“排版已完整”的错觉里；继续检查任务特有的决策规则、冲突优先级、证据边界、不确定性处理和可直接执行的细节是否真的到位。
+- 不要为了显得完整而机械追加通用壳子；只有当某个结构块能明显提升这个任务的可执行性时才引入。
 
-- `score >= 70`：采用 `Preserve` 策略。
-  - 保留原提示词的核心结构与术语。
-  - 仅修复逻辑矛盾、变量缺失、约束冲突与输出格式问题。
-- `score < 70`：采用 `Rebuild` 策略。
-  - 直接切换到 [references/universal-template.md](references/universal-template.md) 的统一框架重构。
-  - 保留用户真实目标与关键业务词，不保留低质量结构。
+## Adaptive Guardrails
 
-当任务为 `Create` 时，直接采用 `Rebuild` 策略。
-
-## Mandatory Guardrails
-
-所有任务都必须执行以下约束：
+以下约束按任务需要启用，目标是补真正缺口，而不是把每个 prompt 都改造成同一种重型模板：
 
 1. 变量校验
-- 扫描 `{变量}`。
+- 当任务明显依赖输入变量、条件分支或占位符时，扫描 `{变量}`。
 - 若缺少关键变量，挂起并返回：
   - `> ⚠️ 缺少核心变量：[{变量名}]，请补充。`
+- 若任务本身不依赖显式变量，不要为了凑格式硬造占位符区块。
 
 2. 动态 Few-Shot
-- 最终交付的提示词必须包含：`[输入] -> [内部逻辑] -> [输出]` 示例。
-- 长文本或系统级任务可降级为单模块极简示例。
+- 当示例能明显减少走偏、误解或格式漂移时，再补 `输入 -> 内部逻辑 -> 输出` 示例。
+- 简单任务可用极简示例，已经足够清晰时也可以不强行塞大段示例。
 
 3. 反截断渲染
-- 若最终提示词内部包含代码块（json/sql/tsv 等），外层使用四重反引号容器：` ```` `。
+- 仅当最终提示词内部包含代码块（json/sql/tsv 等）时，外层使用四重反引号容器：` ```` `。
 
 4. 防死胡同
-- 必须给出“卡死信号”和“切换条件”。
-- 至少包含一个最小验证实验（MVE）用于早期止损。
+- 对多步、长链路、高风险或容易跑偏的任务，补“卡死信号”和“切换条件”。
+- 当任务确实需要早期止损时，再加入最小验证实验（MVE）。
+- 仅在同一信息重复出现但没有新增可执行价值时，才做减法优化。
 
 ## Output Contract
 
-### For `Review`
+### 当输入是“现有提示词优化”
 
 按以下顺序输出：
 
@@ -73,7 +71,7 @@ description: Use when the user asks to evaluate, score, debug, rewrite, or gener
 5. `边界压测`：3 个场景（常规、极值/越界、对抗）。
 6. `迭代建议`：下一轮最值得优化的 1-3 个方向。
 
-### For `Create`
+### 当输入是“从需求生成提示词”
 
 按以下顺序输出：
 
@@ -82,7 +80,7 @@ description: Use when the user asks to evaluate, score, debug, rewrite, or gener
 3. `边界压测`：3 个场景（常规、极值/越界、对抗）。
 4. `迭代建议`：下一轮改进方向。
 
-### For `Debug`
+### 当输入是“失败样例修复”
 
 按以下顺序输出：
 
@@ -101,10 +99,11 @@ description: Use when the user asks to evaluate, score, debug, rewrite, or gener
 
 ## Common Failure Patterns
 
-- 直接改写不打分：容易误改正确结构。
+- 只保留人设和整齐标题，但缺少真实任务逻辑、决策规则和例外处理。
 - 只讲概念不给可执行提示词：用户无法落地。
 - 缺少变量校验：运行期容易失败。
 - 忽略死胡同信号：计划长期卡死但无切换机制。
+- 为了变薄而删掉必要的业务契约、主交付或关键边界。
 
 ## Iteration Rules
 

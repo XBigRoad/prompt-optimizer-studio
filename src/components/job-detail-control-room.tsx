@@ -16,11 +16,15 @@ import {
 } from 'lucide-react'
 
 import { JobRoundCard, type RoundCandidateView } from '@/components/job-round-card'
+import { JobRoundRunCard, type RoundRunView } from '@/components/job-round-run-card'
 import { ModelAliasCombobox } from '@/components/ui/model-alias-combobox'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { SelectField } from '@/components/ui/select-field'
 import { useI18n, useLocaleText } from '@/lib/i18n'
+import { normalizeEscapedMultilineText } from '@/lib/prompt-text'
 import { buildReasoningEffortOptions, getReasoningEffortLabel, type ReasoningEffort } from '@/lib/reasoning-effort'
+import type { ReviewSuggestionAddResult } from '@/lib/review-suggestion-drafts'
+import { parseRubricDimensions } from '@/lib/server/rubric-dimensions'
 import type { SteeringItem } from '@/lib/server/types'
 import { getJobDisplayError, getJobScoreDisplay, getJobScoreMeta, getJobStatusLabel } from '@/lib/presentation'
 
@@ -59,6 +63,8 @@ export type JobDetailViewModel = {
   passStreak: number
   lastReviewScore: number
   customRubricMd: string | null
+  autoApplyReviewSuggestions: boolean
+  autoApplyReviewSuggestionsToStableRules: boolean
   effectiveRubricMd: string
   effectiveRubricSource: 'job' | 'settings' | 'default'
   errorMessage: string | null
@@ -67,6 +73,7 @@ export type JobDetailViewModel = {
   modelsLabel: string
   effectiveMaxRounds: number
   candidates: RoundCandidateView[]
+  roundRuns: RoundRunView[]
 }
 
 export function JobDetailControlRoom({
@@ -81,6 +88,7 @@ export function JobDetailControlRoom({
   ui: {
     loading: boolean
     error: string | null
+    loadWarning?: string | null
     actionMessage: string | null
     savingModels: boolean
     savingMaxRounds: boolean
@@ -94,8 +102,11 @@ export function JobDetailControlRoom({
     pausing: boolean
     resumingStep: boolean
     resumingAuto: boolean
+    forkingFromFinal?: boolean
     copyingPrompt: boolean
     compareMode: boolean
+    completedResumePickerOpen?: boolean
+    completedResumeTargetRunMode?: 'auto' | 'step' | null
     expandedRounds: Record<string, boolean>
   }
   form: {
@@ -116,6 +127,9 @@ export function JobDetailControlRoom({
     onSaveMaxRoundsOverride: () => void
     onSaveCustomRubric: (nextValue?: string) => void
     onAddPendingSteering: () => void
+    onAddReviewSuggestions?: (items: string[]) => Promise<ReviewSuggestionAddResult | void> | ReviewSuggestionAddResult | void
+    onReviewSuggestionTargetChange?: (target: 'pending' | 'stable') => void
+    onToggleAutoApplyReviewSuggestions?: (items: string[]) => Promise<void> | void
     onRemovePendingSteeringItem: (itemId: string) => void
     onClearPendingSteering: () => void
     onGenerateGoalAnchorDraft: () => void
@@ -123,6 +137,9 @@ export function JobDetailControlRoom({
     onPauseTask: () => void
     onResumeStep: () => void
     onResumeAuto: () => void
+    onCloseCompletedResumePicker?: () => void
+    onResumeCompletedCurrentTask?: () => void
+    onForkFromFinalTask?: () => void
     onCancelTask: () => void
     onCompleteTask: () => void
     onCopyLatestPrompt: () => void
@@ -141,18 +158,33 @@ export function JobDetailControlRoom({
 }) {
   const { locale } = useI18n()
   const text = useLocaleText()
+  const rubricDimensions = parseRubricDimensions(model.effectiveRubricMd)
   const reasoningEffortOptions = buildReasoningEffortOptions(locale)
-  const canEdit = model.status !== 'completed'
-  const canAdjustStableRules = ['paused', 'manual_review', 'failed'].includes(model.status)
-  const canSteer = !['completed', 'cancelled'].includes(model.status)
+  const canEditRuntime = model.status !== 'cancelled'
+  const canAdjustStableRules = model.status !== 'completed'
+  const canEditTaskRubric = model.status !== 'completed'
+  const canSteer = model.status !== 'cancelled'
   const canRestart = ['pending', 'paused', 'failed', 'manual_review', 'cancelled'].includes(model.status)
   const canCancel = !['completed', 'cancelled'].includes(model.status)
   const canPause = !['completed', 'cancelled', 'paused'].includes(model.status)
-  const canResume = !['completed', 'cancelled', 'running'].includes(model.status)
+  const canResume = !['cancelled', 'running'].includes(model.status)
   const canComplete = ['paused', 'manual_review', 'failed'].includes(model.status) && model.candidates.length > 0
   const hasPendingSteering = model.pendingSteeringItems.length > 0
   const selectedPendingSteeringIdSet = new Set(form.selectedPendingSteeringIds)
   const hasSelectedPendingSteering = selectedPendingSteeringIdSet.size > 0
+  const completedResumeTarget = ui.completedResumeTargetRunMode === 'step' ? 'step' : 'auto'
+  const completedResumeActionLabel = completedResumeTarget === 'step'
+    ? text('继续一轮', 'run one round')
+    : text('恢复自动运行', 'resume auto')
+  const completedResumeCurrentLabel = completedResumeTarget === 'step'
+    ? text('当前任务继续一轮', 'Continue this job for one round')
+    : text('当前任务恢复自动运行', 'Resume this job in auto mode')
+  const completedResumeForkDescription = completedResumeTarget === 'step'
+    ? text('保留旧任务归档，新建一条 fresh 任务，并从当前最终版继续一轮。', 'Keep the archived job, create a fresh one, and continue one round from the current final prompt.')
+    : text('保留旧任务归档，新建一条 fresh 任务，并从当前最终版恢复自动运行。', 'Keep the archived job, create a fresh one, and resume automatic execution from the current final prompt.')
+  const completedResumeResetDescription = completedResumeTarget === 'step'
+    ? text('清空当前任务历史，从初版提示词重新继续一轮。', 'Clear this job history and continue one round again from the initial prompt.')
+    : text('清空当前任务历史，从初版提示词重新恢复自动运行。', 'Clear this job history and resume automatic execution again from the initial prompt.')
   const rubricSourceZh =
     model.effectiveRubricSource === 'job'
       ? '本任务'
@@ -167,11 +199,11 @@ export function JobDetailControlRoom({
         : 'built-in default'
   const rubricSourceLine = text(`当前来源：${rubricSourceZh}`, `Current source: ${rubricSourceEn}`)
   const hasSavedJobRubricOverride = Boolean((model.customRubricMd ?? '').trim())
-  const reasoningEffortSummary = model.optimizerReasoningEffort === model.judgeReasoningEffort
-    ? getReasoningEffortLabel(model.optimizerReasoningEffort, locale)
-    : `${getReasoningEffortLabel(model.optimizerReasoningEffort, locale)} / ${getReasoningEffortLabel(model.judgeReasoningEffort, locale)}`
+  const reasoningEffortSummary = getReasoningEffortLabel(model.optimizerReasoningEffort, locale)
   const bestScoreDisplay = getJobScoreDisplay(model, locale)
   const bestScoreMeta = getJobScoreMeta(model, locale)
+  const latestRoundRunId = model.roundRuns[0]?.id ?? null
+  const latestCandidateId = latestRoundRunId ? null : model.candidates[0]?.id ?? null
 
   return (
     <div className="detail-control-room">
@@ -181,18 +213,18 @@ export function JobDetailControlRoom({
           <Link href="/settings" className="link nav-chip"><Settings2 size={16} /> {text('配置台', 'Settings Desk')}</Link>
         </div>
         <div className="detail-hero-grid">
-          <div>
+          <div className="detail-hero-copy">
             <span className="eyebrow detail-stage-label detail-stage-chip" data-ui="detail-stage-chip">
               <Sparkles size={15} />
               {text('结果台', 'Result Desk')}
             </span>
-            <h1>{model.title}</h1>
+            <h1 className="detail-hero-title">{model.title}</h1>
             <p className="hero-lead">{text('先确认最终结果，再检查目标理解，最后决定是否继续推进任务。', 'Confirm the latest result first, then inspect the goal understanding, and only then decide whether to continue.')}</p>
           </div>
           <div className="summary-cluster detail-summary-cluster">
             <SummaryBadge label={text('状态', 'Status')} value={getJobStatusLabel(model.status, locale)} tone={model.status} />
             <SummaryBadge label={text('任务模型', 'Task model')} value={model.modelsLabel} />
-            <SummaryBadge label={text('推理强度', 'Reasoning effort')} value={reasoningEffortSummary} />
+            <SummaryBadge label={text('当前推理', 'Active reasoning')} value={reasoningEffortSummary} />
             <SummaryBadge label={text('运行模式', 'Run mode')} value={model.runMode === 'step' ? text('单步', 'Step') : text('自动', 'Auto')} />
             <SummaryBadge label={text('轮数上限', 'Round cap')} value={String(model.effectiveMaxRounds)} />
             <SummaryBadge label={text('最佳分数', 'Best score')} value={bestScoreDisplay} meta={bestScoreMeta} />
@@ -205,7 +237,10 @@ export function JobDetailControlRoom({
           loading: ui.loading,
           actionMessage: ui.actionMessage,
           error: ui.error,
-          displayError: getJobDisplayError(model.errorMessage, locale),
+          loadWarning: ui.loadWarning,
+          displayError: getJobDisplayError(model.errorMessage, locale, {
+            hasUsableResult: model.currentRound > 0 || model.candidateCount > 0 || model.bestAverageScore > 0,
+          }),
           locale,
         }).map((notice) => (
           <motion.div
@@ -321,24 +356,19 @@ export function JobDetailControlRoom({
                   value={model.goalAnchor.goal}
                   expandLabel={text('展开全部', 'Expand all')}
                   collapseLabel={text('收起', 'Collapse')}
-                  collapsedPreview={text('内容较长，展开查看完整内容', 'Long content. Expand to view the full text.')}
                 />
                 <ReadonlyGoalField
                   label={text('长期交付物', 'Stable deliverable')}
                   value={model.goalAnchor.deliverable}
                   expandLabel={text('展开全部', 'Expand all')}
                   collapseLabel={text('收起', 'Collapse')}
-                  collapsedPreview={text('内容较长，展开查看完整内容', 'Long content. Expand to view the full text.')}
                 />
                 <ReadonlyGoalField
                   label={text('长期边界', 'Stable guardrails')}
                   value={model.goalAnchor.driftGuard.join('\n')}
+                  items={model.goalAnchor.driftGuard}
                   expandLabel={text('展开全部', 'Expand all')}
                   collapseLabel={text('收起', 'Collapse')}
-                  collapsedPreview={text(
-                    `共 ${model.goalAnchor.driftGuard.length} 条边界，展开查看完整内容`,
-                    `${model.goalAnchor.driftGuard.length} guardrails. Expand to view the full text.`,
-                  )}
                 />
                 <p className="small goal-summary-note">
                   {text(
@@ -367,7 +397,7 @@ export function JobDetailControlRoom({
                   <pre className="pre rubric-pre">{model.effectiveRubricMd}</pre>
                 </details>
 
-                {canEdit ? (
+                {canEditTaskRubric ? (
                   <details className="fold-card fold-card-toggle rubric-editor-fold">
                     <summary className="fold-card-summary">
                       <FoldCardSummary
@@ -384,9 +414,15 @@ export function JobDetailControlRoom({
                         value={form.customRubricMd}
                         onChange={(event) => handlers.onCustomRubricChange(event.target.value)}
                         placeholder={text('留空以跟随配置台。', 'Leave empty to follow settings.')}
-                        disabled={!canEdit}
+                        disabled={!canEditTaskRubric}
                       />
                     </label>
+                    <p className="small rubric-editor-hint">
+                      {text(
+                        '想保留分项分数条，请继续使用“编号 + 维度名 + 分值”的结构化格式。分项达标显示按每维满分的 90% 自动判断。',
+                        'Keep the “number + dimension label + max score” structure if you want per-dimension score bars. The pass state is shown automatically at 90% of each dimension max.',
+                      )}
+                    </p>
                     <div className="inline-actions runtime-save-actions">
                       <button className="button ghost compact" type="button" onClick={() => handlers.onSaveCustomRubric()} disabled={ui.savingCustomRubric}>
                         {ui.savingCustomRubric ? text('保存中...', 'Saving...') : text('保存任务评分标准', 'Save task scoring standard')}
@@ -511,25 +547,25 @@ export function JobDetailControlRoom({
                 value={form.taskModel}
                 options={models}
                 placeholder={model.optimizerModel || text('例如：gpt-5.2', 'For example: gpt-5.2')}
-                disabled={!canEdit}
+                disabled={!canEditRuntime}
                 onChange={handlers.onTaskModelChange}
               />
               <SelectField
-                label={text('推理强度', 'Reasoning effort')}
+                label={text('调整推理强度', 'Adjust reasoning effort')}
                 value={form.reasoningEffort ?? 'default'}
                 options={reasoningEffortOptions}
-                disabled={!canEdit}
+                disabled={!canEditRuntime}
                 onChange={(value) => handlers.onReasoningEffortChange?.(value)}
               />
               <label className="label compact-control-field">
                 {text('任务级最大轮数', 'Task-level round cap')}
-                <input className="input" type="number" min={1} max={99} value={form.maxRoundsOverrideValue} onChange={(event) => handlers.onMaxRoundsOverrideChange(event.target.value)} disabled={!canEdit} />
+                <input className="input" type="number" min={1} max={99} value={form.maxRoundsOverrideValue} onChange={(event) => handlers.onMaxRoundsOverrideChange(event.target.value)} disabled={!canEditRuntime} />
               </label>
             </div>
-            {canEdit ? (
+            {canEditRuntime ? (
               <div className="inline-actions runtime-save-actions">
                 <button className="button ghost compact" type="button" onClick={handlers.onSaveModel} disabled={ui.savingModels}>
-                  {ui.savingModels ? text('保存中...', 'Saving...') : text('保存模型与推理强度', 'Save model and reasoning')}
+                  {ui.savingModels ? text('保存中...', 'Saving...') : text('保存运行配置', 'Save runtime settings')}
                 </button>
                 <button className="button ghost compact" type="button" onClick={handlers.onSaveMaxRoundsOverride} disabled={ui.savingMaxRounds}>
                   {ui.savingMaxRounds ? text('保存中...', 'Saving...') : text('保存轮数', 'Save round cap')}
@@ -559,7 +595,7 @@ export function JobDetailControlRoom({
                 {canRestart ? (
                   <ConfirmDialog
                     title={text('重新开始？', 'Restart from the beginning?')}
-                    description={text('这会清空当前候选稿与历史轮次，从初版提示词重新跑。', 'This clears the current candidates and round history, then restarts from the initial prompt.')}
+                    description={text('这会清空当前候选稿、历史轮次和待生效引导，并基于初版提示词与重建后的长期规则重新跑。模型配置会按当前设置生效。', 'This clears current candidates, round history, and pending steering, then reruns from the initial prompt with rebuilt stable rules. The current model settings still apply.')}
                     confirmText={text('确认重新开始', 'Confirm restart')}
                     disabled={ui.retrying}
                     onConfirm={handlers.onRetry}
@@ -585,6 +621,63 @@ export function JobDetailControlRoom({
                 ) : null}
               </div>
             </div>
+            {ui.completedResumePickerOpen ? (
+              <div className="dialog-overlay">
+                <div className="dialog-content completed-resume-dialog" role="dialog" aria-modal="true" aria-labelledby="completed-resume-picker-title">
+                  <div className="dialog-head">
+                    <div className="dialog-copy">
+                      <h3 className="dialog-title" id="completed-resume-picker-title">{text('继续已完成任务？', 'Continue this completed job?')}</h3>
+                      <p className="dialog-description">{text(`你刚点的是「${completedResumeActionLabel}」`, `You just clicked "${completedResumeActionLabel}".`)}</p>
+                    </div>
+                    {handlers.onCloseCompletedResumePicker ? (
+                      <button type="button" className="icon-button dialog-close" onClick={handlers.onCloseCompletedResumePicker} aria-label={text('关闭分流弹层', 'Close chooser')}>
+                        ×
+                      </button>
+                    ) : null}
+                  </div>
+                  <div className="completed-resume-option-list">
+                    <div className="completed-resume-option-card">
+                      <div className="completed-resume-option-copy">
+                        <strong>{completedResumeCurrentLabel}</strong>
+                        <p className="small">{text('会清空已完成标记、旧连胜和最终结果标记，但保留历史轮次与候选稿。', 'This clears the completed marker, old pass streak, and final result marker, while keeping round history and candidates.')}</p>
+                      </div>
+                      {handlers.onResumeCompletedCurrentTask ? (
+                        <button className="button secondary" type="button" onClick={handlers.onResumeCompletedCurrentTask} disabled={ui.resumingStep || ui.resumingAuto}>
+                          {completedResumeCurrentLabel}
+                        </button>
+                      ) : null}
+                    </div>
+                    <div className="completed-resume-option-card">
+                      <div className="completed-resume-option-copy">
+                        <strong>{text('基于当前最终版新建任务', 'Create a fresh job from the current final prompt')}</strong>
+                        <p className="small">{completedResumeForkDescription}</p>
+                      </div>
+                      {handlers.onForkFromFinalTask ? (
+                        <button className="button ghost" type="button" onClick={handlers.onForkFromFinalTask} disabled={ui.forkingFromFinal}>
+                          {ui.forkingFromFinal ? text('处理中...', 'Working...') : text('新建并继续', 'Create and continue')}
+                        </button>
+                      ) : null}
+                    </div>
+                    <div className="completed-resume-option-card">
+                      <div className="completed-resume-option-copy">
+                        <strong>{text('整任务重置', 'Reset this job')}</strong>
+                        <p className="small">{completedResumeResetDescription}</p>
+                      </div>
+                      <button className="button ghost" type="button" onClick={handlers.onRetry} disabled={ui.retrying}>
+                        {ui.retrying ? text('处理中...', 'Working...') : text('确认重置', 'Confirm reset')}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="dialog-actions">
+                    {handlers.onCloseCompletedResumePicker ? (
+                      <button type="button" className="button ghost" onClick={handlers.onCloseCompletedResumePicker}>
+                        {text('先不继续', 'Not now')}
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            ) : null}
           </div>
 
           <div className="control-subpanel steering-control-panel" id="next-round-steering">
@@ -593,7 +686,7 @@ export function JobDetailControlRoom({
                 <strong>{text('下一轮引导', 'Next-round steering')}</strong>
                 <p className="small">{text('只写这次想纠偏的点。它会在下一轮生效，不影响当前轮。', 'Only write the correction you want for this turn. It takes effect in the next round, not the current one.')}</p>
                 {model.status === 'completed' && hasPendingSteering ? (
-                  <p className="small">{text('任务已完成：这些待生效引导会作为记录保留，但不会再被应用到后续轮次。', 'This job is already completed. These pending steering items remain only as records and will not be applied again.')}</p>
+                  <p className="small">{text('任务已完成：这些待生效引导会在你重新继续当前任务，或基于当前最终版新建任务后生效。', 'This job is already completed. These pending steering items will take effect after you continue this job again or create a fresh one from the current final prompt.')}</p>
                 ) : null}
               </div>
             </div>
@@ -607,7 +700,7 @@ export function JobDetailControlRoom({
                 </div>
                 <ul className="list compact-list">
                   <li>{text('optimizer 会按当前顺序吸收这组引导，再基于完整提示词做最小必要改动。', 'The optimizer absorbs this steering batch in order, then makes the smallest necessary changes to the full prompt.')}</li>
-                  <li>{text('reviewer 不会看到这些引导原文，只会看到下一轮产出的候选提示词。', 'The reviewer never sees the raw steering. It only sees the next candidate prompt.')}</li>
+                  <li>{text('评分器不会看到这些引导原文，只会看到下一轮产出的候选提示词。', 'The judge never sees the raw steering. It only sees the next candidate prompt.')}</li>
                 </ul>
               </div>
             ) : null}
@@ -621,7 +714,7 @@ export function JobDetailControlRoom({
                   <Plus size={16} /> {ui.savingSteering ? text('保存中...', 'Saving...') : text('加入待生效列表', 'Add to pending list')}
                 </button>
               ) : null}
-              {canEdit ? (
+              {canAdjustStableRules ? (
                 <button className="button ghost compact" type="button" onClick={handlers.onGenerateGoalAnchorDraft} disabled={!hasSelectedPendingSteering || ui.generatingGoalAnchorDraft}>
                   <WandSparkles size={16} /> {ui.generatingGoalAnchorDraft ? text('生成中...', 'Building...') : text('生成长期规则草稿', 'Build stable-rule draft')}
                 </button>
@@ -667,7 +760,7 @@ export function JobDetailControlRoom({
                               type="checkbox"
                               checked={selectedPendingSteeringIdSet.has(item.id)}
                               onChange={() => handlers.onTogglePendingSteeringSelection(item.id)}
-                              disabled={!canEdit || ui.generatingGoalAnchorDraft || ui.savingGoalAnchor}
+                              disabled={!canAdjustStableRules || ui.generatingGoalAnchorDraft || ui.savingGoalAnchor}
                               aria-label={text(`切换待生效引导 ${index + 1} 是否加入长期规则`, `Toggle whether pending steering ${index + 1} should be merged into stable rules`)}
                             />
                             <span className="small">{selectedPendingSteeringIdSet.has(item.id) ? text('加入长期规则', 'Merge into stable rules') : text('只影响下一轮', 'Next round only')}</span>
@@ -702,20 +795,47 @@ export function JobDetailControlRoom({
               </span>
               {text('优化过程诊断', 'Optimization diagnostics')}
             </h2>
-            <p className="small">{text('默认只露摘要。需要时再展开每一轮的完整诊断和复核细节。', 'By default you only see the summary. Expand a round when you need the full diagnostic and review details.')}</p>
+            <p className="small">{text('默认只露摘要。需要时再展开每一轮的完整诊断和评分细节。', 'By default you only see the summary. Expand a round when you need the full diagnostic and scoring details.')}</p>
           </div>
         </div>
-        {model.candidates.length === 0 ? <div className="notice">{text('还没有产出候选稿。', 'No candidates yet.')}</div> : null}
-        <motion.div layout className="shell">
-          {model.candidates.map((candidate) => (
-            <JobRoundCard
-              key={candidate.id}
-              candidate={candidate}
-              expanded={Boolean(ui.expandedRounds[candidate.id])}
-              onToggle={() => handlers.onToggleRound(candidate.id)}
-            />
-          ))}
-        </motion.div>
+        {model.candidates.length === 0 && model.roundRuns.length === 0
+          ? <div className="notice">{text('还没有产出候选稿。', 'No candidates yet.')}</div>
+          : null}
+        <div className="shell">
+          {model.roundRuns.length > 0
+            ? model.roundRuns.map((round) => (
+              <JobRoundRunCard
+                key={round.id}
+                round={round}
+                expanded={Boolean(ui.expandedRounds[round.id])}
+                onToggle={() => handlers.onToggleRound(round.id)}
+                onAddReviewSuggestions={canSteer ? handlers.onAddReviewSuggestions : undefined}
+                addingReviewSuggestions={ui.savingSteering}
+                reviewSuggestionTarget={model.autoApplyReviewSuggestionsToStableRules ? 'stable' : 'pending'}
+                showReviewSuggestionAutomationControls={round.id === latestRoundRunId}
+                autoApplyReviewSuggestions={model.autoApplyReviewSuggestions}
+                onReviewSuggestionTargetChange={handlers.onReviewSuggestionTargetChange}
+                onToggleAutoApplyReviewSuggestions={handlers.onToggleAutoApplyReviewSuggestions}
+                rubricDimensions={rubricDimensions}
+              />
+            ))
+            : model.candidates.map((candidate) => (
+              <JobRoundCard
+                key={candidate.id}
+                candidate={candidate}
+                expanded={Boolean(ui.expandedRounds[candidate.id])}
+                onToggle={() => handlers.onToggleRound(candidate.id)}
+                onAddReviewSuggestions={canSteer ? handlers.onAddReviewSuggestions : undefined}
+                addingReviewSuggestions={ui.savingSteering}
+                reviewSuggestionTarget={model.autoApplyReviewSuggestionsToStableRules ? 'stable' : 'pending'}
+                showReviewSuggestionAutomationControls={candidate.id === latestCandidateId}
+                autoApplyReviewSuggestions={model.autoApplyReviewSuggestions}
+                onReviewSuggestionTargetChange={handlers.onReviewSuggestionTargetChange}
+                onToggleAutoApplyReviewSuggestions={handlers.onToggleAutoApplyReviewSuggestions}
+                rubricDimensions={rubricDimensions}
+              />
+            ))}
+        </div>
       </section>
     </div>
   )
@@ -725,10 +845,12 @@ export function getDetailNoticeItems(input: {
   loading: boolean
   actionMessage: string | null
   error: string | null
+  loadWarning?: string | null
   displayError: string | null
   locale?: 'zh-CN' | 'en'
 }) {
   const notices: Array<{ key: string; tone: 'info' | 'success' | 'error'; text: string }> = []
+  let primaryErrorText: string | null = null
 
   if (input.loading) {
     notices.push({ key: 'loading', tone: 'info', text: input.locale === 'en' ? 'Loading job detail...' : '正在读取任务详情...' })
@@ -737,13 +859,21 @@ export function getDetailNoticeItems(input: {
     notices.push({ key: 'action-message', tone: 'success', text: input.actionMessage })
   }
   if (input.error) {
-    notices.push({ key: 'ui-error', tone: 'error', text: getJobDisplayError(input.error, input.locale) ?? input.error })
+    primaryErrorText = getJobDisplayError(input.error, input.locale) ?? input.error
+    notices.push({ key: 'ui-error', tone: 'error', text: primaryErrorText })
   }
-  if (input.displayError) {
+  if (input.loadWarning) {
+    notices.push({ key: 'load-warning', tone: 'info', text: input.loadWarning })
+  }
+  if (input.displayError && normalizeNoticeText(input.displayError) !== normalizeNoticeText(primaryErrorText)) {
     notices.push({ key: 'display-error', tone: 'error', text: input.displayError })
   }
 
   return notices
+}
+
+function normalizeNoticeText(value: string | null) {
+  return (value ?? '').replace(/\s+/g, ' ').trim()
 }
 
 function SummaryBadge({
@@ -769,18 +899,29 @@ function SummaryBadge({
 function ReadonlyGoalField({
   label,
   value,
+  items,
   expandLabel,
   collapseLabel,
   collapsedPreview,
 }: {
   label: string
   value: string
+  items?: string[]
   expandLabel: string
   collapseLabel: string
   collapsedPreview?: string
 }) {
-  const shouldCollapse = shouldCollapseGoalValue(value)
-  const preview = collapsedPreview ?? getGoalValuePreview(value)
+  const displayValue = normalizeEscapedMultilineText(value)
+  const displayItems = (items ?? []).map((item) => normalizeEscapedMultilineText(item)).filter(Boolean)
+  const shouldCollapse = shouldCollapseGoalValue(displayValue)
+  const preview = collapsedPreview ?? (displayItems.length > 1 ? getGoalItemsPreview(displayItems) : getGoalValuePreview(displayValue))
+  const content = displayItems.length > 1
+    ? (
+      <ul className="list compact-list goal-value-list">
+        {displayItems.map((item, index) => <li className="goal-value-list-item" key={`${label}-${index}`}>{item}</li>)}
+      </ul>
+    )
+    : <div className="active-goal-value">{displayValue}</div>
 
   return (
     <div className="active-goal-card compact-goal-card">
@@ -801,10 +942,10 @@ function ReadonlyGoalField({
               </span>
             </span>
           </summary>
-          <div className="active-goal-value">{value}</div>
+          {content}
         </details>
       ) : (
-        <div className="active-goal-value">{value}</div>
+        content
       )}
     </div>
   )
@@ -824,6 +965,28 @@ function getGoalValuePreview(value: string) {
   }
 
   return `${normalized.slice(0, 56).trimEnd()}…`
+}
+
+function getGoalItemsPreview(items: string[]) {
+  const preview = items
+    .slice(0, 2)
+    .map((item) => normalizeGoalPreviewItem(item))
+    .filter(Boolean)
+    .join('；')
+
+  if (!preview) {
+    return ''
+  }
+
+  return items.length > 2 ? `${preview}（共 ${items.length} 条）` : preview
+}
+
+function normalizeGoalPreviewItem(item: string) {
+  return item
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/[。；;，,\s]+$/u, '')
+    .trim()
 }
 
 function FoldCardSummary({

@@ -27,9 +27,9 @@ export async function POST(request: Request) {
         : {}),
       scoreThreshold: clampNumber(body.scoreThreshold, 1, 100, 95),
       judgePassCount: clampNumber(body.judgePassCount, 1, 5, 3),
-      maxRounds: clampNumber(body.maxRounds, 1, 20, 8),
+      maxRounds: clampNumber(body.maxRounds, 1, 99, 8),
       noImprovementLimit: clampNumber(body.noImprovementLimit, 1, 5, 2),
-      workerConcurrency: clampNumber(body.workerConcurrency, 1, 4, 2),
+      workerConcurrency: clampMinNumber(body.workerConcurrency, 1, 2),
       conversationPolicy: body.conversationPolicy === 'pooled-3x' ? 'pooled-3x' : 'stateless',
       ...(typeof body.customRubricMd === 'string' ? { customRubricMd: body.customRubricMd } : {}),
     })
@@ -49,4 +49,12 @@ function clampNumber(value: unknown, min: number, max: number, fallback: number)
     return fallback
   }
   return Math.min(max, Math.max(min, Math.round(numeric)))
+}
+
+function clampMinNumber(value: unknown, min: number, fallback: number) {
+  const numeric = Number(value)
+  if (Number.isNaN(numeric)) {
+    return fallback
+  }
+  return Math.max(min, Math.round(numeric))
 }

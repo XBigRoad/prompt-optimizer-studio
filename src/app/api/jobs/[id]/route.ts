@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 
 import {
-  addPendingSteeringItem,
+  addPendingSteeringItemsWithResult,
   buildGoalAnchorDraftFromPendingSteering,
   clearPendingSteeringItems,
   getJobDetail,
@@ -12,6 +12,7 @@ import {
   updateJobMaxRoundsOverride,
   updateJobModels,
   updateJobNextRoundInstruction,
+  updateJobReviewSuggestionAutomation,
 } from '@/lib/server/jobs'
 import { normalizeReasoningEffort } from '@/lib/reasoning-effort'
 import { ensureWorkerStarted } from '@/lib/server/worker'
@@ -19,7 +20,8 @@ import { ensureWorkerStarted } from '@/lib/server/worker'
 export const runtime = 'nodejs'
 
 type SteeringAction =
-  | { type: 'add'; text: string }
+  | { type: 'add'; text: string; target?: 'pending' | 'stable' }
+  | { type: 'add_many'; texts: string[]; items?: string[]; target?: 'pending' | 'stable' }
   | { type: 'remove'; itemId: string }
   | { type: 'clear' }
   | { type: 'build_goal_anchor_draft'; itemIds?: string[] }
@@ -57,6 +59,8 @@ export async function PATCH(
       judgeReasoningEffort?: string
       maxRoundsOverride?: number | null
       customRubricMd?: string | null
+      autoApplyReviewSuggestions?: boolean
+      autoApplyReviewSuggestionsToStableRules?: boolean
       nextRoundInstruction?: string
       steeringAction?: SteeringAction
       goalAnchor?: {
@@ -70,6 +74,7 @@ export async function PATCH(
     let updatedJob = job
     let goalAnchorDraft: ReturnType<typeof buildGoalAnchorDraftFromPendingSteering>['goalAnchor'] | null = null
     let consumePendingSteeringIds: string[] = []
+    let steeringActionResult: { addedTexts: string[]; skippedDuplicateTexts: string[] } | null = null
 
     if (
       body.optimizerModel !== undefined
@@ -96,9 +101,32 @@ export async function PATCH(
     }
     if (body.steeringAction) {
       switch (body.steeringAction.type) {
-        case 'add':
-          updatedJob = addPendingSteeringItem(id, body.steeringAction.text)
+        case 'add': {
+          const result = addPendingSteeringItemsWithResult(
+            id,
+            [body.steeringAction.text],
+            body.steeringAction.target === 'stable' ? 'stable' : 'pending',
+          )
+          updatedJob = result.job
+          steeringActionResult = {
+            addedTexts: result.addedTexts,
+            skippedDuplicateTexts: result.skippedDuplicateTexts,
+          }
           break
+        }
+        case 'add_many': {
+          const result = addPendingSteeringItemsWithResult(
+            id,
+            body.steeringAction.texts ?? body.steeringAction.items ?? [],
+            body.steeringAction.target === 'stable' ? 'stable' : 'pending',
+          )
+          updatedJob = result.job
+          steeringActionResult = {
+            addedTexts: result.addedTexts,
+            skippedDuplicateTexts: result.skippedDuplicateTexts,
+          }
+          break
+        }
         case 'remove':
           updatedJob = removePendingSteeringItem(id, body.steeringAction.itemId)
           break
@@ -119,13 +147,22 @@ export async function PATCH(
     if (Object.hasOwn(body, 'nextRoundInstruction')) {
       updatedJob = updateJobNextRoundInstruction(id, body.nextRoundInstruction ?? '')
     }
+    if (
+      Object.hasOwn(body, 'autoApplyReviewSuggestions')
+      || Object.hasOwn(body, 'autoApplyReviewSuggestionsToStableRules')
+    ) {
+      updatedJob = updateJobReviewSuggestionAutomation(id, {
+        autoApplyReviewSuggestions: body.autoApplyReviewSuggestions,
+        autoApplyReviewSuggestionsToStableRules: body.autoApplyReviewSuggestionsToStableRules,
+      })
+    }
     if (Object.hasOwn(body, 'goalAnchor')) {
       updatedJob = updateJobGoalAnchor(id, body.goalAnchor ?? {}, {
         consumePendingSteeringIds: body.consumePendingSteeringIds ?? [],
       })
     }
 
-    return NextResponse.json({ job: updatedJob, goalAnchorDraft, consumePendingSteeringIds })
+    return NextResponse.json({ job: updatedJob, goalAnchorDraft, consumePendingSteeringIds, steeringActionResult })
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Failed to update job models.' },

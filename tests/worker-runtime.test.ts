@@ -17,9 +17,10 @@ test('keeps worker runtime when owner is unchanged', () => {
   assert.equal(shouldReplaceWorkerRuntime(existing, 'owner-a', 'runtime-a'), false)
 })
 
-test('replaces worker runtime when runtime version changes', () => {
+test('keeps worker runtime when only runtime version changes but owner is unchanged', () => {
   const existing = createWorkerRuntimeState('owner-a', 'runtime-a')
-  assert.equal(shouldReplaceWorkerRuntime(existing, 'owner-a', 'runtime-b'), true)
+  existing.started = true
+  assert.equal(shouldReplaceWorkerRuntime(existing, 'owner-a', 'runtime-b'), false)
 })
 
 test('stable worker owner id is generated once per holder', () => {

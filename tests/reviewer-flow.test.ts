@@ -50,8 +50,19 @@ test('drift labels can be attached without changing pass logic when review passe
   assert.equal(nextPassStreak(0, review), 1)
 })
 
+test('drift labels reset pass logic even when the numeric score is high', () => {
+  const review = makeJudgment(98, false, [], [], ['focus_shift'], '偏题')
+  assert.equal(nextPassStreak(2, review), 0)
+  assert.equal(shouldFinalizeAfterReview(2, review, 95), false)
+})
+
 test('job finalizes only after three consecutive passing reviews', () => {
   assert.equal(shouldFinalizeAfterReview(2, makeJudgment(95, false), 95), true)
   assert.equal(shouldFinalizeAfterReview(1, makeJudgment(95, false), 95), false)
   assert.equal(shouldFinalizeAfterReview(2, makeJudgment(95, true, ['issue']), 95), false)
+})
+
+test('job finalization respects a custom required pass count when configured', () => {
+  assert.equal(shouldFinalizeAfterReview(1, makeJudgment(95, false), 95, 2), true)
+  assert.equal(shouldFinalizeAfterReview(0, makeJudgment(95, false), 95, 2), false)
 })
