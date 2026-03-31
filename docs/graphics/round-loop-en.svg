@@ -1,30 +1,48 @@
-<svg width="1280" height="260" viewBox="0 0 1280 260" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="1280" height="260" rx="28" fill="#F7F4EC"/>
-  <rect x="34" y="28" width="1212" height="204" rx="24" fill="#FFFDF8" stroke="#E6DFC9" stroke-width="2"/>
-  <text x="72" y="76" fill="#1F2937" font-size="30" font-weight="700" font-family="Inter, Segoe UI, Arial, sans-serif">What one round actually does</text>
-  <text x="72" y="108" fill="#6B7280" font-size="18" font-family="Inter, Segoe UI, Arial, sans-serif">The key detail: this round reviews the current prompt first. The prompt generated now is reviewed in the next round.</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 320" width="1280" height="320" font-family="Inter, 'Segoe UI', Arial, sans-serif">
+  <rect width="1280" height="320" fill="#FDFCF8" />
 
-  <rect x="72" y="142" width="184" height="52" rx="16" fill="#FFFFFF" stroke="#E5E7EB"/>
-  <text x="96" y="174" fill="#374151" font-size="18" font-family="Inter, Segoe UI, Arial, sans-serif">Current prompt enters</text>
-  <path d="M256 168H312" stroke="#A3C88B" stroke-width="4" stroke-linecap="round"/>
-  <path d="M312 168L302 160M312 168L302 176" stroke="#A3C88B" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="640" y="56" font-size="28" font-weight="700" text-anchor="middle" fill="#1E293B">What One Round Actually Does</text>
+  <text x="640" y="92" font-size="16" font-weight="400" text-anchor="middle" fill="#64748B">This round reviews the current prompt first. The prompt generated now gets reviewed in the next round.</text>
 
-  <rect x="328" y="142" width="216" height="52" rx="16" fill="#FFFFFF" stroke="#D3E8C8"/>
-  <text x="352" y="174" fill="#374151" font-size="18" font-family="Inter, Segoe UI, Arial, sans-serif">Judge reviews it first</text>
-  <path d="M544 168H600" stroke="#A3C88B" stroke-width="4" stroke-linecap="round"/>
-  <path d="M600 168L590 160M600 168L590 176" stroke="#A3C88B" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="80" y="130" width="620" height="150" rx="12" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="1.5" />
+  <path d="M 80 142 A 12 12 0 0 1 92 130 L 688 130 A 12 12 0 0 1 700 142 L 700 164 L 80 164 Z" fill="#F8FAFC" />
+  <line x1="80" y1="164" x2="700" y2="164" stroke="#E2E8F0" stroke-width="1.5" />
+  <text x="100" y="152" font-size="13" font-weight="600" fill="#475569">Current round (Round N)</text>
 
-  <rect x="616" y="142" width="220" height="52" rx="16" fill="#FFFFFF" stroke="#D3E8C8"/>
-  <text x="640" y="174" fill="#374151" font-size="18" font-family="Inter, Segoe UI, Arial, sans-serif">Score, issues, drift are recorded</text>
-  <path d="M836 168H892" stroke="#A3C88B" stroke-width="4" stroke-linecap="round"/>
-  <path d="M892 168L882 160M892 168L882 176" stroke="#A3C88B" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <line x1="40" y1="220" x2="94" y2="220" stroke="#CBD5E1" stroke-width="2" />
+  <polygon points="92,216 98,220 92,224" fill="#CBD5E1" />
 
-  <rect x="908" y="142" width="232" height="52" rx="16" fill="#FFFFFF" stroke="#D3E8C8"/>
-  <text x="932" y="174" fill="#374151" font-size="18" font-family="Inter, Segoe UI, Arial, sans-serif">Optimizer produces the next prompt</text>
+  <rect x="100" y="185" width="150" height="70" rx="8" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.5" />
+  <text x="175" y="225" font-size="14" font-weight="600" fill="#334155" text-anchor="middle">Current prompt enters</text>
 
-  <path d="M1024 194V212" stroke="#A3C88B" stroke-width="4" stroke-linecap="round"/>
-  <path d="M1024 212H176" stroke="#A3C88B" stroke-width="4" stroke-linecap="round"/>
-  <path d="M176 212V196" stroke="#A3C88B" stroke-width="4" stroke-linecap="round"/>
-  <path d="M176 196L168 206M176 196L184 206" stroke="#A3C88B" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-  <text x="846" y="232" fill="#3B6B2D" font-size="17" font-family="Inter, Segoe UI, Arial, sans-serif">The next round reviews the prompt that was just generated</text>
+  <line x1="250" y1="220" x2="284" y2="220" stroke="#94A3B8" stroke-width="2" />
+  <polygon points="282,216 288,220 282,224" fill="#94A3B8" />
+
+  <rect x="290" y="185" width="180" height="70" rx="8" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="1.5" />
+  <text x="380" y="214" font-size="14" font-weight="600" fill="#1E293B" text-anchor="middle">Judge reviews current prompt</text>
+  <text x="380" y="238" font-size="12" font-weight="400" fill="#64748B" text-anchor="middle">Score, issues, drift</text>
+
+  <line x1="470" y1="220" x2="504" y2="220" stroke="#94A3B8" stroke-width="2" />
+  <polygon points="502,216 508,220 502,224" fill="#94A3B8" />
+
+  <rect x="510" y="185" width="170" height="70" rx="8" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="1.5" />
+  <text x="595" y="225" font-size="14" font-weight="600" fill="#1E293B" text-anchor="middle">Optimizer creates next prompt</text>
+
+  <rect x="740" y="130" width="460" height="150" rx="12" fill="#FAFAFA" stroke="#E2E8F0" stroke-width="1.5" stroke-dasharray="8 4" />
+  <path d="M 740 142 A 12 12 0 0 1 752 130 L 1188 130 A 12 12 0 0 1 1200 142 L 1200 164 L 740 164 Z" fill="#F1F5F9" />
+  <line x1="740" y1="164" x2="1200" y2="164" stroke="#E2E8F0" stroke-width="1.5" />
+  <text x="760" y="152" font-size="13" font-weight="600" fill="#64748B">Next round (Round N+1)</text>
+
+  <rect x="850" y="185" width="240" height="70" rx="8" fill="#ECFDF5" stroke="#10B981" stroke-width="2" />
+  <text x="970" y="225" font-size="16" font-weight="700" fill="#059669" text-anchor="middle">The next round reviews that new prompt</text>
+
+  <line x1="1090" y1="220" x2="1134" y2="220" stroke="#CBD5E1" stroke-width="2" stroke-dasharray="4 4" />
+  <polygon points="1132,216 1138,220 1132,224" fill="#CBD5E1" />
+  <text x="1170" y="224" font-size="12" fill="#94A3B8" text-anchor="middle">...loop continues</text>
+
+  <line x1="680" y1="220" x2="844" y2="220" stroke="#10B981" stroke-width="3" stroke-dasharray="6 4" />
+  <polygon points="840,215 850,220 840,225" fill="#10B981" />
+
+  <rect x="715" y="206" width="98" height="28" rx="14" fill="#D1FAE5" stroke="#34D399" stroke-width="1" />
+  <text x="764" y="225" font-size="12" font-weight="600" fill="#047857" text-anchor="middle">Carry new prompt</text>
 </svg>

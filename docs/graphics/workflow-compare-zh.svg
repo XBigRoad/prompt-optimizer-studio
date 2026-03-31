@@ -1,43 +1,89 @@
-<svg width="1280" height="540" viewBox="0 0 1280 540" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="1280" height="540" rx="28" fill="#F7F4EC"/>
-  <rect x="40" y="36" width="1200" height="468" rx="24" fill="#FFFDF8" stroke="#E6DFC9" stroke-width="2"/>
-  <text x="76" y="92" fill="#1F2937" font-size="34" font-weight="700" font-family="Inter, PingFang SC, Microsoft YaHei, sans-serif">普通工具 vs Prompt Optimizer Studio</text>
-  <text x="76" y="126" fill="#6B7280" font-size="18" font-family="Inter, PingFang SC, Microsoft YaHei, sans-serif">左边更像一次性改写；右边更像可接管的完整 prompt 流水线。</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 520" width="1280" height="520" font-family="Inter, 'PingFang SC', 'Microsoft YaHei', sans-serif">
+  <rect width="1280" height="520" fill="#FDFCF8" />
 
-  <rect x="74" y="164" width="512" height="286" rx="24" fill="#F9FAFB" stroke="#E5E7EB" stroke-width="2"/>
-  <rect x="694" y="164" width="512" height="286" rx="24" fill="#F2FBEF" stroke="#CDE7BF" stroke-width="2"/>
+  <text x="640" y="60" font-size="28" font-weight="700" text-anchor="middle" fill="#1E293B">普通工具 <tspan fill="#94A3B8">vs</tspan> <tspan fill="#059669">Prompt Optimizer Studio</tspan></text>
+  <text x="640" y="96" font-size="16" font-weight="400" text-anchor="middle" fill="#64748B">左边更像一次性改写；右边更像可接管的完整 prompt 流水线。</text>
 
-  <text x="106" y="212" fill="#111827" font-size="28" font-weight="700" font-family="Inter, PingFang SC, Microsoft YaHei, sans-serif">普通 prompt 工具</text>
-  <text x="726" y="212" fill="#0F5132" font-size="28" font-weight="700" font-family="Inter, PingFang SC, Microsoft YaHei, sans-serif">Prompt Optimizer Studio</text>
+  <rect x="80" y="140" width="440" height="290" rx="12" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="1.5" />
+  <path d="M 80 152 A 12 12 0 0 1 92 140 L 508 140 A 12 12 0 0 1 520 152 L 520 180 L 80 180 Z" fill="#F8FAFC" />
+  <circle cx="104" cy="160" r="5" fill="#CBD5E1" />
+  <circle cx="120" cy="160" r="5" fill="#CBD5E1" />
+  <circle cx="136" cy="160" r="5" fill="#CBD5E1" />
+  <text x="300" y="165" font-size="15" font-weight="600" fill="#475569" text-anchor="middle">普通工具</text>
+  <line x1="80" y1="180" x2="520" y2="180" stroke="#E2E8F0" stroke-width="1.5" />
 
-  <rect x="106" y="240" width="448" height="48" rx="14" fill="#FFFFFF" stroke="#E5E7EB"/>
-  <text x="130" y="271" fill="#374151" font-size="19" font-family="Inter, PingFang SC, Microsoft YaHei, sans-serif">初版 prompt</text>
-  <path d="M330 288V312" stroke="#CBD5E1" stroke-width="3" stroke-linecap="round"/>
-  <path d="M330 312L322 304M330 312L338 304" stroke="#CBD5E1" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-  <rect x="106" y="324" width="448" height="48" rx="14" fill="#FFFFFF" stroke="#E5E7EB"/>
-  <text x="130" y="355" fill="#374151" font-size="19" font-family="Inter, PingFang SC, Microsoft YaHei, sans-serif">直接改写 / 给 diff</text>
-  <path d="M330 372V396" stroke="#CBD5E1" stroke-width="3" stroke-linecap="round"/>
-  <path d="M330 396L322 388M330 396L338 388" stroke="#CBD5E1" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-  <rect x="106" y="408" width="448" height="48" rx="14" fill="#FFFFFF" stroke="#E5E7EB"/>
-  <text x="130" y="439" fill="#374151" font-size="19" font-family="Inter, PingFang SC, Microsoft YaHei, sans-serif">你自己判断这版能不能用</text>
+  <rect x="150" y="210" width="300" height="48" rx="8" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="1.5" />
+  <text x="300" y="239" font-size="15" font-weight="500" fill="#334155" text-anchor="middle">1. 初版 prompt</text>
 
-  <rect x="726" y="236" width="448" height="42" rx="14" fill="#FFFFFF" stroke="#D3E8C8"/>
-  <text x="748" y="263" fill="#1F2937" font-size="18" font-family="Inter, PingFang SC, Microsoft YaHei, sans-serif">初版 prompt</text>
-  <path d="M948 278V294" stroke="#A3C88B" stroke-width="3" stroke-linecap="round"/>
-  <path d="M948 294L940 286M948 294L956 286" stroke="#A3C88B" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-  <rect x="726" y="304" width="448" height="42" rx="14" fill="#FFFFFF" stroke="#D3E8C8"/>
-  <text x="748" y="331" fill="#1F2937" font-size="18" font-family="Inter, PingFang SC, Microsoft YaHei, sans-serif">提炼长期规则</text>
-  <path d="M948 346V362" stroke="#A3C88B" stroke-width="3" stroke-linecap="round"/>
-  <path d="M948 362L940 354M948 362L956 354" stroke="#A3C88B" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-  <rect x="726" y="372" width="448" height="42" rx="14" fill="#FFFFFF" stroke="#D3E8C8"/>
-  <text x="748" y="399" fill="#1F2937" font-size="18" font-family="Inter, PingFang SC, Microsoft YaHei, sans-serif">先评当前稿，再生成下一版完整稿</text>
-  <path d="M948 414V430" stroke="#A3C88B" stroke-width="3" stroke-linecap="round"/>
-  <path d="M948 430L940 422M948 430L956 422" stroke="#A3C88B" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-  <rect x="726" y="440" width="448" height="42" rx="14" fill="#FFFFFF" stroke="#D3E8C8"/>
-  <text x="748" y="467" fill="#1F2937" font-size="18" font-family="Inter, PingFang SC, Microsoft YaHei, sans-serif">可随时人工接管，达标后交付完整 prompt</text>
+  <line x1="300" y1="258" x2="300" y2="280" stroke="#94A3B8" stroke-width="2" />
+  <polygon points="295,278 305,278 300,284" fill="#94A3B8" />
 
-  <rect x="106" y="474" width="448" height="18" rx="9" fill="#E5E7EB"/>
-  <rect x="726" y="474" width="448" height="18" rx="9" fill="#B6D8A8"/>
-  <text x="106" y="520" fill="#6B7280" font-size="18" font-family="Inter, PingFang SC, Microsoft YaHei, sans-serif">重点：这版改了什么</text>
-  <text x="726" y="520" fill="#3B6B2D" font-size="18" font-family="Inter, PingFang SC, Microsoft YaHei, sans-serif">重点：最后交付什么，以及这条流程现在在哪</text>
+  <rect x="150" y="284" width="300" height="48" rx="8" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="1.5" />
+  <text x="300" y="313" font-size="15" font-weight="500" fill="#334155" text-anchor="middle">2. 直接改写 / 给 diff</text>
+
+  <line x1="300" y1="332" x2="300" y2="354" stroke="#94A3B8" stroke-width="2" />
+  <polygon points="295,352 305,352 300,358" fill="#94A3B8" />
+
+  <rect x="150" y="358" width="300" height="48" rx="8" fill="#FEF2F2" stroke="#FECACA" stroke-width="1.5" />
+  <text x="300" y="387" font-size="15" font-weight="500" fill="#991B1B" text-anchor="middle">3. 你自己判断能不能用</text>
+
+  <rect x="220" y="450" width="160" height="36" rx="18" fill="#F1F5F9" />
+  <text x="300" y="473" font-size="14" font-weight="500" fill="#475569" text-anchor="middle">重点是改了什么</text>
+
+  <rect x="560" y="140" width="640" height="290" rx="12" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="1.5" />
+  <path d="M 560 152 A 12 12 0 0 1 572 140 L 1188 140 A 12 12 0 0 1 1200 152 L 1200 180 L 560 180 Z" fill="#F8FAFC" />
+  <circle cx="584" cy="160" r="5" fill="#CBD5E1" />
+  <circle cx="600" cy="160" r="5" fill="#CBD5E1" />
+  <circle cx="616" cy="160" r="5" fill="#CBD5E1" />
+  <text x="880" y="165" font-size="15" font-weight="600" fill="#059669" text-anchor="middle">Prompt Optimizer Studio</text>
+  <line x1="560" y1="180" x2="1200" y2="180" stroke="#E2E8F0" stroke-width="1.5" />
+
+  <rect x="580" y="200" width="280" height="210" rx="8" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.5" />
+  <text x="596" y="228" font-size="14" font-weight="600" fill="#1E293B">当前最新完整 prompt</text>
+
+  <rect x="596" y="244" width="200" height="6" rx="3" fill="#CBD5E1" />
+  <rect x="596" y="260" width="240" height="6" rx="3" fill="#CBD5E1" />
+  <rect x="596" y="276" width="180" height="6" rx="3" fill="#CBD5E1" />
+  <rect x="596" y="292" width="240" height="24" rx="4" fill="#D1FAE5" />
+  <rect x="604" y="301" width="220" height="6" rx="3" fill="#10B981" />
+  <rect x="596" y="326" width="210" height="6" rx="3" fill="#CBD5E1" />
+  <rect x="596" y="342" width="230" height="6" rx="3" fill="#CBD5E1" />
+  <rect x="596" y="358" width="160" height="6" rx="3" fill="#CBD5E1" />
+
+  <rect x="846" y="204" width="6" height="202" rx="3" fill="#E2E8F0" />
+  <rect x="846" y="240" width="6" height="60" rx="3" fill="#94A3B8" />
+
+  <line x1="880" y1="305" x2="865" y2="305" stroke="#10B981" stroke-width="2" />
+  <polygon points="868,301 862,305 868,309" fill="#10B981" />
+
+  <rect x="880" y="200" width="300" height="58" rx="8" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="1.5" />
+  <rect x="896" y="215" width="28" height="28" rx="6" fill="#F1F5F9" />
+  <line x1="902" y1="225" x2="918" y2="225" stroke="#64748B" stroke-width="1.5" stroke-linecap="round" />
+  <line x1="902" y1="233" x2="918" y2="233" stroke="#64748B" stroke-width="1.5" stroke-linecap="round" />
+  <circle cx="906" cy="225" r="2" fill="#64748B" />
+  <circle cx="914" cy="233" r="2" fill="#64748B" />
+  <text x="936" y="234" font-size="14" font-weight="600" fill="#334155">长期规则 / 下一轮引导</text>
+
+  <line x1="1030" y1="258" x2="1030" y2="270" stroke="#CBD5E1" stroke-width="2" />
+  <polygon points="1027,268 1033,268 1030,274" fill="#CBD5E1" />
+
+  <rect x="880" y="276" width="300" height="58" rx="8" fill="#ECFDF5" stroke="#34D399" stroke-width="1.5" />
+  <rect x="896" y="291" width="28" height="28" rx="6" fill="#D1FAE5" />
+  <path d="M 914 300 A 6 6 0 1 1 906 300" stroke="#059669" stroke-width="1.5" fill="none" stroke-linecap="round" />
+  <polygon points="913,298 915,302 917,298" fill="#059669" />
+  <text x="936" y="310" font-size="14" font-weight="600" fill="#059669">先评当前稿，再生成下一版</text>
+
+  <line x1="1030" y1="334" x2="1030" y2="346" stroke="#CBD5E1" stroke-width="2" />
+  <polygon points="1027,344 1033,344 1030,350" fill="#CBD5E1" />
+
+  <rect x="880" y="352" width="300" height="58" rx="8" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="1.5" />
+  <rect x="896" y="367" width="28" height="28" rx="6" fill="#F1F5F9" />
+  <polygon points="906,375 906,387 914,381" fill="#334155" />
+  <rect x="916" y="376" width="2" height="10" fill="#334155" />
+  <text x="936" y="375" font-size="13" font-weight="600" fill="#334155">可暂停、可接管、交付完整 prompt</text>
+  <rect x="936" y="384" width="60" height="18" rx="4" fill="#059669" />
+  <text x="966" y="397" font-size="10" font-weight="600" fill="#FFFFFF" text-anchor="middle">交付成品</text>
+
+  <rect x="720" y="450" width="320" height="36" rx="18" fill="#ECFDF5" />
+  <text x="880" y="473" font-size="14" font-weight="600" fill="#059669" text-anchor="middle">重点是最后交付什么，以及流程现在到哪</text>
 </svg>
