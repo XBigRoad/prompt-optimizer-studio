@@ -38,39 +38,11 @@
 
 ## 它怎么跑
 
-```mermaid
-flowchart LR
-    subgraph A["普通 prompt 改写器"]
-        A1["丢进去一版 prompt"] --> A2["直接改写 / 给 diff"]
-        A2 --> A3["你自己判断这版能不能用"]
-        A3 --> A4["跑偏了通常只能重来"]
-    end
-
-    subgraph B["Prompt Optimizer Studio"]
-        B1["输入初版 prompt"] --> B2["提炼长期目标 / 长期交付物 / 长期边界"]
-        B2 --> B3["先复核当前稿"]
-        B3 --> B4["再生成下一版完整 prompt"]
-        B4 --> B5["下一轮继续复核这版"]
-        B5 --> B6{"继续跑，还是人工接管"}
-        B6 -- 继续 --> B4
-        B6 -- 人工接管 --> B7["补下一轮引导 / 改长期规则 / 改任务级 rubric"]
-        B7 --> B4
-        B6 -- 连续可信通过 --> B8["交付最终完整 prompt"]
-    end
-```
+![Prompt Optimizer Studio 工作流对比](docs/graphics/workflow-compare-zh.svg)
 
 ### 单轮其实是这样跑的
 
-```mermaid
-flowchart TD
-    A["第 N 轮开始：当前稿进场"] --> B["judge 先复核当前稿"]
-    B --> C["写下分数、问题、漂移判断"]
-    C --> D["optimizer 根据这轮诊断改出下一稿"]
-    D --> E{"这一轮要不要停"}
-    E -- step / pause --> F["停下，等你决定"]
-    E -- auto 继续 --> G["进入第 N+1 轮"]
-    G --> H["第 N+1 轮先评刚才那一稿"]
-```
+![Prompt Optimizer Studio 单轮流程](docs/graphics/round-loop-zh.svg)
 
 - 一轮里同时发生两件事：**复核当前稿**，以及**生成下一稿**。
 - 所以新稿不是“当场打分”，而是**要到下一轮才会被复核**。

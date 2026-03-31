@@ -1,0 +1,43 @@
+<svg width="1280" height="540" viewBox="0 0 1280 540" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1280" height="540" rx="28" fill="#F7F4EC"/>
+  <rect x="40" y="36" width="1200" height="468" rx="24" fill="#FFFDF8" stroke="#E6DFC9" stroke-width="2"/>
+  <text x="76" y="92" fill="#1F2937" font-size="34" font-weight="700" font-family="Inter, Segoe UI, Arial, sans-serif">Typical tools vs Prompt Optimizer Studio</text>
+  <text x="76" y="126" fill="#6B7280" font-size="18" font-family="Inter, Segoe UI, Arial, sans-serif">The left side rewrites once. The right side keeps a full-prompt workflow you can take over at any time.</text>
+
+  <rect x="74" y="164" width="512" height="286" rx="24" fill="#F9FAFB" stroke="#E5E7EB" stroke-width="2"/>
+  <rect x="694" y="164" width="512" height="286" rx="24" fill="#F2FBEF" stroke="#CDE7BF" stroke-width="2"/>
+
+  <text x="106" y="212" fill="#111827" font-size="28" font-weight="700" font-family="Inter, Segoe UI, Arial, sans-serif">Typical prompt rewriter</text>
+  <text x="726" y="212" fill="#0F5132" font-size="28" font-weight="700" font-family="Inter, Segoe UI, Arial, sans-serif">Prompt Optimizer Studio</text>
+
+  <rect x="106" y="240" width="448" height="48" rx="14" fill="#FFFFFF" stroke="#E5E7EB"/>
+  <text x="130" y="271" fill="#374151" font-size="19" font-family="Inter, Segoe UI, Arial, sans-serif">Draft prompt</text>
+  <path d="M330 288V312" stroke="#CBD5E1" stroke-width="3" stroke-linecap="round"/>
+  <path d="M330 312L322 304M330 312L338 304" stroke="#CBD5E1" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="106" y="324" width="448" height="48" rx="14" fill="#FFFFFF" stroke="#E5E7EB"/>
+  <text x="130" y="355" fill="#374151" font-size="19" font-family="Inter, Segoe UI, Arial, sans-serif">Rewrite once or show a diff</text>
+  <path d="M330 372V396" stroke="#CBD5E1" stroke-width="3" stroke-linecap="round"/>
+  <path d="M330 396L322 388M330 396L338 388" stroke="#CBD5E1" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="106" y="408" width="448" height="48" rx="14" fill="#FFFFFF" stroke="#E5E7EB"/>
+  <text x="130" y="439" fill="#374151" font-size="19" font-family="Inter, Segoe UI, Arial, sans-serif">You decide whether this version is usable</text>
+
+  <rect x="726" y="236" width="448" height="42" rx="14" fill="#FFFFFF" stroke="#D3E8C8"/>
+  <text x="748" y="263" fill="#1F2937" font-size="18" font-family="Inter, Segoe UI, Arial, sans-serif">Start from a draft prompt</text>
+  <path d="M948 278V294" stroke="#A3C88B" stroke-width="3" stroke-linecap="round"/>
+  <path d="M948 294L940 286M948 294L956 286" stroke="#A3C88B" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="726" y="304" width="448" height="42" rx="14" fill="#FFFFFF" stroke="#D3E8C8"/>
+  <text x="748" y="331" fill="#1F2937" font-size="18" font-family="Inter, Segoe UI, Arial, sans-serif">Derive long-term rules</text>
+  <path d="M948 346V362" stroke="#A3C88B" stroke-width="3" stroke-linecap="round"/>
+  <path d="M948 362L940 354M948 362L956 354" stroke="#A3C88B" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="726" y="372" width="448" height="42" rx="14" fill="#FFFFFF" stroke="#D3E8C8"/>
+  <text x="748" y="399" fill="#1F2937" font-size="18" font-family="Inter, Segoe UI, Arial, sans-serif">Review the current prompt, then generate the next full prompt</text>
+  <path d="M948 414V430" stroke="#A3C88B" stroke-width="3" stroke-linecap="round"/>
+  <path d="M948 430L940 422M948 430L956 422" stroke="#A3C88B" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="726" y="440" width="448" height="42" rx="14" fill="#FFFFFF" stroke="#D3E8C8"/>
+  <text x="748" y="467" fill="#1F2937" font-size="18" font-family="Inter, Segoe UI, Arial, sans-serif">Take over when needed, ship the full prompt when ready</text>
+
+  <rect x="106" y="474" width="448" height="18" rx="9" fill="#E5E7EB"/>
+  <rect x="726" y="474" width="448" height="18" rx="9" fill="#B6D8A8"/>
+  <text x="106" y="520" fill="#6B7280" font-size="18" font-family="Inter, Segoe UI, Arial, sans-serif">Focus: what changed</text>
+  <text x="726" y="520" fill="#3B6B2D" font-size="18" font-family="Inter, Segoe UI, Arial, sans-serif">Focus: what gets shipped, and where the workflow stands</text>
+</svg>

@@ -1,0 +1,30 @@
+<svg width="1280" height="260" viewBox="0 0 1280 260" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1280" height="260" rx="28" fill="#F7F4EC"/>
+  <rect x="34" y="28" width="1212" height="204" rx="24" fill="#FFFDF8" stroke="#E6DFC9" stroke-width="2"/>
+  <text x="72" y="76" fill="#1F2937" font-size="30" font-weight="700" font-family="Inter, Segoe UI, Arial, sans-serif">What one round actually does</text>
+  <text x="72" y="108" fill="#6B7280" font-size="18" font-family="Inter, Segoe UI, Arial, sans-serif">The key detail: this round reviews the current prompt first. The prompt generated now is reviewed in the next round.</text>
+
+  <rect x="72" y="142" width="184" height="52" rx="16" fill="#FFFFFF" stroke="#E5E7EB"/>
+  <text x="96" y="174" fill="#374151" font-size="18" font-family="Inter, Segoe UI, Arial, sans-serif">Current prompt enters</text>
+  <path d="M256 168H312" stroke="#A3C88B" stroke-width="4" stroke-linecap="round"/>
+  <path d="M312 168L302 160M312 168L302 176" stroke="#A3C88B" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <rect x="328" y="142" width="216" height="52" rx="16" fill="#FFFFFF" stroke="#D3E8C8"/>
+  <text x="352" y="174" fill="#374151" font-size="18" font-family="Inter, Segoe UI, Arial, sans-serif">Judge reviews it first</text>
+  <path d="M544 168H600" stroke="#A3C88B" stroke-width="4" stroke-linecap="round"/>
+  <path d="M600 168L590 160M600 168L590 176" stroke="#A3C88B" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <rect x="616" y="142" width="220" height="52" rx="16" fill="#FFFFFF" stroke="#D3E8C8"/>
+  <text x="640" y="174" fill="#374151" font-size="18" font-family="Inter, Segoe UI, Arial, sans-serif">Score, issues, drift are recorded</text>
+  <path d="M836 168H892" stroke="#A3C88B" stroke-width="4" stroke-linecap="round"/>
+  <path d="M892 168L882 160M892 168L882 176" stroke="#A3C88B" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <rect x="908" y="142" width="232" height="52" rx="16" fill="#FFFFFF" stroke="#D3E8C8"/>
+  <text x="932" y="174" fill="#374151" font-size="18" font-family="Inter, Segoe UI, Arial, sans-serif">Optimizer produces the next prompt</text>
+
+  <path d="M1024 194V212" stroke="#A3C88B" stroke-width="4" stroke-linecap="round"/>
+  <path d="M1024 212H176" stroke="#A3C88B" stroke-width="4" stroke-linecap="round"/>
+  <path d="M176 212V196" stroke="#A3C88B" stroke-width="4" stroke-linecap="round"/>
+  <path d="M176 196L168 206M176 196L184 206" stroke="#A3C88B" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="846" y="232" fill="#3B6B2D" font-size="17" font-family="Inter, Segoe UI, Arial, sans-serif">The next round reviews the prompt that was just generated</text>
+</svg>

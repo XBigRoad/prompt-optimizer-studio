@@ -38,39 +38,11 @@ Start from a draft prompt, let the system iterate round by round, and step in wh
 
 ## How It Runs
 
-```mermaid
-flowchart LR
-    subgraph A["Typical prompt rewriter"]
-        A1["Drop in a prompt"] --> A2["Get a rewrite or diff"]
-        A2 --> A3["You decide whether it is usable"]
-        A3 --> A4["If it drifts, you often restart by hand"]
-    end
-
-    subgraph B["Prompt Optimizer Studio"]
-        B1["Start from a draft prompt"] --> B2["Derive long-term goal, deliverable, and boundaries"]
-        B2 --> B3["Review the current prompt first"]
-        B3 --> B4["Generate the next full prompt"]
-        B4 --> B5["Review that version in the next round"]
-        B5 --> B6{"Keep running or take over"}
-        B6 -- Keep running --> B4
-        B6 -- Take over --> B7["Add next-round steering, stable rules, or a task rubric override"]
-        B7 --> B4
-        B6 -- Credible pass streak reached --> B8["Deliver the final full prompt"]
-    end
-```
+![Prompt Optimizer Studio workflow comparison](docs/graphics/workflow-compare-en.svg)
 
 ### One Round Actually Works Like This
 
-```mermaid
-flowchart TD
-    A["Round N starts with the current prompt"] --> B["Judge reviews the current prompt first"]
-    B --> C["The round records score, issues, and drift state"]
-    C --> D["Optimizer turns that diagnosis into the next full prompt"]
-    D --> E{"Should this round stop here?"}
-    E -- step / pause --> F["Stop and wait for the operator"]
-    E -- auto --> G["Enter round N+1"]
-    G --> H["Round N+1 reviews the prompt that was just generated"]
-```
+![Prompt Optimizer Studio one-round flow](docs/graphics/round-loop-en.svg)
 
 - A round does two different things: **review the current prompt** and **produce the next prompt**.
 - That means the prompt generated in round `N` is reviewed in round `N+1`, not immediately.
