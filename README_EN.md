@@ -27,62 +27,63 @@ Start from a draft prompt, let the system iterate round by round, and step in wh
   <a href="https://github.com/XBigRoad/prompt-optimizer-studio/releases"><strong>Releases</strong></a>
 </p>
 
-## What You Can Use It For
+## What It Is Best At
 
-✨ If what you really want is a prompt you can copy and use, this is the section that matters.
+- **It keeps the full prompt as the main artifact**
+  - This is not a diff viewer. The system keeps a visible `latest full prompt` all the way through, and the thing you ship is still the full prompt.
+- **It automates the loop without taking control away from you**
+  - You can let it run, inspect one round at a time, pause, add next-round steering, change stable rules, or switch the task-level rubric and keep going.
+- **Each round tries to stay explainable**
+  - You can trace what got reviewed, why the run continued, why it paused, why there was no new output, and why score bars did or did not render.
 
-Most prompt optimizers stop at showing diffs, patch fragments, or internal reasoning.
-
-`Prompt Optimizer Studio` is built around a different promise:
-
-| What you need | How Prompt Optimizer Studio helps |
-| --- | --- |
-| Stop reading patch fragments | It keeps the `latest full prompt` visible and copyable instead of only showing diffs |
-| Want multi-round automation without a black box | It supports both `auto` and `step`, with visible pause points, stop rules, and manual-review handoff |
-| Need to change scoring mid-run | It supports global rubric overrides and job-level rubric overrides; structured rubrics automatically render per-dimension score bars |
-| Need history to stay interpretable | Older rounds prefer their own `rubric snapshot` and do not get retroactively polluted by a later rubric edit |
-| Want failure states that tell the truth | Request failures, no-output rounds, invalid summaries, and invalid structured scores are surfaced with root-cause-oriented copy instead of one generic error bucket |
-| Want to actually use review suggestions | Suggestions can be adopted into next-round steering or stable rules, and the latest panel can auto-adopt future rounds too |
-
-## How It Works
-
-🔄 In the current public build, the main path from draft prompt to final full prompt is:
+## How It Runs
 
 ```mermaid
 flowchart LR
-    A[Draft prompt] --> B[System derives goalAnchor and long-term guardrails]
-    B --> C[Judge scores the current input prompt first]
-    C --> D[Optimizer produces the next full prompt]
-    D --> E[Judge writes the round run against the current rubric]
-    E --> F{Has the same candidate reached a credible pass streak?}
-    F -- Yes --> G[Complete / copy final prompt / fork a new job from final]
-    F -- No --> H{Pause point, manual review, or operator takeover?}
-    H -- No --> D
-    H -- Yes --> I[Adjust steering, stable rules, task rubric, or run mode]
-    I --> D
+    subgraph A["Typical prompt rewriter"]
+        A1["Drop in a prompt"] --> A2["Get a rewrite or diff"]
+        A2 --> A3["You decide whether it is usable"]
+        A3 --> A4["If it drifts, you often restart by hand"]
+    end
+
+    subgraph B["Prompt Optimizer Studio"]
+        B1["Start from a draft prompt"] --> B2["Derive long-term goal, deliverable, and boundaries"]
+        B2 --> B3["Review the current prompt first"]
+        B3 --> B4["Generate the next full prompt"]
+        B4 --> B5["Review that version in the next round"]
+        B5 --> B6{"Keep running or take over"}
+        B6 -- Keep running --> B4
+        B6 -- Take over --> B7["Add next-round steering, stable rules, or a task rubric override"]
+        B7 --> B4
+        B6 -- Credible pass streak reached --> B8["Deliver the final full prompt"]
+    end
 ```
 
-### Workflow Details
+### One Round Actually Works Like This
 
-1. A new job starts by deriving a `goalAnchor`: long-term goal, long-term deliverable, long-term boundaries, plus a readable explanation.
-2. Each round judges the current input prompt first, then passes de-scored structural feedback into the optimizer for the next rewrite.
-3. The public build exposes two run modes:
-   - `auto` keeps going until completion, `manual_review`, pause, or another stop rule.
-   - `step` runs exactly one full round, then lands in `paused`.
-4. `completed` does **not** mean “one passing review.” By default, the **same candidate must earn multiple credible passes in a row** (public default: 3) without material issues or drift.
-5. If the run hits the round cap, trips a strict no-output guard, or needs operator judgment, it lands in `manual_review`. That means “your decision is needed now,” not necessarily “the task is dead.”
-6. If an infra fault happens but the round still produced a usable result, the system tries to soft-land instead of hard-failing:
-   - `step` usually goes back to `paused`
-   - `auto` usually goes back to `pending`
-7. Every round writes a `round run`. Successful structured reviews keep both `dimensionScores` and `rubricDimensionsSnapshot`, so the Result Desk can render trustworthy per-dimension score bars.
-8. The latest review-suggestion panel supports two paths:
-   - adopt suggestions into next-round steering
-   - write them directly into stable rules
-   It can also auto-adopt future rounds.
-9. After completion, you can do more than copy the final prompt. You can also:
-   - continue the current job
-   - restart from the beginning
-   - `fork` a fresh job from the final prompt
+```mermaid
+flowchart TD
+    A["Round N starts with the current prompt"] --> B["Judge reviews the current prompt first"]
+    B --> C["The round records score, issues, and drift state"]
+    C --> D["Optimizer turns that diagnosis into the next full prompt"]
+    D --> E{"Should this round stop here?"}
+    E -- step / pause --> F["Stop and wait for the operator"]
+    E -- auto --> G["Enter round N+1"]
+    G --> H["Round N+1 reviews the prompt that was just generated"]
+```
+
+- A round does two different things: **review the current prompt** and **produce the next prompt**.
+- That means the prompt generated in round `N` is reviewed in round `N+1`, not immediately.
+- `completed` does not mean “one passing score.” The same candidate needs a credible pass streak before the job is actually done.
+
+## What You Can Use It For
+
+| If what you have right now is | Prompt Optimizer Studio is better at helping by |
+| --- | --- |
+| A draft prompt that still cannot be shipped | keeping one full-prompt line of history and refining it round by round instead of showing patch fragments |
+| A desire to automate multiple rounds without losing control | keeping `step / pause / next-round steering / stable rules / task rubric` as real operator controls |
+| A need to hand the result to a teammate, client, or downstream system | producing a copy-ready full prompt instead of an internal diff log |
+| A need to run inside your own provider / model environment | staying self-hosted, with settings, runtime policy, and result history under your own control |
 
 ## Start Here
 
@@ -97,20 +98,13 @@ flowchart LR
 
 More: [Configuration](#configuration) · [Screenshots](#screenshots)
 
-## What Makes It Feel Different
+## Other Ways It Differs From Typical Tools
 
-- **Full prompt first**
-  - The main deliverable is the prompt you can actually ship, not a diff viewer.
-- **Operator in the loop**
-  - Human intervention is a first-class control path, not an afterthought.
-- **Multi-round automation with visible stop logic**
-  - Runs can complete, pause, or land in `manual_review` under explicit rules instead of disappearing into a black box.
-- **Intent protection**
-  - `goalAnchor`, drift labels, and reviewer isolation help reduce silent prompt drift.
-- **Structured scoring as a product surface**
-  - Structured rubrics render per-dimension score bars, and history prefers the round-local rubric snapshot instead of faking alignment later.
-- **Failure states that try to stay honest**
-  - No-output rounds, provider failures, invalid summaries, and invalid structured scores are surfaced as distinct causes instead of all collapsing into one vague message.
+- **You are not looking at a patch viewer; you are following one full prompt line**
+- **You are taking over a workflow, not just attaching comments**
+- **Older rounds do not get rewritten just because you edited the rubric later**
+- **Structured scoring can become visible score bars, not just a single overall score**
+- **Failure states try to tell the truth instead of collapsing into one vague error**
 
 ## Project Docs
 
