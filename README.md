@@ -13,7 +13,7 @@
   <a href="LICENSE"><img alt="AGPL-3.0 License" src="https://img.shields.io/badge/license-AGPL--3.0-1d3557?style=flat-square" /></a>
 </p>
 
-把一版 prompt 继续打磨成可直接交付的完整成品，而且中途随时能接管。
+把一版 prompt 自动优化成高质量可直接交付的完整成品，而且中途随时能接管。
 
 > 当前公开仓库交付的是 `Self-Hosted / Server Edition（自托管服务端版）`。
 
@@ -29,9 +29,7 @@
 <a id="先跑起来"></a>
 ## 🚀 先跑起来
 
-### 🐳 方式 1：源码部署（当前就能用）
-
-想直接部署，推荐从空目录开始执行这一段：
+### 🐳 方式 1：Docker
 
 ```bash
 git clone https://github.com/XBigRoad/prompt-optimizer-studio.git
@@ -99,11 +97,6 @@ npm run dev
 - [配置方式](#user-content-配置方式)
 - [常见问题](#user-content-常见问题)
 
-## ⭐ 它最强在哪
-
-- **完整 prompt 主线**：一直保留最新完整稿，最后交付的也是完整成品，不是 patch。
-- **自动跑，但你随时能接管**：支持 `step / pause / 下一轮引导 / 长期规则 / task rubric`。
-- **每轮都尽量说清楚**：为什么继续、为什么暂停、为什么没新稿、为什么没分数条，都会尽量按真实原因展示。
 
 <a id="工作流程"></a>
 ## 🔄 工作流程
@@ -114,6 +107,10 @@ npm run dev
 | `2. 系统跑一轮` | 同时做两件事：复核当前稿、生成下一稿 |
 | `3. 你随时接管` | 可以暂停、补下一轮引导、改长期规则、改任务级 rubric，再继续 |
 | `4. 达标后结束` | 不是某一轮刚过线就停，而是同一候选连续拿到可信通过后才真正完成 |
+
+![Prompt Optimizer Studio 工作流对比](docs/graphics/workflow-compare-zh.svg)
+
+![Prompt Optimizer Studio 单轮流程](docs/graphics/round-loop-zh.svg)
 
 > 注意：这一轮新生成的稿子，不会当场评分，要到下一轮才会被复核。
 
@@ -127,21 +124,7 @@ npm run dev
 | 需要把结果交给同事、客户或自己下游继续用 | 最后拿到的是一份可以直接复制的完整 prompt，不是内部 diff 日志 |
 | 想在自己的环境里接不同 provider / 模型 | 走自托管服务端路径，把设置、运行参数、结果链路和数据库都放在自己手里 |
 
-## ✅ 和普通工具有什么不一样
 
-- **你看到的不是 patch 展示页，而是一条完整 prompt 主线**
-- **你接管的是流程，不只是补几句备注**
-- **历史轮次不会因为你后来改了 rubric 就被冲掉**
-- **结构化评分能直接变成分数条，不是只剩一个总分**
-- **失败时尽量说真话，不把所有问题都糊成同一种报错**
-
-### 一眼看懂
-
-![Prompt Optimizer Studio 工作流对比](docs/graphics/workflow-compare-zh.svg)
-
-### 单轮细一点看
-
-![Prompt Optimizer Studio 单轮流程](docs/graphics/round-loop-zh.svg)
 
 ## 📚 项目文档
 
@@ -155,7 +138,7 @@ npm run dev
 <a id="页面截图"></a>
 ## 🖼️ 页面截图
 
-当前截图基于 `v0.1.8` 自托管实例拍摄。
+当前截图基于 `v0.1.7` 。
 
 | 任务控制室 | 结果台 | 配置台 |
 | --- | --- | --- |
@@ -318,8 +301,6 @@ PROMPT_OPTIMIZER_DB_PATH=/your/custom/path.db
 - 行为准则：[`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md)
 
 本项目采用 `AGPL-3.0-only` 许可证。
-
-用人话来说：
 
 - 你可以使用、研究、修改和自托管它
 - 如果你分发修改版，或者把修改版作为在线服务提供给其他用户使用，就需要按 AGPL 提供对应源码
