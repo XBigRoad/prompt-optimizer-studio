@@ -29,7 +29,7 @@
 <a id="先跑起来"></a>
 ## 🚀 先跑起来
 
-### 🐳 方式 1：源码构建
+### 📦 方式 1：源码构建
 ```bash
 git clone https://github.com/XBigRoad/prompt-optimizer-studio.git
 cd prompt-optimizer-studio
@@ -56,7 +56,7 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
-### 📦 方式 2：官方镜像部署（发布版）
+### 🐳 方式 2：官方镜像部署（发布版）
 
 发布版会同步推送官方 Docker 镜像到 GHCR。拿到镜像后，可以直接这样跑：
 
