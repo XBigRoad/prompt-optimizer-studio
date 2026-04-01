@@ -29,8 +29,7 @@
 <a id="先跑起来"></a>
 ## 🚀 先跑起来
 
-### 🐳 方式 1：Docker
-
+### 🐳 方式 1：源码构建
 ```bash
 git clone https://github.com/XBigRoad/prompt-optimizer-studio.git
 cd prompt-optimizer-studio
