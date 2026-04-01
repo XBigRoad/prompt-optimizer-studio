@@ -9,6 +9,7 @@
 你会得到：
 
 - 单容器自托管部署
+- 发布版官方 Docker 镜像（GHCR）
 - 通过 Docker 挂载卷持久化 SQLite
 - 与本地 `npm` 运行一致的服务端 worker 行为
 - 用于烟雾检查的 `/api/health` 接口
@@ -26,9 +27,51 @@
 
 ## 快速启动
 
+### 方式 1：源码构建
+
+```bash
+git clone https://github.com/XBigRoad/prompt-optimizer-studio.git
+cd prompt-optimizer-studio
+cp .env.example .env
+docker compose up -d --build
+```
+
+如果你已经在仓库目录里，只需要：
+
 ```bash
 cp .env.example .env
 docker compose up -d --build
+```
+
+### 方式 2：官方镜像
+
+发布版会同步推送到：
+
+```text
+ghcr.io/xbigroad/prompt-optimizer-studio
+```
+
+直接运行：
+
+```bash
+docker run -d \
+  --name prompt-optimizer-studio \
+  -p 3000:3000 \
+  -v prompt_optimizer_data:/app/data \
+  --restart unless-stopped \
+  ghcr.io/xbigroad/prompt-optimizer-studio:latest
+```
+
+如果要锁定具体版本：
+
+```bash
+ghcr.io/xbigroad/prompt-optimizer-studio:<tag>
+```
+
+如果你想跟主线最新提交，可以使用：
+
+```bash
+ghcr.io/xbigroad/prompt-optimizer-studio:main
 ```
 
 打开：
@@ -73,11 +116,18 @@ curl http://localhost:3000/api/health
 docker compose up -d --build
 ```
 
-如果后续切换成发布镜像模式，再使用：
+如果你使用的是官方镜像模式，更新方式是：
 
 ```bash
-docker compose pull
-docker compose up -d
+docker pull ghcr.io/xbigroad/prompt-optimizer-studio:latest
+docker stop prompt-optimizer-studio
+docker rm prompt-optimizer-studio
+docker run -d \
+  --name prompt-optimizer-studio \
+  -p 3000:3000 \
+  -v prompt_optimizer_data:/app/data \
+  --restart unless-stopped \
+  ghcr.io/xbigroad/prompt-optimizer-studio:latest
 ```
 
 ## 本地源码运行与 Docker 运行的区别

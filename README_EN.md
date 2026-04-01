@@ -13,42 +13,112 @@
   <a href="LICENSE"><img alt="AGPL-3.0 License" src="https://img.shields.io/badge/license-AGPL--3.0-1d3557?style=flat-square" /></a>
 </p>
 
-Automated, pipeline-style prompt optimization for people who still want control. ✨ It turns one-off prompt rewriting into a pauseable, steerable, multi-round workflow.
-Start from a draft prompt, let the system iterate round by round, and step in whenever the run drifts so you end with a copy-ready full prompt instead of a patch log.
+Turn a draft prompt into a ship-ready full prompt, while keeping the workflow under your control.
 
 > This repository currently ships the `Self-Hosted / Server Edition`.
 
 <p align="center">
-  <a href="#what-you-can-use-it-for"><strong>✨ What It Does</strong></a> ·
-  <a href="#how-it-works"><strong>🔄 Workflow</strong></a> ·
-  <a href="#start-here"><strong>🚀 Start Here</strong></a> ·
-  <a href="#screenshots"><strong>🖼️ Screenshots</strong></a> ·
+  <a href="#user-content-what-you-can-use-it-for"><strong>🎯 What It Does</strong></a> ·
+  <a href="#user-content-deploy-it-first"><strong>🚀 Deploy It First</strong></a> ·
+  <a href="#user-content-workflow"><strong>🔄 Workflow</strong></a> ·
+  <a href="#user-content-screenshots"><strong>🖼️ Screenshots</strong></a> ·
   <a href="docs/deployment/docker-self-hosted_EN.md"><strong>🐳 Docker Self-Hosted</strong></a> ·
   <a href="https://github.com/XBigRoad/prompt-optimizer-studio/releases"><strong>Releases</strong></a>
 </p>
 
-## What It Is Best At
+<a id="deploy-it-first"></a>
+## Deploy It First
 
-- **It keeps the full prompt as the main artifact**
-  - This is not a diff viewer. The system keeps a visible `latest full prompt` all the way through, and the thing you ship is still the full prompt.
-- **It automates the loop without taking control away from you**
-  - You can let it run, inspect one round at a time, pause, add next-round steering, change stable rules, or switch the task-level rubric and keep going.
-- **Each round tries to stay explainable**
-  - You can trace what got reviewed, why the run continued, why it paused, why there was no new output, and why score bars did or did not render.
+### 🐳 Option 1: Build From Source (works right now)
 
-## How It Runs
+If you want a direct deploy path, start from an empty directory with:
 
-![Prompt Optimizer Studio workflow comparison](docs/graphics/workflow-compare-en.svg)
+```bash
+git clone https://github.com/XBigRoad/prompt-optimizer-studio.git
+cd prompt-optimizer-studio
+cp .env.example .env
+docker compose up -d --build
+```
 
-### One Round Actually Works Like This
+Open:
 
-![Prompt Optimizer Studio one-round flow](docs/graphics/round-loop-en.svg)
+```text
+http://localhost:3000
+```
 
-- A round does two different things: **review the current prompt** and **produce the next prompt**.
-- That means the prompt generated in round `N` is reviewed in round `N+1`, not immediately.
-- `completed` does not mean “one passing score.” The same candidate needs a credible pass streak before the job is actually done.
+Optional health check:
 
-## What You Can Use It For
+```bash
+curl http://localhost:3000/api/health
+```
+
+If you are already inside the repository, you only need:
+
+```bash
+cp .env.example .env
+docker compose up -d --build
+```
+
+### 📦 Option 2: Official Image (release build)
+
+Release builds will also publish an official Docker image to GHCR. Once the image is available, you can run:
+
+```bash
+docker run -d \
+  --name prompt-optimizer-studio \
+  -p 3000:3000 \
+  -v prompt_optimizer_data:/app/data \
+  --restart unless-stopped \
+  ghcr.io/xbigroad/prompt-optimizer-studio:latest
+```
+
+If you want to pin a specific version, replace `latest` with the release tag:
+
+```bash
+ghcr.io/xbigroad/prompt-optimizer-studio:<tag>
+```
+
+If you want the newest image built from `main`, use:
+
+```bash
+ghcr.io/xbigroad/prompt-optimizer-studio:main
+```
+
+If you want to change code locally, use the dev flow instead:
+
+```bash
+npm install
+npm run dev
+```
+
+Continue here:
+
+- [Docker Self-Hosted Guide](docs/deployment/docker-self-hosted_EN.md)
+- [GitHub Container Registry](https://github.com/XBigRoad/prompt-optimizer-studio/pkgs/container/prompt-optimizer-studio)
+- [Releases](https://github.com/XBigRoad/prompt-optimizer-studio/releases)
+- [Configuration](#user-content-configuration)
+- [FAQ](#user-content-faq)
+
+## ⭐ What It Is Best At
+
+- **One full prompt line**: the latest full prompt stays visible the whole time, and the final output is still a full prompt.
+- **Automation with operator control**: you can use `step / pause / next-round steering / stable rules / task rubric` at any time.
+- **Round-by-round traceability**: the app tries to show why a run continued, paused, produced no new output, or skipped score bars.
+
+<a id="workflow"></a>
+## 🔄 Workflow
+
+| Step | What happens |
+| --- | --- |
+| `1. Submit a draft` | Start with one prompt and create a job |
+| `2. Let one round run` | The system reviews the current prompt and generates the next one in the same round |
+| `3. Step in anytime` | Pause, add next-round steering, change stable rules, or switch the task-level rubric |
+| `4. Finish on a credible streak` | A job is not done after one passing round; the same candidate needs a credible pass streak |
+
+> Important: a prompt generated in round `N` is reviewed in round `N+1`, not immediately.
+
+<a id="what-you-can-use-it-for"></a>
+## 🎯 What You Can Use It For
 
 | If what you have right now is | Prompt Optimizer Studio is better at helping by |
 | --- | --- |
@@ -57,20 +127,7 @@ Start from a draft prompt, let the system iterate round by round, and step in wh
 | A need to hand the result to a teammate, client, or downstream system | producing a copy-ready full prompt instead of an internal diff log |
 | A need to run inside your own provider / model environment | staying self-hosted, with settings, runtime policy, and result history under your own control |
 
-## Start Here
-
-🚀 If you want to get started right now, these are the only links you need first:
-
-| What you want to do now | Entry |
-| --- | --- |
-| Run it locally | [Quick Start](#quick-start) |
-| Self-host with Docker | [Docker Self-Hosted Guide](docs/deployment/docker-self-hosted_EN.md) |
-| Check release packages and updates | [Releases](https://github.com/XBigRoad/prompt-optimizer-studio/releases) |
-| Read common questions | [FAQ](#faq) |
-
-More: [Configuration](#configuration) · [Screenshots](#screenshots)
-
-## Other Ways It Differs From Typical Tools
+## ✅ What Makes It Different
 
 - **You are not looking at a patch viewer; you are following one full prompt line**
 - **You are taking over a workflow, not just attaching comments**
@@ -78,7 +135,15 @@ More: [Configuration](#configuration) · [Screenshots](#screenshots)
 - **Structured scoring can become visible score bars, not just a single overall score**
 - **Failure states try to tell the truth instead of collapsing into one vague error**
 
-## Project Docs
+### At A Glance
+
+![Prompt Optimizer Studio workflow comparison](docs/graphics/workflow-compare-en.svg)
+
+### One Round In More Detail
+
+![Prompt Optimizer Studio one-round flow](docs/graphics/round-loop-en.svg)
+
+## 📚 Project Docs
 
 - [Chinese Home](README.md)
 - [Contributing](CONTRIBUTING_EN.md)
@@ -87,7 +152,8 @@ More: [Configuration](#configuration) · [Screenshots](#screenshots)
 - [Open Source Launch Copy](docs/open-source-launch_EN.md)
 - [License](LICENSE)
 
-## Screenshots
+<a id="screenshots"></a>
+## 🖼️ Screenshots
 
 The screenshots below are captured from a `v0.1.8` self-hosted instance.
 
@@ -95,7 +161,7 @@ The screenshots below are captured from a `v0.1.8` self-hosted instance.
 | --- | --- | --- |
 | <img src="docs/screenshots/dashboard-control-room.png" alt="Control Room" width="100%" /> | <img src="docs/screenshots/job-detail-result-desk.png" alt="Result Desk" width="100%" /> | <img src="docs/screenshots/settings-console.png" alt="Config Desk" width="100%" /> |
 
-## Quick Start
+## 🛠️ Development And Verification
 
 ### Requirements
 
@@ -127,28 +193,10 @@ That command runs:
 - `test`
 - `build`
 
-### Docker Self-Hosted
-
-```bash
-cp .env.example .env
-docker compose up -d --build
-```
-
-Open:
-
-```text
-http://localhost:3000
-```
-
-Optional health check:
-
-```bash
-curl http://localhost:3000/api/health
-```
-
 For full deployment instructions, see the [Docker self-hosted guide](docs/deployment/docker-self-hosted_EN.md).
 
-## Configuration
+<a id="configuration"></a>
+## ⚙️ Configuration
 
 The app is configured from the **Config Desk**.
 
@@ -210,7 +258,7 @@ Additional notes:
   - old rounds keep their old snapshot
 - Model or reasoning-effort edits made while a job is already running usually take effect on the next round, not by rewriting the round currently in flight.
 
-## Deployment Model
+## 📦 Deployment Model
 
 This repository currently ships the **Self-Hosted / Server Edition**.
 
@@ -231,7 +279,8 @@ You can override it with:
 PROMPT_OPTIMIZER_DB_PATH=/your/custom/path.db
 ```
 
-## FAQ
+<a id="faq"></a>
+## ❓ FAQ
 
 - **Is this a hosted SaaS?**
   - No. This repository currently ships the self-hosted server edition.
@@ -262,7 +311,7 @@ PROMPT_OPTIMIZER_DB_PATH=/your/custom/path.db
 - **Why AGPL-3.0?**
   - Because modified hosted versions should remain source-available to the users who depend on them.
 
-## Contributing And License
+## 🤝 Contributing And License
 
 - Contribution guide: [`CONTRIBUTING_EN.md`](CONTRIBUTING_EN.md)
 - Security policy: [`SECURITY_EN.md`](SECURITY_EN.md)

@@ -13,42 +13,112 @@
   <a href="LICENSE"><img alt="AGPL-3.0 License" src="https://img.shields.io/badge/license-AGPL--3.0-1d3557?style=flat-square" /></a>
 </p>
 
-一个强调自动化流水线、但不把人排除在外的提示词优化工作台。✨ 它把提示词优化从“一次性改写”变成“可暂停、可继续、可复核”的自动化流程。
-给出初版 prompt，系统会按轮次自动优化；如果中途发现偏题，你可以随时暂停、补充引导、继续推进，最后拿到可直接复制的完整 prompt。
+把一版 prompt 继续打磨成可直接交付的完整成品，而且中途随时能接管。
 
 > 当前公开仓库交付的是 `Self-Hosted / Server Edition（自托管服务端版）`。
 
 <p align="center">
-  <a href="#你可以用它做什么"><strong>✨ 你可以用它做什么</strong></a> ·
-  <a href="#工作流程一眼看懂"><strong>🔄 工作流程</strong></a> ·
-  <a href="#开始使用"><strong>🚀 开始使用</strong></a> ·
-  <a href="#页面截图"><strong>🖼️ 页面截图</strong></a> ·
+  <a href="#user-content-适合拿来做什么"><strong>🎯 适合拿来做什么</strong></a> ·
+  <a href="#user-content-先跑起来"><strong>🚀 先跑起来</strong></a> ·
+  <a href="#user-content-工作流程"><strong>🔄 工作流程</strong></a> ·
+  <a href="#user-content-页面截图"><strong>🖼️ 页面截图</strong></a> ·
   <a href="docs/deployment/docker-self-hosted.md"><strong>🐳 Docker 自托管</strong></a> ·
   <a href="https://github.com/XBigRoad/prompt-optimizer-studio/releases"><strong>Releases</strong></a>
 </p>
 
-## 它最强在哪
+<a id="先跑起来"></a>
+## 🚀 先跑起来
 
-- **始终保留完整 prompt 主线**
-  - 它不是把结果切成 diff 给你看，而是一直保留“当前最新完整提示词”。最后交付的也是完整成品，不是 patch 碎片。
-- **自动跑，但你随时能接管**
-  - 你可以让它连续多轮往前跑，也可以一轮一轮看。中途随时能暂停、补下一轮引导、改长期规则、改任务级 rubric，再继续。
-- **每一轮都尽量说清楚**
-  - 这轮评了谁、为什么继续、为什么暂停、为什么没新稿、为什么没有分数条，结果页都会尽量按真实原因留痕，不让你靠猜。
+### 🐳 方式 1：源码部署（当前就能用）
 
-## 它怎么跑
+想直接部署，推荐从空目录开始执行这一段：
 
-![Prompt Optimizer Studio 工作流对比](docs/graphics/workflow-compare-zh.svg)
+```bash
+git clone https://github.com/XBigRoad/prompt-optimizer-studio.git
+cd prompt-optimizer-studio
+cp .env.example .env
+docker compose up -d --build
+```
 
-### 单轮其实是这样跑的
+打开：
 
-![Prompt Optimizer Studio 单轮流程](docs/graphics/round-loop-zh.svg)
+```text
+http://localhost:3000
+```
 
-- 一轮里同时发生两件事：**复核当前稿**，以及**生成下一稿**。
-- 所以新稿不是“当场打分”，而是**要到下一轮才会被复核**。
-- 任务完成也不是“某一轮刚过线就停”，而是同一候选稿要连续拿到可信通过，才会真正进入 `completed`。
+可选健康检查：
 
-## 你可以用它做什么
+```bash
+curl http://localhost:3000/api/health
+```
+
+如果你已经在仓库目录里，其实只需要后两步：
+
+```bash
+cp .env.example .env
+docker compose up -d --build
+```
+
+### 📦 方式 2：官方镜像部署（发布版）
+
+发布版会同步推送官方 Docker 镜像到 GHCR。拿到镜像后，可以直接这样跑：
+
+```bash
+docker run -d \
+  --name prompt-optimizer-studio \
+  -p 3000:3000 \
+  -v prompt_optimizer_data:/app/data \
+  --restart unless-stopped \
+  ghcr.io/xbigroad/prompt-optimizer-studio:latest
+```
+
+如果你想锁定具体版本，把 `latest` 换成对应的 release tag 即可：
+
+```bash
+ghcr.io/xbigroad/prompt-optimizer-studio:<tag>
+```
+
+如果你想跟主线最新提交，可以改成：
+
+```bash
+ghcr.io/xbigroad/prompt-optimizer-studio:main
+```
+
+如果你要本地改代码，再走开发模式：
+
+```bash
+npm install
+npm run dev
+```
+
+继续看这里：
+
+- [Docker 自托管文档](docs/deployment/docker-self-hosted.md)
+- [GitHub Container Registry](https://github.com/XBigRoad/prompt-optimizer-studio/pkgs/container/prompt-optimizer-studio)
+- [Releases](https://github.com/XBigRoad/prompt-optimizer-studio/releases)
+- [配置方式](#user-content-配置方式)
+- [常见问题](#user-content-常见问题)
+
+## ⭐ 它最强在哪
+
+- **完整 prompt 主线**：一直保留最新完整稿，最后交付的也是完整成品，不是 patch。
+- **自动跑，但你随时能接管**：支持 `step / pause / 下一轮引导 / 长期规则 / task rubric`。
+- **每轮都尽量说清楚**：为什么继续、为什么暂停、为什么没新稿、为什么没分数条，都会尽量按真实原因展示。
+
+<a id="工作流程"></a>
+## 🔄 工作流程
+
+| 步骤 | 这里会发生什么 |
+| --- | --- |
+| `1. 提交初稿` | 先给系统一版 prompt，任务从这里开始 |
+| `2. 系统跑一轮` | 同时做两件事：复核当前稿、生成下一稿 |
+| `3. 你随时接管` | 可以暂停、补下一轮引导、改长期规则、改任务级 rubric，再继续 |
+| `4. 达标后结束` | 不是某一轮刚过线就停，而是同一候选连续拿到可信通过后才真正完成 |
+
+> 注意：这一轮新生成的稿子，不会当场评分，要到下一轮才会被复核。
+
+<a id="适合拿来做什么"></a>
+## 🎯 适合拿来做什么
 
 | 如果你现在遇到的是 | Prompt Optimizer Studio 更适合怎么帮你 |
 | --- | --- |
@@ -57,20 +127,7 @@
 | 需要把结果交给同事、客户或自己下游继续用 | 最后拿到的是一份可以直接复制的完整 prompt，不是内部 diff 日志 |
 | 想在自己的环境里接不同 provider / 模型 | 走自托管服务端路径，把设置、运行参数、结果链路和数据库都放在自己手里 |
 
-## 开始使用
-
-🚀 如果你现在就想开始，先看这几个入口就够了：
-
-| 我现在想做什么 | 入口 |
-| --- | --- |
-| 本地跑起来 | [快速开始](#快速开始) |
-| 用 Docker 自托管 | [Docker 自托管文档](docs/deployment/docker-self-hosted.md) |
-| 查看发布包与更新记录 | [Releases](https://github.com/XBigRoad/prompt-optimizer-studio/releases) |
-| 查看常见问题 | [常见问题](#常见问题) |
-
-更多信息： [配置方式](#配置方式) · [页面截图](#页面截图)
-
-## 还有哪些地方和普通工具不一样
+## ✅ 和普通工具有什么不一样
 
 - **你看到的不是 patch 展示页，而是一条完整 prompt 主线**
 - **你接管的是流程，不只是补几句备注**
@@ -78,7 +135,15 @@
 - **结构化评分能直接变成分数条，不是只剩一个总分**
 - **失败时尽量说真话，不把所有问题都糊成同一种报错**
 
-## 项目文档
+### 一眼看懂
+
+![Prompt Optimizer Studio 工作流对比](docs/graphics/workflow-compare-zh.svg)
+
+### 单轮细一点看
+
+![Prompt Optimizer Studio 单轮流程](docs/graphics/round-loop-zh.svg)
+
+## 📚 项目文档
 
 - [英文首页](README_EN.md)
 - [贡献指南](CONTRIBUTING.md)
@@ -87,7 +152,8 @@
 - [开源发布文案](docs/open-source-launch.md)
 - [许可证](LICENSE)
 
-## 页面截图
+<a id="页面截图"></a>
+## 🖼️ 页面截图
 
 当前截图基于 `v0.1.8` 自托管实例拍摄。
 
@@ -95,7 +161,7 @@
 | --- | --- | --- |
 | <img src="docs/screenshots/dashboard-control-room.png" alt="任务控制室" width="100%" /> | <img src="docs/screenshots/job-detail-result-desk.png" alt="结果台" width="100%" /> | <img src="docs/screenshots/settings-console.png" alt="配置台" width="100%" /> |
 
-## 快速开始
+## 🛠️ 本地开发与验证
 
 ### 环境要求
 
@@ -127,28 +193,10 @@ npm run check
 - `test`
 - `build`
 
-### Docker 自托管
+完整部署说明见前面的 [Docker 自托管文档](docs/deployment/docker-self-hosted.md)。
 
-```bash
-cp .env.example .env
-docker compose up -d --build
-```
-
-打开：
-
-```text
-http://localhost:3000
-```
-
-可选健康检查：
-
-```bash
-curl http://localhost:3000/api/health
-```
-
-完整部署说明见 [Docker 自托管文档](docs/deployment/docker-self-hosted.md)。
-
-## 配置方式
+<a id="配置方式"></a>
+## ⚙️ 配置方式
 
 应用通过**配置台**完成配置。
 
@@ -210,7 +258,7 @@ curl http://localhost:3000/api/health
   - 旧轮次继续按旧 snapshot 显示
 - 运行中的任务如果修改模型或推理强度，通常会在下一轮生效，而不是强插进当前正在跑的这一轮。
 
-## 发布形态
+## 📦 发布形态
 
 当前仓库发布的是 **Self-Hosted / Server Edition（自托管服务端版）**。
 
@@ -231,7 +279,8 @@ data/prompt-optimizer.db
 PROMPT_OPTIMIZER_DB_PATH=/your/custom/path.db
 ```
 
-## 常见问题
+<a id="常见问题"></a>
+## ❓ 常见问题
 
 - **这是官方在线 SaaS 吗？**
   - 不是。当前仓库是自托管服务端版。
@@ -262,7 +311,7 @@ PROMPT_OPTIMIZER_DB_PATH=/your/custom/path.db
 - **为什么使用 AGPL-3.0？**
   - 因为这个项目希望即使被别人改成在线服务继续对外提供，也必须继续公开对应源码。
 
-## 贡献与许可证
+## 🤝 贡献与许可证
 
 - 贡献说明：[`CONTRIBUTING.md`](CONTRIBUTING.md)
 - 安全策略：[`SECURITY.md`](SECURITY.md)

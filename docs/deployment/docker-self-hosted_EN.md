@@ -9,6 +9,7 @@ This guide explains the recommended Docker deployment path for the current `Self
 What you get:
 
 - one-container self-hosted deployment
+- official release image on GHCR
 - SQLite persisted through a mounted Docker volume
 - the same server-side worker behavior as local `npm` execution
 - a simple `/api/health` endpoint for smoke checks
@@ -26,9 +27,51 @@ What this is not:
 
 ## Quick Start
 
+### Option 1: Build From Source
+
+```bash
+git clone https://github.com/XBigRoad/prompt-optimizer-studio.git
+cd prompt-optimizer-studio
+cp .env.example .env
+docker compose up -d --build
+```
+
+If you are already inside the repository, you only need:
+
 ```bash
 cp .env.example .env
 docker compose up -d --build
+```
+
+### Option 2: Official Image
+
+Release builds are also published to:
+
+```text
+ghcr.io/xbigroad/prompt-optimizer-studio
+```
+
+Run directly with:
+
+```bash
+docker run -d \
+  --name prompt-optimizer-studio \
+  -p 3000:3000 \
+  -v prompt_optimizer_data:/app/data \
+  --restart unless-stopped \
+  ghcr.io/xbigroad/prompt-optimizer-studio:latest
+```
+
+To pin a specific version:
+
+```bash
+ghcr.io/xbigroad/prompt-optimizer-studio:<tag>
+```
+
+If you want the newest image built from `main`, use:
+
+```bash
+ghcr.io/xbigroad/prompt-optimizer-studio:main
 ```
 
 Open:
@@ -73,11 +116,18 @@ For the current repository-based Docker setup, rebuild and restart with:
 docker compose up -d --build
 ```
 
-If you later switch to a published image workflow, update with:
+If you use the official image workflow, update with:
 
 ```bash
-docker compose pull
-docker compose up -d
+docker pull ghcr.io/xbigroad/prompt-optimizer-studio:latest
+docker stop prompt-optimizer-studio
+docker rm prompt-optimizer-studio
+docker run -d \
+  --name prompt-optimizer-studio \
+  -p 3000:3000 \
+  -v prompt_optimizer_data:/app/data \
+  --restart unless-stopped \
+  ghcr.io/xbigroad/prompt-optimizer-studio:latest
 ```
 
 ## Local Repo Run Vs Docker
