@@ -16,6 +16,7 @@ import {
 import { readJobDetailRuntimeSnapshot, writeJobDetailRuntimeSnapshot } from '@/lib/job-detail-runtime-cache'
 import { normalizeEscapedMultilineText } from '@/lib/prompt-text'
 import type { ReasoningEffort } from '@/lib/reasoning-effort'
+import { resolveReviewSuggestionAutomationState } from '@/lib/review-suggestion-automation'
 import { getJobFailureKind, getJobScoreState, getTaskModelLabel, isDeliveredFinalRoundOutput, resolveLatestFullPrompt } from '@/lib/presentation'
 import type { SteeringItem } from '@/lib/server/types'
 
@@ -178,6 +179,8 @@ export function JobDetailShell({ jobId }: { jobId: string }) {
   const [completedResumePickerOpen, setCompletedResumePickerOpen] = useState(false)
   const [completedResumeTargetRunMode, setCompletedResumeTargetRunMode] = useState<JobRunMode | null>(null)
   const [actionMessage, setActionMessage] = useState<string | null>(null)
+  const [reviewSuggestionTargetOverride, setReviewSuggestionTargetOverride] = useState<'pending' | 'stable' | null>(null)
+  const [autoApplyReviewSuggestionsOverride, setAutoApplyReviewSuggestionsOverride] = useState<boolean | null>(null)
   const [expandedRounds, setExpandedRounds] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
@@ -375,6 +378,11 @@ export function JobDetailShell({ jobId }: { jobId: string }) {
 
   const model = useMemo<JobDetailViewModel | null>(() => {
     if (!detail) return null
+    const reviewSuggestionAutomation = resolveReviewSuggestionAutomationState(detail.job, {
+      enabled: autoApplyReviewSuggestionsOverride,
+      target: reviewSuggestionTargetOverride,
+    })
+
     return {
       jobId,
       title: detail.job.title,
@@ -410,8 +418,8 @@ export function JobDetailShell({ jobId }: { jobId: string }) {
       passStreak: detail.job.passStreak,
       lastReviewScore: detail.job.lastReviewScore,
       customRubricMd: detail.job.customRubricMd,
-      autoApplyReviewSuggestions: detail.job.autoApplyReviewSuggestions,
-      autoApplyReviewSuggestionsToStableRules: detail.job.autoApplyReviewSuggestionsToStableRules,
+      autoApplyReviewSuggestions: reviewSuggestionAutomation.enabled,
+      autoApplyReviewSuggestionsToStableRules: reviewSuggestionAutomation.target === 'stable',
       effectiveRubricMd,
       effectiveRubricSource,
       errorMessage: detail.job.errorMessage,
@@ -425,11 +433,25 @@ export function JobDetailShell({ jobId }: { jobId: string }) {
         outputFinal: isDeliveredFinalRoundOutput(detail.job.status, round.outputCandidateId, detail.job.finalCandidateId),
       })),
     }
-  }, [detail, effectiveRubricMd, effectiveRubricSource, jobId, locale, settings.maxRounds])
+  }, [
+    autoApplyReviewSuggestionsOverride,
+    detail,
+    effectiveRubricMd,
+    effectiveRubricSource,
+    jobId,
+    locale,
+    reviewSuggestionTargetOverride,
+    settings.maxRounds,
+  ])
 
   function mergeJobUpdate(jobPatch: JobDetailPayload['job']) {
     setDetail((current) => current ? { ...current, job: { ...current.job, ...jobPatch } } : current)
   }
+
+  const reviewSuggestionAutomation = resolveReviewSuggestionAutomationState(detail?.job, {
+    enabled: autoApplyReviewSuggestionsOverride,
+    target: reviewSuggestionTargetOverride,
+  })
 
   function resetDraftState() {
     setGoalAnchorDraftReady(false)
@@ -588,7 +610,7 @@ export function JobDetailShell({ jobId }: { jobId: string }) {
   async function addReviewSuggestions(items: string[]) {
     setSavingSteering(true)
     try {
-      const target = detail?.job.autoApplyReviewSuggestionsToStableRules === false ? 'pending' : 'stable'
+      const target = reviewSuggestionAutomation.target
       const response = await fetch(`/api/jobs/${jobId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -629,6 +651,7 @@ export function JobDetailShell({ jobId }: { jobId: string }) {
 
   async function updateReviewSuggestionTarget(target: 'pending' | 'stable') {
     setSavingSteering(true)
+    setReviewSuggestionTargetOverride(target)
     try {
       const response = await fetch(`/api/jobs/${jobId}`, {
         method: 'PATCH',
@@ -651,6 +674,7 @@ export function JobDetailShell({ jobId }: { jobId: string }) {
       setActionError(saveError instanceof Error ? saveError.message : text('保存失败。', 'Save failed.'))
       setActionMessage(null)
     } finally {
+      setReviewSuggestionTargetOverride(null)
       setSavingSteering(false)
     }
   }
@@ -658,8 +682,9 @@ export function JobDetailShell({ jobId }: { jobId: string }) {
   async function toggleAutoApplyReviewSuggestions(items: string[]) {
     setSavingSteering(true)
     try {
-      const enable = !(detail?.job.autoApplyReviewSuggestions ?? false)
-      const target = detail?.job.autoApplyReviewSuggestionsToStableRules === false ? 'pending' : 'stable'
+      const enable = !reviewSuggestionAutomation.enabled
+      const target = reviewSuggestionAutomation.target
+      setAutoApplyReviewSuggestionsOverride(enable)
       const response = await fetch(`/api/jobs/${jobId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -697,6 +722,7 @@ export function JobDetailShell({ jobId }: { jobId: string }) {
       setActionError(saveError instanceof Error ? saveError.message : text('保存失败。', 'Save failed.'))
       setActionMessage(null)
     } finally {
+      setAutoApplyReviewSuggestionsOverride(null)
       setSavingSteering(false)
     }
   }
